@@ -1,0 +1,99 @@
+# Production stack for Coolify ("Docker Compose" resource).
+# Coolify injects the environment variables defined in its UI; the ones listed under `environment`
+# below are passed through from that environment. Point the domain at service `web`, port 3000.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["/app/docker/entrypoint.sh", "web"]
+    environment:
+      - NODE_ENV=production
+      - APP_URL=${APP_URL}
+      - APP_TIMEZONE=${APP_TIMEZONE:-Europe/Berlin}
+      - DEFAULT_LOCALE=${DEFAULT_LOCALE:-de}
+      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY}
+      - DATABASE_URL=postgres://aiup:${POSTGRES_PASSWORD}@postgres:5432/aiup
+      - REDIS_URL=redis://redis:6379
+      - UPLOAD_DIR=/data/uploads
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-500}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+      - WORKFLOW_CONCURRENCY=${WORKFLOW_CONCURRENCY:-4}
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["/app/docker/entrypoint.sh", "worker"]
+    environment:
+      - NODE_ENV=production
+      - APP_URL=${APP_URL}
+      - APP_TIMEZONE=${APP_TIMEZONE:-Europe/Berlin}
+      - DEFAULT_LOCALE=${DEFAULT_LOCALE:-de}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY}
+      - DATABASE_URL=postgres://aiup:${POSTGRES_PASSWORD}@postgres:5432/aiup
+      - REDIS_URL=redis://redis:6379
+      - UPLOAD_DIR=/data/uploads
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-500}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+      - WORKFLOW_CONCURRENCY=${WORKFLOW_CONCURRENCY:-4}
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aiup
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: aiup
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiup -d aiup"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+volumes:
+  uploads:
+  pgdata:
+  redisdata:
