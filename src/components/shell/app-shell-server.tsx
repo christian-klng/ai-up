@@ -7,6 +7,7 @@ import { unreadMessagesCount } from "@/server/domain/messenger";
 import { signOut } from "@/server/actions/auth";
 import { AppShell } from "./app-shell";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
+import { WorkflowToasts } from "@/components/workflows/workflow-toasts";
 import { BrandLogo } from "./brand-logo";
 
 /** Server wrapper: loads everything the shell needs (settings, nav data, counters) once per request. */
@@ -55,6 +56,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
     >
       {children}
     </AppShell>
+    <WorkflowToasts isAdmin={user.role === "admin"} />
     </RealtimeProvider>
   );
 }

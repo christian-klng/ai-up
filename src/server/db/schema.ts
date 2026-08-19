@@ -294,6 +294,152 @@ export const messages = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Workflows (engine room): definitions, versions, runs, steps, LLM providers
+// ---------------------------------------------------------------------------
+
+/** Trigger part of a workflow definition. `type` refers to the trigger registry (English ids). */
+export type WorkflowTrigger = { type: string; config: Record<string, unknown> };
+/** One step of a workflow: an action with config; templates use LiquidJS. */
+export type WorkflowStep = {
+  id: string;
+  name?: string;
+  action: string;
+  config: Record<string, unknown>;
+  /** Liquid expression – step runs only if it renders to a truthy value ("true", non-empty, non-"false"). */
+  condition?: string;
+  onError?: "stop" | "continue";
+};
+export type WorkflowDefinition = { name: string; description?: string | null; trigger: WorkflowTrigger; steps: WorkflowStep[] };
+
+export const workflowStatusEnum = pgEnum("workflow_status", ["draft", "active", "paused"]);
+
+export const workflows = pgTable(
+  "workflows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: workflowStatusEnum("status").notNull().default("draft"),
+    trigger: jsonb("trigger").$type<WorkflowTrigger>().notNull(),
+    steps: jsonb("steps").$type<WorkflowStep[]>().notNull().default([]),
+    version: integer("version").notNull().default(1),
+    /** Toast visibility for members: all | admins */
+    toastAudience: text("toast_audience").notNull().default("all"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("workflows_status_idx").on(t.status)],
+);
+
+export const workflowVersions = pgTable(
+  "workflow_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    definition: jsonb("definition").$type<WorkflowDefinition>().notNull(),
+    /** ui | mcp | system */
+    source: text("source").notNull().default("ui"),
+    changeNote: text("change_note"),
+    changedBy: text("changed_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("workflow_versions_wf_version_idx").on(t.workflowId, t.version)],
+);
+
+export const runStatusEnum = pgEnum("run_status", ["queued", "running", "succeeded", "failed", "cancelled"]);
+
+export type StepUsage = { promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number; model?: string };
+
+export const workflowRuns = pgTable(
+  "workflow_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    workflowVersion: integer("workflow_version").notNull(),
+    workflowName: text("workflow_name").notNull(),
+    status: runStatusEnum("status").notNull().default("queued"),
+    triggerType: text("trigger_type").notNull(),
+    triggerEvent: jsonb("trigger_event").$type<Record<string, unknown>>().notNull().default({}),
+    /** Final template context snapshot (steps outputs) – handy for debugging and MCP */
+    context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
+    error: text("error"),
+    /** user who triggered (manual runs / content authors) – used for notify_user audience "triggerUser" */
+    triggeredBy: text("triggered_by").references(() => users.id, { onDelete: "set null" }),
+    /** Runs spawned by other runs (create_content → content.created) carry the parent to prevent loops */
+    parentRunId: uuid("parent_run_id"),
+    depth: integer("depth").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("workflow_runs_wf_created_idx").on(t.workflowId, t.createdAt), index("workflow_runs_status_idx").on(t.status), index("workflow_runs_created_idx").on(t.createdAt)],
+);
+
+export const workflowRunSteps = pgTable(
+  "workflow_run_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    index: integer("index").notNull(),
+    stepId: text("step_id").notNull(),
+    stepName: text("step_name"),
+    actionType: text("action_type").notNull(),
+    status: runStatusEnum("status").notNull().default("queued"),
+    /** Rendered config (templates resolved) */
+    input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
+    output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
+    error: text("error"),
+    skipped: boolean("skipped").notNull().default(false),
+    usage: jsonb("usage").$type<StepUsage>().notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    durationMs: integer("duration_ms"),
+  },
+  (t) => [index("workflow_run_steps_run_idx").on(t.runId, t.index)],
+);
+
+export const llmProviderKindEnum = pgEnum("llm_provider_kind", ["openrouter", "cortecs", "openai", "generic"]);
+
+export type LlmModelInfo = {
+  id: string;
+  name?: string;
+  contextLength?: number | null;
+  /** e.g. ["temperature","top_p","max_tokens","response_format","structured_outputs","reasoning","tools"] */
+  supportedParameters?: string[];
+  pricing?: { prompt?: string; completion?: string } | null;
+};
+
+export const llmProviders = pgTable(
+  "llm_providers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    kind: llmProviderKindEnum("kind").notNull().default("generic"),
+    baseUrl: text("base_url").notNull(),
+    /** AES-256-GCM encrypted (see src/server/crypto.ts) */
+    apiKeyEncrypted: text("api_key_encrypted"),
+    extraHeaders: jsonb("extra_headers").$type<Record<string, string>>().notNull().default({}),
+    availableModels: jsonb("available_models").$type<LlmModelInfo[]>().notNull().default([]),
+    enabledModels: jsonb("enabled_models").$type<string[]>().notNull().default([]),
+    defaultModel: text("default_model"),
+    isDefault: boolean("is_default").notNull().default(false),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Audit log
 // ---------------------------------------------------------------------------
 
@@ -454,6 +600,18 @@ export const conversationMembersRelations = relations(conversationMembers, ({ on
   user: one(users, { fields: [conversationMembers.userId], references: [users.id] }),
 }));
 
+export const workflowsRelations = relations(workflows, ({ many }) => ({
+  versions: many(workflowVersions),
+  runs: many(workflowRuns),
+}));
+export const workflowRunsRelations = relations(workflowRuns, ({ one, many }) => ({
+  workflow: one(workflows, { fields: [workflowRuns.workflowId], references: [workflows.id] }),
+  steps: many(workflowRunSteps),
+}));
+export const workflowRunStepsRelations = relations(workflowRunSteps, ({ one }) => ({
+  run: one(workflowRuns, { fields: [workflowRunSteps.runId], references: [workflowRuns.id] }),
+}));
+
 export const messagesRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
   sender: one(users, { fields: [messages.senderId], references: [users.id] }),
@@ -470,6 +628,12 @@ export type ContactStatus = ContactRequest["status"];
 export type Conversation = typeof conversations.$inferSelect;
 export type ConversationMember = typeof conversationMembers.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type Workflow = typeof workflows.$inferSelect;
+export type WorkflowVersion = typeof workflowVersions.$inferSelect;
+export type WorkflowRun = typeof workflowRuns.$inferSelect;
+export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
+export type RunStatus = WorkflowRun["status"];
+export type LlmProvider = typeof llmProviders.$inferSelect;
 
 export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
 export type Content = typeof contents.$inferSelect;

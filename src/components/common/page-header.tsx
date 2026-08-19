@@ -1,4 +1,4 @@
-export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) {
+export function PageHeader({ title, description, actions }: { title: React.ReactNode; description?: string | null; actions?: React.ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">

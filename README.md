@@ -2,7 +2,16 @@
 
 Community-Plattform (Circle.so-artig) mit Wissensbereichen, Meetings (Nextcloud Talk), Messenger, Notifications und einem Workflow-„Maschinenraum" (Trigger/Aktionen, LLM, MCP). Vollständiger Plan: [PLAN.md](PLAN.md).
 
-**Stand:** Phase 1 (Fundament) – Registrierung mit Admin-Freigabe, Magic-Link-Login, App-Shell (de/en), Admin: Branding/Zweck/Mitglieder, Profil & Avatare, Mitgliederübersicht, Notifications-Grundlage, Worker-Prozess.
+**Stand:** Phasen 1–3 und 5 umgesetzt – Registrierung mit Admin-Freigabe, Magic-Link-Login, App-Shell (de/en), Admin (Branding, Zweck, Mitglieder, Wissensbereiche, LLM-Provider, Workflows), Wissensbereiche mit versionierten Inhalten (Text/Bild/Video/Link), Realtime (SSE), Messenger mit Kontaktanfragen, Notification-Center, Workflow-Engine (Trigger/Aktionen, Worker, Toasts, Historie/Statistik). Offen: Phase 4 (Meetings/Nextcloud Talk), Phase 6 (Fragen-Aktion, MCP), Phase 7 (Härtung).
+
+## Workflows (Maschinenraum)
+
+- Definitionen (Trigger + Schritte) liegen in `workflows` (JSON), jede Änderung als Version in `workflow_versions`; Läufe in `workflow_runs` / `workflow_run_steps`.
+- Registry: `src/server/workflows/triggers` (content.created, content.updated, schedule, manual) und `src/server/workflows/actions` (llm, read_webpage, notify_user, create_content). Neue Trigger/Aktionen = eine Datei mit zod-Schema, Feldbeschreibung (de/en) und `run()`.
+- Ausführung im **Worker** (`npm run worker`, BullMQ-Queue `workflow-runs`); Zeit-Trigger als BullMQ Job Scheduler, Abgleich bei jeder Workflow-Änderung und beim Worker-Start.
+- Templates: LiquidJS – `{{ trigger.* }}`, `{{ steps.<id>.output.* }}`, `{{ app.name }}`, `{{ app.purpose }}`.
+- LLM: OpenAI-kompatible Provider unter Admin → LLM (Schlüssel AES-256-GCM-verschlüsselt mit `APP_ENCRYPTION_KEY`); Structured Output über `response_format` mit Fallback-Parsing.
+- Realtime-Events `workflow.run.started/finished` → Toasts oben rechts (min. 2 s), Fehler-Notifications an Admins.
 
 ## Stack
 

@@ -5,9 +5,33 @@ import { logger } from "@/server/logger";
  * Phase 3 adds Redis fan-out for realtime (SSE), Phase 5 subscribes the workflow engine (triggers).
  * Keep every domain event flowing through `emitDomainEvent` so later phases only add handlers.
  */
+/** Where an event came from – workflows tag their own side effects so triggers can avoid loops. */
+export type EventOrigin = { kind: "user" } | { kind: "workflow"; runId: string; workflowId: string; depth: number } | { kind: "system" };
+
+export type ContentEventPayload = {
+  content: {
+    id: string;
+    type: string;
+    title: string;
+    url: string | null;
+    body: string | null;
+    areaId: string;
+    areaSlug: string;
+    areaName: string;
+    areaPurpose: string;
+    authorId: string | null;
+    authorName: string | null;
+    versionNo: number;
+    href: string;
+  };
+  /** user id who caused the event (author/editor) */
+  actorId: string | null;
+  origin: EventOrigin;
+};
+
 export type DomainEventMap = {
-  "content.created": { contentId: string; areaId: string; type: string; title: string; authorId: string | null; versionNo: number; url?: string | null };
-  "content.updated": { contentId: string; areaId: string; type: string; title: string; editorId: string | null; versionNo: number; url?: string | null };
+  "content.created": ContentEventPayload;
+  "content.updated": ContentEventPayload;
   "content.deleted": { contentId: string; areaId: string; actorId: string };
   "member.registered": { userId: string };
   "member.approved": { userId: string; actorId: string };
@@ -37,10 +61,16 @@ export function emitDomainEvent<T extends DomainEventType>(type: T, payload: Dom
   const event: DomainEvent<T> = { type, payload, at: new Date().toISOString() };
   logger.debug({ event: type, payload }, "domain event");
   const set = handlers.get(type);
-  if (!set) return;
-  for (const h of set) {
-    Promise.resolve()
-      .then(() => h(event as DomainEvent<DomainEventType>))
-      .catch((err) => logger.error({ err, event: type }, "domain event handler failed"));
+  if (set) {
+    for (const h of set) {
+      Promise.resolve()
+        .then(() => h(event as DomainEvent<DomainEventType>))
+        .catch((err) => logger.error({ err, event: type }, "domain event handler failed"));
+    }
   }
+  // Workflow triggers: dispatched through a dynamic import (avoids the import cycle dispatch → domain → bus
+  // and does not depend on process-level listener registration, which is fragile across bundles).
+  void import("@/server/workflows/dispatch")
+    .then((m) => m.dispatchEvent(event as DomainEvent<DomainEventType>))
+    .catch((err) => logger.error({ err, event: type }, "workflow dispatch failed"));
 }

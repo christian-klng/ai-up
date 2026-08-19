@@ -32,6 +32,9 @@ export type RealtimeEventMap = {
   "presence.changed": { userId: string; online: boolean };
   /** Admin changed branding/theme – clients reload theme tokens */
   "settings.updated": Record<string, never>;
+  /** Workflow run lifecycle (toasts top-right, run pages) */
+  "workflow.run.started": { runId: string; workflowId: string; workflowName: string; triggerType: string; startedAt: string };
+  "workflow.run.finished": { runId: string; workflowId: string; workflowName: string; status: "succeeded" | "failed" | "cancelled"; durationMs: number; error: string | null; finishedAt: string };
   /** Server hint: reload current data (used after reconnect) */
   "sync": Record<string, never>;
 };

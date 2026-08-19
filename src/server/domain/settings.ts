@@ -8,12 +8,15 @@ export const DEFAULT_THEME: ThemeSettings = { primaryColor: "#2563eb", radius: 0
 /**
  * Loads the singleton settings row (created by the seed). Memoized per request via React cache.
  */
-export const getAppSettings = cache(async (): Promise<AppSettings> => {
+export async function loadAppSettings(): Promise<AppSettings> {
   const row = await db.query.appSettings.findFirst({ where: eq(appSettings.id, "default") });
   if (row) return row;
   const [created] = await db.insert(appSettings).values({ id: "default" }).onConflictDoNothing().returning();
   return created ?? (await db.query.appSettings.findFirst({ where: eq(appSettings.id, "default") }))!;
-});
+}
+
+/** Request-memoized variant for React Server Components; the worker uses `loadAppSettings()` directly. */
+export const getAppSettings = cache(loadAppSettings);
 
 export type UpdateSettingsInput = Partial<
   Pick<AppSettings, "name" | "tagline" | "purpose" | "logoMediaId" | "faviconMediaId" | "defaultLocale" | "theme">

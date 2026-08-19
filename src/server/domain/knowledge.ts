@@ -14,7 +14,7 @@ import {
   type KnowledgeArea,
   type MediaFile,
 } from "@/server/db/schema";
-import { emitDomainEvent } from "@/server/events/bus";
+import { emitDomainEvent, type ContentEventPayload, type EventOrigin } from "@/server/events/bus";
 import { slugify } from "@/lib/slug";
 
 // ---------------------------------------------------------------------------
@@ -144,7 +144,30 @@ function buildSearchText(type: ContentType, v: ContentVersionInput): string {
   return parts.filter(Boolean).join("\n").slice(0, 20000);
 }
 
-export async function createContent(areaId: string, type: ContentType, input: ContentVersionInput, authorId: string): Promise<Content> {
+async function contentEventPayload(content: Content, input: ContentVersionInput, versionNo: number, actorId: string | null, origin: EventOrigin): Promise<ContentEventPayload> {
+  const [area, author] = await Promise.all([getAreaById(content.areaId), content.authorId ? db.query.users.findFirst({ where: eq(users.id, content.authorId), columns: { name: true } }) : null]);
+  return {
+    content: {
+      id: content.id,
+      type: content.type,
+      title: content.title,
+      url: input.url ?? null,
+      body: input.bodyMarkdown ?? null,
+      areaId: content.areaId,
+      areaSlug: area?.slug ?? "",
+      areaName: area?.name ?? "",
+      areaPurpose: area?.purpose ?? "",
+      authorId: content.authorId,
+      authorName: author?.name ?? null,
+      versionNo,
+      href: `/knowledge/${area?.slug ?? content.areaId}/${content.id}`,
+    },
+    actorId,
+    origin,
+  };
+}
+
+export async function createContent(areaId: string, type: ContentType, input: ContentVersionInput, authorId: string | null, origin: EventOrigin = { kind: "user" }): Promise<Content> {
   const result = await db.transaction(async (tx) => {
     const [content] = await tx
       .insert(contents)
@@ -167,12 +190,12 @@ export async function createContent(areaId: string, type: ContentType, input: Co
     const [updated] = await tx.update(contents).set({ currentVersionId: version.id }).where(eq(contents.id, content.id)).returning();
     return updated;
   });
-  emitDomainEvent("content.created", { contentId: result.id, areaId, type, title: result.title, authorId, versionNo: 1, url: input.url ?? null });
+  emitDomainEvent("content.created", await contentEventPayload(result, input, 1, authorId, origin));
   return result;
 }
 
 /** Appends a new version (edits are never destructive). */
-export async function addContentVersion(contentId: string, input: ContentVersionInput, editorId: string): Promise<Content | undefined> {
+export async function addContentVersion(contentId: string, input: ContentVersionInput, editorId: string, origin: EventOrigin = { kind: "user" }): Promise<Content | undefined> {
   const existing = await db.query.contents.findFirst({ where: and(eq(contents.id, contentId), isNull(contents.deletedAt)) });
   if (!existing) return undefined;
   const nextNo = existing.versionCount + 1;
@@ -198,7 +221,7 @@ export async function addContentVersion(contentId: string, input: ContentVersion
       .returning();
     return updated;
   });
-  emitDomainEvent("content.updated", { contentId, areaId: existing.areaId, type: existing.type, title: result.title, editorId, versionNo: nextNo, url: input.url ?? null });
+  emitDomainEvent("content.updated", await contentEventPayload(result, input, nextNo, editorId, origin));
   return result;
 }
 
