@@ -111,7 +111,7 @@ export function MessagesShell({ meId, conversations, contacts, labels, children 
                         {c.lastMessageSenderId === meId && c.lastMessagePreview ? `${labels.you}: ` : ""}
                         {c.lastMessagePreview ?? ""}
                       </span>
-                      {c.unreadCount > 0 && <span className="shrink-0 rounded-full bg-blue-500 px-1.5 text-[10px] font-semibold leading-4 text-white">{c.unreadCount}</span>}
+                      {c.unreadCount > 0 && <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-4 text-primary-foreground">{c.unreadCount}</span>}
                     </span>
                   </span>
                 </Link>

@@ -75,7 +75,9 @@ export function AppShell({ brand, user, nav, labels, signOutAction, children }: 
                   <Link href="/messages">
                     <MessageCircle className="size-5" />
                     {counts.unreadMessages > 0 && (
-                      <span className="absolute right-1.5 top-1.5 size-2.5 rounded-full bg-blue-500 ring-2 ring-background" aria-label={`${counts.unreadMessages}`} />
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground ring-2 ring-background">
+                        {counts.unreadMessages > 99 ? "99+" : counts.unreadMessages}
+                      </span>
                     )}
                   </Link>
                 </Button>

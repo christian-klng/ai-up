@@ -225,10 +225,10 @@ export function ChatThread({ conversationId, me, other, otherLastReadAt, initial
                   </div>
                 )}
                 {showNewDivider && (
-                  <div className="my-2 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wider text-blue-600">
-                    <span className="h-px flex-1 bg-blue-500/40" />
+                  <div className="my-2 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wider text-primary">
+                    <span className="h-px flex-1 bg-primary/40" />
                     {t("new")}
-                    <span className="h-px flex-1 bg-blue-500/40" />
+                    <span className="h-px flex-1 bg-primary/40" />
                   </div>
                 )}
                 <div className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start", grouped ? "mt-0" : "mt-2")}>
