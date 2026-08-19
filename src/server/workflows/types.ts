@@ -13,7 +13,7 @@ export type FieldSpec = {
   key: string;
   label: Localized;
   help?: Localized;
-  type: "text" | "textarea" | "number" | "boolean" | "select" | "multiselect" | "json" | "template" | "area" | "content-types" | "llm-model" | "audience" | "cron";
+  type: "text" | "textarea" | "number" | "boolean" | "select" | "multiselect" | "json" | "template" | "area" | "content-types" | "llm-model" | "audience" | "cron" | "question-key";
   required?: boolean;
   placeholder?: string;
   options?: { value: string; label: Localized }[];

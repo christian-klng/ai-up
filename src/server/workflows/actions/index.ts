@@ -273,3 +273,82 @@ registerAction<z.infer<typeof createContentConfig>>({
     return { output: { contentId: content.id, href: `/knowledge/${area.slug}/${content.id}` } };
   },
 });
+
+// ---------------------------------------------------------------------------
+// ask_user
+// ---------------------------------------------------------------------------
+
+const questionFieldSchema = z.discriminatedUnion("type", [
+  z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), type: z.literal("single_choice"), label: z.string().min(1), options: z.array(z.string().min(1)).min(2).max(12), required: z.boolean().optional() }),
+  z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), type: z.literal("multi_choice"), label: z.string().min(1), options: z.array(z.string().min(1)).min(2).max(12), required: z.boolean().optional() }),
+  z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), type: z.literal("text"), label: z.string().min(1), placeholder: z.string().optional(), required: z.boolean().optional() }),
+  z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), type: z.literal("rating"), label: z.string().min(1), max: z.number().int().min(2).max(10).optional(), required: z.boolean().optional() }),
+  z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), type: z.literal("yes_no"), label: z.string().min(1), required: z.boolean().optional() }),
+  z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), type: z.literal("cta"), label: z.string().min(1), buttonLabel: z.string().min(1), href: z.string().optional() }),
+]);
+
+const fieldsInput = z
+  .union([z.array(questionFieldSchema), z.string()])
+  .transform((v, ctx) => {
+    if (typeof v !== "string") return v;
+    try {
+      const parsed = z.array(questionFieldSchema).safeParse(JSON.parse(v));
+      if (!parsed.success) {
+        ctx.addIssue({ code: "custom", message: parsed.error.issues.map((i) => i.message).join("; ") });
+        return z.NEVER;
+      }
+      return parsed.data;
+    } catch {
+      ctx.addIssue({ code: "custom", message: "fields must be a JSON array" });
+      return z.NEVER;
+    }
+  });
+
+const askUserConfig = z.object({
+  questionKey: z.string().regex(/^[a-z][a-z0-9_\-]{1,59}$/, "questionKey: lowercase letters, digits, _ or - (2–60 chars)"),
+  title: z.string().min(1, "title is required"),
+  description: z.string().default(""),
+  fields: fieldsInput,
+  audience: audienceSchema.default({ type: "all", userIds: [] }),
+  allowDismiss: z.boolean().default(true),
+  expiresInHours: z.coerce.number().min(0).max(24 * 365).default(0),
+});
+export type AskUserConfig = z.infer<typeof askUserConfig>;
+
+registerAction<AskUserConfig>({
+  type: "ask_user",
+  labels: { name: { de: "Dem Nutzer Frage stellen", en: "Ask the user" }, description: { de: "Zeigt ein Mini-Formular unten links (Umfrage, Bewertung, Call-to-Action). Antworten lösen den Trigger „Frage beantwortet“ aus.", en: "Shows a mini form bottom-left (survey, rating, call to action). Answers fire the “Question answered” trigger." } },
+  doc: "Creates a question shown as a mini form in the bottom-left corner for the audience. `questionKey` is a stable id you reuse in a `question.answered` trigger to react to answers. `fields` is an array of {key,type,label,...} with type single_choice|multi_choice (options[]), text (placeholder), rating (max), yes_no, cta (buttonLabel, href). title/description are Liquid templates. expiresInHours 0 = no expiry.",
+  configSchema: askUserConfig,
+  fields: [
+    { key: "questionKey", type: "text", label: { de: "Frage-Schlüssel", en: "Question key" }, required: true, placeholder: "weekly_mood", help: { de: "Stabile ID – darüber reagiert ein anderer Workflow mit dem Trigger „Frage beantwortet“.", en: "Stable id – another workflow reacts via the “Question answered” trigger." } },
+    { key: "title", type: "template", label: { de: "Titel", en: "Title" }, required: true, placeholder: "Wie war dein Meeting heute?" },
+    { key: "description", type: "template", label: { de: "Beschreibung", en: "Description" } },
+    { key: "fields", type: "json", label: { de: "Felder (JSON)", en: "Fields (JSON)" }, required: true, placeholder: '[{"key":"mood","type":"single_choice","label":"Stimmung","options":["Gut","Mittel","Schlecht"],"required":true},{"key":"comment","type":"text","label":"Kommentar"}]', help: { de: "Typen: single_choice, multi_choice, text, rating, yes_no, cta", en: "Types: single_choice, multi_choice, text, rating, yes_no, cta" } },
+    { key: "audience", type: "audience", label: { de: "Empfänger", en: "Audience" }, required: true },
+    { key: "allowDismiss", type: "boolean", label: { de: "„Später“ erlauben", en: "Allow dismiss" } },
+    { key: "expiresInHours", type: "number", label: { de: "Läuft ab nach (Stunden, 0 = nie)", en: "Expires after (hours, 0 = never)" }, min: 0 },
+  ],
+  templateKeys: ["title", "description"],
+  outputDoc: { questionId: "id of the created question", questionKey: "the key", recipients: "number of targeted users (0 = everyone)" },
+  timeoutMs: 15_000,
+  async run(config, ctx) {
+    const { createQuestion } = await import("@/server/domain/questions");
+    const recipientIds = config.audience.type === "all" ? [] : [...new Set(await resolveAudience(config.audience, ctx))];
+    const q = await createQuestion({
+      questionKey: config.questionKey,
+      title: config.title.slice(0, 200),
+      description: config.description?.slice(0, 2000) || null,
+      fields: config.fields,
+      audience: config.audience,
+      recipientIds,
+      allowDismiss: config.allowDismiss,
+      expiresAt: config.expiresInHours > 0 ? new Date(Date.now() + config.expiresInHours * 3_600_000) : null,
+      workflowId: ctx.workflowId,
+      runId: ctx.runId,
+      stepId: ctx.stepId,
+      workflowName: ctx.workflowName,
+    });
+    return { output: { questionId: q.id, questionKey: q.questionKey, recipients: recipientIds.length } };
+  },
+});

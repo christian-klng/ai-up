@@ -243,6 +243,31 @@ export function SchemaForm({ fields, values, onChange, catalog, idPrefix }: { fi
               </div>
             );
           }
+          case "question-key": {
+            const opts = catalog.questionKeys;
+            return (
+              <div key={f.key} className="grid gap-1.5">
+                {label}
+                <div className="flex flex-wrap gap-2">
+                  <Select value={(v as string) || "__any__"} onValueChange={(val) => set(f.key, val === "__any__" ? "" : val)}>
+                    <SelectTrigger id={id} className="w-72">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">{t("anyQuestion")}</SelectItem>
+                      {opts.map((o) => (
+                        <SelectItem key={o.key} value={o.key}>
+                          {o.key} <span className="text-muted-foreground">· {o.title}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input value={(v as string) ?? ""} onChange={(e) => set(f.key, e.target.value)} placeholder={t("questionKeyManual")} className="w-56 font-mono text-sm" />
+                </div>
+                {help}
+              </div>
+            );
+          }
           case "multiselect":
             return null;
           default:

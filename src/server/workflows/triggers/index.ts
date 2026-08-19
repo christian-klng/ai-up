@@ -126,3 +126,31 @@ registerTrigger<Record<string, unknown>>({
   payloadDoc: { input: "arbitrary JSON passed when starting the run", startedBy: "user id" },
   samplePayload: { input: { topic: "example" } },
 });
+
+const questionAnsweredConfig = z.object({
+  /** empty = any question */
+  questionKey: z.string().trim().default(""),
+});
+registerTrigger<z.infer<typeof questionAnsweredConfig>>({
+  type: "question.answered",
+  labels: { name: { de: "Frage beantwortet", en: "Question answered" }, description: { de: "Startet, wenn ein Mitglied eine Frage (Aktion „Dem Nutzer Frage stellen“) beantwortet.", en: "Fires when a member answers a question (action “Ask the user”)." } },
+  doc: "Fires on every answer to a question created by the ask_user action. Filter by questionKey (empty = all). Payload: question {id,key,title}, response.answers (by field key), user {id,name}, stats {responses, distribution}.",
+  configSchema: questionAnsweredConfig,
+  fields: [{ key: "questionKey", type: "question-key", label: { de: "Frage-Schlüssel", en: "Question key" }, help: { de: "Leer = jede Frage.", en: "Empty = any question." } }],
+  payloadDoc: {
+    "question.id": "question id",
+    "question.key": "questionKey from the ask_user step",
+    "question.title": "question title",
+    "response.answers": "object keyed by field key, e.g. {{ trigger.response.answers.mood }}",
+    "user.id": "answering user id",
+    "user.name": "answering user name",
+    "stats.responses": "number of responses so far",
+    "stats.distribution": "per field: counts per option",
+  },
+  samplePayload: { question: { id: "…", key: "weekly_mood", title: "How was your week?" }, response: { answers: { mood: "Gut", comment: "Alles bestens" }, answeredAt: new Date().toISOString() }, user: { id: "…", name: "Jane" }, stats: { responses: 3, distribution: { mood: { Gut: 2, Mittel: 1 } } } },
+  matches: (config, payload) => {
+    const q = payload.question as { key?: string } | undefined;
+    return !config.questionKey || q?.key === config.questionKey;
+  },
+  eventTypes: ["question.answered"],
+});

@@ -440,6 +440,73 @@ export const llmProviders = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Questions (workflow action "ask_user": mini forms shown bottom-left)
+// ---------------------------------------------------------------------------
+
+export type QuestionField =
+  | { key: string; type: "single_choice"; label: string; options: string[]; required?: boolean }
+  | { key: string; type: "multi_choice"; label: string; options: string[]; required?: boolean }
+  | { key: string; type: "text"; label: string; placeholder?: string; required?: boolean }
+  | { key: string; type: "rating"; label: string; max?: number; required?: boolean }
+  | { key: string; type: "yes_no"; label: string; required?: boolean }
+  | { key: string; type: "cta"; label: string; buttonLabel: string; href?: string };
+
+export type QuestionAudience = { type: "triggerUser" | "admins" | "all" | "users"; userIds: string[] };
+
+export const questions = pgTable(
+  "questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Stable key from the ask_user step config – the `question.answered` trigger filters on it */
+    questionKey: text("question_key").notNull(),
+    workflowId: uuid("workflow_id").references(() => workflows.id, { onDelete: "set null" }),
+    runId: uuid("run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
+    stepId: text("step_id"),
+    title: text("title").notNull(),
+    description: text("description"),
+    fields: jsonb("fields").$type<QuestionField[]>().notNull().default([]),
+    audience: jsonb("audience").$type<QuestionAudience>().notNull().default({ type: "all", userIds: [] }),
+    /** resolved recipient ids at creation time (empty = everyone active) */
+    recipientIds: jsonb("recipient_ids").$type<string[]>().notNull().default([]),
+    allowDismiss: boolean("allow_dismiss").notNull().default(true),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("questions_key_idx").on(t.questionKey), index("questions_open_idx").on(t.closedAt, t.createdAt)],
+);
+
+export const questionResponses = pgTable(
+  "question_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    answers: jsonb("answers").$type<Record<string, unknown>>().notNull().default({}),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("question_responses_q_user_idx").on(t.questionId, t.userId)],
+);
+
+export const questionDismissals = pgTable(
+  "question_dismissals",
+  {
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.questionId, t.userId] })],
+);
+
+// ---------------------------------------------------------------------------
 // Audit log
 // ---------------------------------------------------------------------------
 
@@ -634,6 +701,9 @@ export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type RunStatus = WorkflowRun["status"];
 export type LlmProvider = typeof llmProviders.$inferSelect;
+export type Question = typeof questions.$inferSelect;
+export type QuestionResponse = typeof questionResponses.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
 
 export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
 export type Content = typeof contents.$inferSelect;

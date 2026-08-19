@@ -121,7 +121,8 @@
       "llm": "LLM",
       "integrations": "Integrations",
       "apiKeys": "API keys",
-      "audit": "Audit log"
+      "audit": "Audit log",
+      "questions": "Questions"
     },
     "general": {
       "title": "General & branding",
@@ -255,6 +256,49 @@
       "output": "Output",
       "skipped": "Skipped",
       "noStepsYet": "No steps started yet."
+    },
+    "questions": {
+      "title": "Questions & surveys",
+      "intro": "Questions asked by workflows (action “Ask the user”) with answers and distribution.",
+      "empty": "No questions asked yet.",
+      "open": "Open",
+      "closed": "Closed",
+      "responses": "{count, plural, =1 {# answer} other {# answers}}",
+      "close": "Close question",
+      "audience": "Audience",
+      "distribution": "Distribution",
+      "answers": "Answers",
+      "noAnswers": "No answers yet.",
+      "textAnswersBelow": "Free text – see answers.",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "apiKeys": {
+      "title": "API keys",
+      "intro": "Keys for the MCP server (e.g. Claude Code). Each key belongs to the creating admin and carries scopes.",
+      "create": "Create key",
+      "dialogIntro": "Name, scopes and an optional expiry.",
+      "createdIntro": "Copy the key now – it is shown only once.",
+      "name": "Name",
+      "scopes": "Scopes",
+      "expiresInDays": "Expires after (days, 0 = never)",
+      "expiresHint": "Recommendation: rotate keys regularly.",
+      "copied": "Copied.",
+      "copy": "Copy",
+      "onlyOnce": "This key will never be shown again. Create a new one if lost.",
+      "empty": "No API keys yet.",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "active": "Active",
+      "created": "created {date}",
+      "lastUsed": "last used {date}",
+      "expires": "expires {date}",
+      "revoke": "Revoke",
+      "confirmRevoke": "Revoke key “{name}”? Clients using it lose access immediately.",
+      "revokedToast": "Key revoked.",
+      "mcpTitle": "Connect the MCP server",
+      "mcpIntro": "The MCP server lets you inspect and edit workflows from Claude Code (or other MCP clients) – fields and docs are English.",
+      "mcpHint": "Endpoint: {url} (Streamable HTTP). Auth: Authorization: Bearer API-KEY."
     }
   },
   "status": {
@@ -486,7 +530,9 @@
         "admins": "All admins",
         "all": "All members",
         "users": "Selected members"
-      }
+      },
+      "anyQuestion": "Any question",
+      "questionKeyManual": "or type a key"
     },
     "stats": {
       "runs": "Runs (14 d)",
@@ -503,5 +549,16 @@
       "succeeded": "succeeded · {duration}",
       "failed": "failed · {duration}"
     }
+  },
+  "questions": {
+    "question": "Question",
+    "fromWorkflow": "Question · {name}",
+    "pending": "{count, plural, =1 {# open question} other {# open questions}}",
+    "send": "Submit",
+    "later": "Later",
+    "collapse": "Collapse",
+    "thanks": "Thanks for your answer!",
+    "yes": "Yes",
+    "no": "No"
   }
 }

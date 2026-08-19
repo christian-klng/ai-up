@@ -121,7 +121,8 @@
       "llm": "LLM",
       "integrations": "Integrationen",
       "apiKeys": "API-Schlüssel",
-      "audit": "Audit-Log"
+      "audit": "Audit-Log",
+      "questions": "Fragen"
     },
     "general": {
       "title": "Allgemein & Branding",
@@ -255,6 +256,49 @@
       "output": "Ausgabe",
       "skipped": "Übersprungen",
       "noStepsYet": "Noch keine Schritte gestartet."
+    },
+    "questions": {
+      "title": "Fragen & Umfragen",
+      "intro": "Von Workflows gestellte Fragen (Aktion „Dem Nutzer Frage stellen“) mit Antworten und Verteilung.",
+      "empty": "Noch keine Fragen gestellt.",
+      "open": "Offen",
+      "closed": "Geschlossen",
+      "responses": "{count, plural, =1 {# Antwort} other {# Antworten}}",
+      "close": "Frage schließen",
+      "audience": "Empfänger",
+      "distribution": "Verteilung",
+      "answers": "Antworten",
+      "noAnswers": "Noch keine Antworten.",
+      "textAnswersBelow": "Freitext – siehe Antworten.",
+      "yes": "Ja",
+      "no": "Nein"
+    },
+    "apiKeys": {
+      "title": "API-Schlüssel",
+      "intro": "Schlüssel für den MCP-Server (z. B. Claude Code). Jeder Schlüssel gehört dem erstellenden Admin und hat Berechtigungen (Scopes).",
+      "create": "Schlüssel erstellen",
+      "dialogIntro": "Name, Berechtigungen und optional ein Ablaufdatum.",
+      "createdIntro": "Kopiere den Schlüssel jetzt – er wird nur einmal angezeigt.",
+      "name": "Name",
+      "scopes": "Berechtigungen",
+      "expiresInDays": "Läuft ab nach (Tage, 0 = nie)",
+      "expiresHint": "Empfehlung: Schlüssel regelmäßig erneuern.",
+      "copied": "Kopiert.",
+      "copy": "Kopieren",
+      "onlyOnce": "Dieser Schlüssel wird nie wieder angezeigt. Bei Verlust einen neuen erstellen.",
+      "empty": "Noch keine API-Schlüssel.",
+      "revoked": "Widerrufen",
+      "expired": "Abgelaufen",
+      "active": "Aktiv",
+      "created": "erstellt {date}",
+      "lastUsed": "zuletzt genutzt {date}",
+      "expires": "läuft ab {date}",
+      "revoke": "Widerrufen",
+      "confirmRevoke": "Schlüssel „{name}“ widerrufen? Clients, die ihn nutzen, verlieren sofort den Zugriff.",
+      "revokedToast": "Schlüssel widerrufen.",
+      "mcpTitle": "MCP-Server verbinden",
+      "mcpIntro": "Der MCP-Server erlaubt es, Workflows per Claude Code (oder anderen MCP-Clients) einzusehen und zu bearbeiten – Felder und Doku auf Englisch.",
+      "mcpHint": "Endpunkt: {url} (Streamable HTTP). Auth: Authorization: Bearer API-KEY."
     }
   },
   "status": {
@@ -486,7 +530,9 @@
         "admins": "Alle Admins",
         "all": "Alle Mitglieder",
         "users": "Ausgewählte Mitglieder"
-      }
+      },
+      "anyQuestion": "Jede Frage",
+      "questionKeyManual": "oder Schlüssel eingeben"
     },
     "stats": {
       "runs": "Läufe (14 T.)",
@@ -503,5 +549,16 @@
       "succeeded": "erfolgreich · {duration}",
       "failed": "fehlgeschlagen · {duration}"
     }
+  },
+  "questions": {
+    "question": "Frage",
+    "fromWorkflow": "Frage · {name}",
+    "pending": "{count, plural, =1 {# offene Frage} other {# offene Fragen}}",
+    "send": "Absenden",
+    "later": "Später",
+    "collapse": "Einklappen",
+    "thanks": "Danke für deine Antwort!",
+    "yes": "Ja",
+    "no": "Nein"
   }
 }

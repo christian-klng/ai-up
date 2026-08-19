@@ -36,6 +36,16 @@ export type DomainEventMap = {
   "member.registered": { userId: string };
   "member.approved": { userId: string; actorId: string };
   "notification.created": { userId: string; notificationId: string };
+  "question.answered": QuestionAnsweredPayload;
+};
+
+export type QuestionAnsweredPayload = {
+  question: { id: string; key: string; title: string; workflowId: string | null; fields: unknown[] };
+  response: { answers: Record<string, unknown>; answeredAt: string };
+  user: { id: string; name: string };
+  stats: { responses: number; distribution: Record<string, Record<string, number>> };
+  actorId: string;
+  origin: EventOrigin;
 };
 
 export type DomainEventType = keyof DomainEventMap;

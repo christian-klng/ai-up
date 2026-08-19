@@ -2,7 +2,7 @@
 
 Community-Plattform (Circle.so-artig) mit Wissensbereichen, Meetings (Nextcloud Talk), Messenger, Notifications und einem Workflow-„Maschinenraum" (Trigger/Aktionen, LLM, MCP). Vollständiger Plan: [PLAN.md](PLAN.md).
 
-**Stand:** Phasen 1–3 und 5 umgesetzt – Registrierung mit Admin-Freigabe, Magic-Link-Login, App-Shell (de/en), Admin (Branding, Zweck, Mitglieder, Wissensbereiche, LLM-Provider, Workflows), Wissensbereiche mit versionierten Inhalten (Text/Bild/Video/Link), Realtime (SSE), Messenger mit Kontaktanfragen, Notification-Center, Workflow-Engine (Trigger/Aktionen, Worker, Toasts, Historie/Statistik). Offen: Phase 4 (Meetings/Nextcloud Talk), Phase 6 (Fragen-Aktion, MCP), Phase 7 (Härtung).
+**Stand:** Phasen 1–3 und 5 umgesetzt – Registrierung mit Admin-Freigabe, Magic-Link-Login, App-Shell (de/en), Admin (Branding, Zweck, Mitglieder, Wissensbereiche, LLM-Provider, Workflows), Wissensbereiche mit versionierten Inhalten (Text/Bild/Video/Link), Realtime (SSE), Messenger mit Kontaktanfragen, Notification-Center, Workflow-Engine (Trigger/Aktionen, Worker, Toasts, Historie/Statistik), Fragen-Aktion mit Mini-Formular und `question.answered`-Trigger, MCP-Server mit API-Schlüsseln. Offen: Phase 4 (Meetings/Nextcloud Talk), Phase 7 (Härtung).
 
 ## Workflows (Maschinenraum)
 
@@ -12,6 +12,13 @@ Community-Plattform (Circle.so-artig) mit Wissensbereichen, Meetings (Nextcloud 
 - Templates: LiquidJS – `{{ trigger.* }}`, `{{ steps.<id>.output.* }}`, `{{ app.name }}`, `{{ app.purpose }}`.
 - LLM: OpenAI-kompatible Provider unter Admin → LLM (Schlüssel AES-256-GCM-verschlüsselt mit `APP_ENCRYPTION_KEY`); Structured Output über `response_format` mit Fallback-Parsing.
 - Realtime-Events `workflow.run.started/finished` → Toasts oben rechts (min. 2 s), Fehler-Notifications an Admins.
+- Aktion `ask_user`: erzeugt eine Frage (Umfrage/Bewertung/CTA), die Mitgliedern unten links als Mini-Formular erscheint; Antworten feuern den Trigger `question.answered` (Filter `questionKey`). Auswertung unter Verwaltung → Fragen.
+
+## MCP-Server
+
+- Endpunkt `POST /api/mcp` (Streamable HTTP, stateless), Auth `Authorization: Bearer aiup_…` (API-Schlüssel unter Verwaltung → API-Schlüssel; nur Admins, Scopes `workflows:read|write`, `runs:read|trigger`, `llm:read`, `questions:read`).
+- Tools: `list_triggers`, `list_actions`, `describe_action`, `describe_trigger`, `list_llm_providers`, `list_llm_models`, `list_workflows`, `get_workflow`, `validate_workflow`, `create_workflow`, `update_workflow`, `set_workflow_status`, `delete_workflow`, `list_runs`, `get_run`, `trigger_workflow`, `get_workflow_stats`, `list_questions`, `get_question_results`. Resource `aiup://docs/workflow-schema`.
+- Claude Code: `claude mcp add --transport http aiup https://<domain>/api/mcp --header "Authorization: Bearer <KEY>"`.
 
 ## Stack
 

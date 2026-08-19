@@ -8,11 +8,13 @@ import { signOut } from "@/server/actions/auth";
 import { AppShell } from "./app-shell";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { WorkflowToasts } from "@/components/workflows/workflow-toasts";
+import { QuestionDock } from "@/components/questions/question-dock";
+import { listOpenQuestionsForUser } from "@/server/domain/questions";
 import { BrandLogo } from "./brand-logo";
 
 /** Server wrapper: loads everything the shell needs (settings, nav data, counters) once per request. */
 export async function AppShellServer({ user, children }: { user: CurrentUser; children: React.ReactNode }) {
-  const [settings, tNav, tAuth, tCommon, unreadNotifications, unreadMessages, areas] = await Promise.all([
+  const [settings, tNav, tAuth, tCommon, unreadNotifications, unreadMessages, areas, openQuestions] = await Promise.all([
     getAppSettings(),
     getTranslations("nav"),
     getTranslations("auth"),
@@ -20,6 +22,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
     unreadNotificationCount(user.id),
     unreadMessagesCount(user.id),
     listAreas(),
+    listOpenQuestionsForUser(user.id),
   ]);
 
   return (
@@ -57,6 +60,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
       {children}
     </AppShell>
     <WorkflowToasts isAdmin={user.role === "admin"} />
+    <QuestionDock initial={openQuestions} />
     </RealtimeProvider>
   );
 }

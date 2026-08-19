@@ -13,7 +13,23 @@ export type ChatMessageDto = {
   createdAt: string;
 };
 
+export type QuestionDto = {
+  id: string;
+  questionKey: string;
+  title: string;
+  description: string | null;
+  fields: import("@/server/db/schema").QuestionField[];
+  allowDismiss: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  workflowName: string | null;
+};
+
 export type RealtimeEventMap = {
+  /** A new question (ask_user action) for this user – shows in the bottom-left dock */
+  "question.created": { question: QuestionDto };
+  /** Question closed/expired – remove from dock */
+  "question.closed": { questionId: string };
   /** New notification for the recipient; unreadCount = total unread notifications after insert */
   "notification.created": { id: string; type: string; title: string; body: string | null; href: string | null; unreadCount: number };
   /** Unread notification counter changed (mark read etc.) */
