@@ -52,6 +52,12 @@ export function extensionForMime(mime: string, fallbackName?: string): string {
   return ext && /^[a-z0-9]{1,8}$/.test(ext) ? ext : "bin";
 }
 
+/** Relative storage path <purpose>/<yyyy>/<mm>/<id>.<ext> for a new file. */
+export function newStoragePath(purpose: MediaPurpose, id: string, ext: string, now = new Date()): string {
+  const dir = path.join(purpose, String(now.getUTCFullYear()), String(now.getUTCMonth() + 1).padStart(2, "0"));
+  return path.join(/*turbopackIgnore: true*/ dir, `${id}.${ext}`);
+}
+
 export type StoreFileInput = {
   buffer: Buffer;
   mime: string;
@@ -70,10 +76,7 @@ export type StoreFileInput = {
  */
 export async function storeFile(input: StoreFileInput): Promise<MediaFile> {
   const id = crypto.randomUUID();
-  const now = new Date();
-  const dir = path.join(input.purpose, String(now.getUTCFullYear()), String(now.getUTCMonth() + 1).padStart(2, "0"));
-  const ext = extensionForMime(input.mime, input.originalName);
-  const storagePath = path.join(/*turbopackIgnore: true*/ dir, `${id}.${ext}`);
+  const storagePath = newStoragePath(input.purpose, id, extensionForMime(input.mime, input.originalName));
   const abs = absolutePath(storagePath);
   await mkdir(path.dirname(abs), { recursive: true });
   await writeFile(abs, input.buffer);

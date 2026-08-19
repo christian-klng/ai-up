@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, CalendarClock, Home, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AreaIcon } from "@/components/knowledge/area-icon";
 
-export type NavArea = { id: string; name: string; slug: string; live?: boolean };
+export type NavArea = { id: string; name: string; slug: string; icon?: string; live?: boolean };
 
 export type SidebarNavProps = {
   labels: {
@@ -31,7 +32,7 @@ function isActivePath(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavItem({ href, icon, live, active, onNavigate, children }: { href: string; icon?: IconKey; live?: boolean; active: boolean; onNavigate?: () => void; children: React.ReactNode }) {
+function NavItem({ href, icon, areaIcon, live, active, onNavigate, children }: { href: string; icon?: IconKey; areaIcon?: string; live?: boolean; active: boolean; onNavigate?: () => void; children: React.ReactNode }) {
   const Icon = icon ? ICONS[icon] : null;
   return (
     <Link
@@ -43,7 +44,7 @@ function NavItem({ href, icon, live, active, onNavigate, children }: { href: str
         active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
       )}
     >
-      {Icon ? <Icon className="size-4 shrink-0 opacity-80" aria-hidden /> : <span className="size-4 shrink-0" aria-hidden />}
+      {Icon ? <Icon className="size-4 shrink-0 opacity-80" aria-hidden /> : areaIcon ? <AreaIcon icon={areaIcon} className="size-4 shrink-0 opacity-70" aria-hidden /> : <span className="size-4 shrink-0" aria-hidden />}
       <span className="truncate">{children}</span>
       {live && (
         <span className="ml-auto inline-flex items-center" aria-label="live">
@@ -65,8 +66,8 @@ function NavSection({ title, children }: { title: string; children: React.ReactN
 
 export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, isAdmin, onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
-  const item = (href: string, icon: IconKey | undefined, label: string, live?: boolean) => (
-    <NavItem key={href} href={href} icon={icon} live={live} active={isActivePath(pathname, href)} onNavigate={onNavigate}>
+  const item = (href: string, icon: IconKey | undefined, label: string, live?: boolean, areaIcon?: string) => (
+    <NavItem key={href} href={href} icon={icon} areaIcon={areaIcon} live={live} active={isActivePath(pathname, href)} onNavigate={onNavigate}>
       {label}
     </NavItem>
   );
@@ -77,7 +78,7 @@ export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, isAdmin, onN
 
       <NavSection title={labels.knowledge}>
         {knowledgeAreas.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground">{labels.noAreasYet}</p>}
-        {knowledgeAreas.map((a) => item(`/knowledge/${a.slug}`, undefined, a.name))}
+        {knowledgeAreas.map((a) => item(`/knowledge/${a.slug}`, undefined, a.name, false, a.icon))}
       </NavSection>
 
       <NavSection title={labels.meetings}>

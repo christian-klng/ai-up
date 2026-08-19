@@ -227,8 +227,117 @@ export const auditLog = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Knowledge areas & contents (versioned)
+// ---------------------------------------------------------------------------
+
+export const knowledgeAreas = pgTable(
+  "knowledge_areas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    /** Required: what this area is for. Shown to members and embedded into LLM prompts. */
+    purpose: text("purpose").notNull(),
+    description: text("description"),
+    /** lucide icon key, see src/components/knowledge/area-icon.tsx */
+    icon: text("icon").notNull().default("book"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("knowledge_areas_slug_idx").on(t.slug), index("knowledge_areas_sort_idx").on(t.sortOrder)],
+);
+
+export const contentTypeEnum = pgEnum("content_type", ["markdown", "image", "video", "link"]);
+
+/** Type-specific metadata stored on each version. */
+export type LinkPreview = {
+  title?: string;
+  description?: string;
+  image?: string;
+  siteName?: string;
+  fetchedAt?: string;
+};
+export type ContentVersionMeta = {
+  /** link/image/video by URL: preview + provider info */
+  preview?: LinkPreview;
+  /** video: youtube | vimeo | file | url */
+  provider?: "youtube" | "vimeo" | "file" | "url";
+  /** embed id for youtube/vimeo */
+  embedId?: string;
+  /** image/video dimensions if known */
+  width?: number;
+  height?: number;
+  /** optional caption/alt text for images */
+  alt?: string;
+};
+
+export const contents = pgTable(
+  "contents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => knowledgeAreas.id, { onDelete: "cascade" }),
+    type: contentTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    /** Points at the latest version (no FK to avoid a cycle; maintained by the domain layer). */
+    currentVersionId: uuid("current_version_id"),
+    versionCount: integer("version_count").notNull().default(0),
+    authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
+    lastEditedBy: text("last_edited_by").references(() => users.id, { onDelete: "set null" }),
+    pinned: boolean("pinned").notNull().default(false),
+    /** Denormalized text for search (title + body/url/preview) */
+    searchText: text("search_text").notNull().default(""),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("contents_area_idx").on(t.areaId, t.createdAt),
+    index("contents_type_idx").on(t.type),
+    index("contents_author_idx").on(t.authorId),
+  ],
+);
+
+export const contentVersions = pgTable(
+  "content_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contents.id, { onDelete: "cascade" }),
+    versionNo: integer("version_no").notNull(),
+    title: text("title").notNull(),
+    bodyMarkdown: text("body_markdown"),
+    mediaId: uuid("media_id").references(() => mediaFiles.id, { onDelete: "set null" }),
+    url: text("url"),
+    meta: jsonb("meta").$type<ContentVersionMeta>().notNull().default({}),
+    changeNote: text("change_note"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("content_versions_content_no_idx").on(t.contentId, t.versionNo)],
+);
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
+
+export const knowledgeAreasRelations = relations(knowledgeAreas, ({ many }) => ({
+  contents: many(contents),
+}));
+
+export const contentsRelations = relations(contents, ({ one, many }) => ({
+  area: one(knowledgeAreas, { fields: [contents.areaId], references: [knowledgeAreas.id] }),
+  author: one(users, { fields: [contents.authorId], references: [users.id] }),
+  versions: many(contentVersions),
+}));
+
+export const contentVersionsRelations = relations(contentVersions, ({ one }) => ({
+  content: one(contents, { fields: [contentVersions.contentId], references: [contents.id] }),
+  media: one(mediaFiles, { fields: [contentVersions.mediaId], references: [mediaFiles.id] }),
+  createdByUser: one(users, { fields: [contentVersions.createdBy], references: [users.id] }),
+}));
 
 export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
@@ -250,3 +359,8 @@ export type NewUser = typeof users.$inferInsert;
 export type AppSettings = typeof appSettings.$inferSelect;
 export type MediaFile = typeof mediaFiles.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+
+export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
+export type Content = typeof contents.$inferSelect;
+export type ContentType = Content["type"];
+export type ContentVersion = typeof contentVersions.$inferSelect;

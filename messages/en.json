@@ -23,7 +23,11 @@
     "role": "Role",
     "unexpectedError": "Something went wrong. Please try again.",
     "online": "Online",
-    "comingSoon": "This area arrives in one of the next phases."
+    "comingSoon": "This area arrives in one of the next phases.",
+    "menu": "Menu",
+    "confirm": "Confirm",
+    "by": "by",
+    "open": "Open"
   },
   "auth": {
     "signIn": "Sign in",
@@ -164,6 +168,28 @@
       "roleChanged": "Role of {name} changed.",
       "cannotChangeSelf": "You cannot change your own account here.",
       "registeredAt": "Registered on {date}"
+    },
+    "knowledge": {
+      "title": "Knowledge areas",
+      "intro": "Areas are categories for content. Every area needs a purpose – members see it and it is embedded into LLM prompts.",
+      "create": "Create area",
+      "edit": "Edit area",
+      "dialogIntro": "Name, purpose and icon of the area.",
+      "name": "Name",
+      "purpose": "Purpose",
+      "purposePlaceholder": "e.g. “Collection of practical examples for AI in sales – focused on concrete outcomes.”",
+      "purposeHint": "Required. Describes what belongs into this area.",
+      "description": "Description (optional)",
+      "icon": "Icon",
+      "empty": "No knowledge areas yet. Create the first one.",
+      "contentCount": "{count, plural, =1 {# item} other {# items}}",
+      "confirmDelete": "Really delete area “{name}”?",
+      "deleted": "Area deleted.",
+      "notEmpty": "The area still contains content and cannot be deleted.",
+      "errors": {
+        "nameRequired": "Please enter a name (at least 2 characters).",
+        "purposeRequired": "Please describe the purpose (at least 5 characters)."
+      }
     }
   },
   "status": {
@@ -174,5 +200,100 @@
   "role": {
     "member": "Member",
     "admin": "Admin"
+  },
+  "knowledge": {
+    "title": "Knowledge",
+    "intro": "All knowledge areas at a glance.",
+    "noAreas": "There are no knowledge areas yet.",
+    "noAreasAdminHint": "Create the first area in the admin section.",
+    "purposeLabel": "Purpose",
+    "newContent": "New content",
+    "searchPlaceholder": "Search this area …",
+    "all": "All",
+    "empty": "No content in this area yet.",
+    "emptySearch": "No matches.",
+    "types": {
+      "markdown": "Text",
+      "image": "Image",
+      "video": "Video",
+      "link": "Link"
+    },
+    "typeHints": {
+      "markdown": "Markdown text, e.g. a guide, note or article.",
+      "image": "Image or screenshot – upload or by URL.",
+      "video": "Upload a video or link one (YouTube, Vimeo, direct URL).",
+      "link": "External link with preview and optional note."
+    },
+    "editor": {
+      "createTitle": "Create content",
+      "editTitle": "Edit content",
+      "typeLabel": "Content type",
+      "titleLabel": "Title",
+      "titlePlaceholder": "Short, descriptive title",
+      "bodyLabel": "Text (Markdown)",
+      "bodyPlaceholder": "Write here … Markdown is supported.",
+      "write": "Write",
+      "preview": "Preview",
+      "nothingToPreview": "Nothing to preview yet.",
+      "urlLabel": "URL",
+      "urlPlaceholder": "https://…",
+      "imageUrlLabel": "Image URL",
+      "videoUrlLabel": "Video URL",
+      "altLabel": "Image description (alt text)",
+      "noteLabel": "Note (Markdown, optional)",
+      "uploadImage": "Upload image",
+      "uploadVideo": "Upload video",
+      "orUrl": "or provide a URL",
+      "uploading": "Uploading … {percent} %",
+      "uploaded": "Uploaded: {name}",
+      "removeFile": "Remove file",
+      "changeNoteLabel": "Change note (optional)",
+      "changeNotePlaceholder": "What did you change?",
+      "save": "Save",
+      "create": "Create",
+      "saved": "Saved",
+      "sourceUpload": "Upload",
+      "sourceUrl": "URL",
+      "errors": {
+        "titleRequired": "Please enter a title.",
+        "bodyRequired": "Please enter some text.",
+        "mediaRequired": "Please upload a file or provide a URL.",
+        "urlInvalid": "Please enter a valid http(s) URL.",
+        "tooLarge": "The file is too large (max. {mb} MB).",
+        "unsupported": "This file type is not supported.",
+        "uploadFailed": "Upload failed.",
+        "forbidden": "You are not allowed to edit this content."
+      }
+    },
+    "view": {
+      "version": "Version {no}",
+      "versions": "{count, plural, =1 {# version} other {# versions}}",
+      "history": "History",
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirmDelete": "Really delete this content?",
+      "deleted": "Content deleted.",
+      "openLink": "Open link",
+      "lastEdited": "last edited {date}",
+      "createdBy": "created by {name} on {date}",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "pinned": "Pinned",
+      "downloadVideo": "Download video",
+      "videoUnsupported": "Your browser cannot play this video."
+    },
+    "history": {
+      "title": "History: {title}",
+      "current": "Current",
+      "restore": "Restore this version",
+      "restored": "Version restored.",
+      "restoreNote": "Restored from version {no}",
+      "changedBy": "{name}, {date}",
+      "noNote": "No note",
+      "diffWith": "Changes compared to version {no}",
+      "noDiff": "No text changes.",
+      "viewVersion": "View version",
+      "back": "Back to content"
+    }
   }
 }

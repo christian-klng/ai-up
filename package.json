@@ -24,7 +24,9 @@
     "bullmq": "^6.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "diff": "^9.0.0",
     "drizzle-orm": "^0.45.2",
+    "file-type": "^22.0.2",
     "geist": "^1.7.2",
     "ioredis": "^6.0.0",
     "lucide-react": "^1.31.0",
@@ -51,6 +53,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tailwindcss/typography": "^0.5.20",
+    "@types/diff": "^7.0.2",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.23.1",

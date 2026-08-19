@@ -23,7 +23,11 @@
     "role": "Rolle",
     "unexpectedError": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
     "online": "Online",
-    "comingSoon": "Dieser Bereich folgt in einer der nächsten Phasen."
+    "comingSoon": "Dieser Bereich folgt in einer der nächsten Phasen.",
+    "menu": "Menü",
+    "confirm": "Bestätigen",
+    "by": "von",
+    "open": "Öffnen"
   },
   "auth": {
     "signIn": "Anmelden",
@@ -164,6 +168,28 @@
       "roleChanged": "Rolle von {name} geändert.",
       "cannotChangeSelf": "Du kannst dein eigenes Konto hier nicht ändern.",
       "registeredAt": "Registriert am {date}"
+    },
+    "knowledge": {
+      "title": "Wissensbereiche",
+      "intro": "Bereiche sind Kategorien für Inhalte. Jeder Bereich braucht einen Zweck – er wird Mitgliedern angezeigt und in LLM-Prompts eingebettet.",
+      "create": "Bereich anlegen",
+      "edit": "Bereich bearbeiten",
+      "dialogIntro": "Name, Zweck und Icon des Bereichs.",
+      "name": "Name",
+      "purpose": "Zweck",
+      "purposePlaceholder": "z. B. „Sammlung von Praxisbeispielen für KI-Einsatz im Vertrieb – mit Fokus auf konkrete Ergebnisse.“",
+      "purposeHint": "Pflichtfeld. Beschreibt, was in diesen Bereich gehört.",
+      "description": "Beschreibung (optional)",
+      "icon": "Icon",
+      "empty": "Noch keine Wissensbereiche. Lege den ersten an.",
+      "contentCount": "{count, plural, =1 {# Inhalt} other {# Inhalte}}",
+      "confirmDelete": "Bereich „{name}“ wirklich löschen?",
+      "deleted": "Bereich gelöscht.",
+      "notEmpty": "Der Bereich enthält noch Inhalte und kann nicht gelöscht werden.",
+      "errors": {
+        "nameRequired": "Bitte gib einen Namen an (mind. 2 Zeichen).",
+        "purposeRequired": "Bitte beschreibe den Zweck (mind. 5 Zeichen)."
+      }
     }
   },
   "status": {
@@ -174,5 +200,100 @@
   "role": {
     "member": "Mitglied",
     "admin": "Admin"
+  },
+  "knowledge": {
+    "title": "Wissen",
+    "intro": "Alle Wissensbereiche im Überblick.",
+    "noAreas": "Es gibt noch keine Wissensbereiche.",
+    "noAreasAdminHint": "Lege in der Verwaltung den ersten Bereich an.",
+    "purposeLabel": "Zweck",
+    "newContent": "Neuer Inhalt",
+    "searchPlaceholder": "In diesem Bereich suchen …",
+    "all": "Alle",
+    "empty": "Noch keine Inhalte in diesem Bereich.",
+    "emptySearch": "Keine Treffer.",
+    "types": {
+      "markdown": "Text",
+      "image": "Bild",
+      "video": "Video",
+      "link": "Link"
+    },
+    "typeHints": {
+      "markdown": "Markdown-Text, z. B. Anleitung, Notiz, Artikel.",
+      "image": "Bild oder Screenshot – hochladen oder per URL.",
+      "video": "Video hochladen oder verlinken (YouTube, Vimeo, direkte URL).",
+      "link": "Externer Link mit Vorschau und optionaler Notiz."
+    },
+    "editor": {
+      "createTitle": "Neuen Inhalt anlegen",
+      "editTitle": "Inhalt bearbeiten",
+      "typeLabel": "Art des Inhalts",
+      "titleLabel": "Titel",
+      "titlePlaceholder": "Kurzer, aussagekräftiger Titel",
+      "bodyLabel": "Text (Markdown)",
+      "bodyPlaceholder": "Schreib hier … Markdown wird unterstützt.",
+      "write": "Schreiben",
+      "preview": "Vorschau",
+      "nothingToPreview": "Noch nichts zu sehen.",
+      "urlLabel": "URL",
+      "urlPlaceholder": "https://…",
+      "imageUrlLabel": "Bild-URL",
+      "videoUrlLabel": "Video-URL",
+      "altLabel": "Bildbeschreibung (Alt-Text)",
+      "noteLabel": "Notiz (Markdown, optional)",
+      "uploadImage": "Bild hochladen",
+      "uploadVideo": "Video hochladen",
+      "orUrl": "oder URL angeben",
+      "uploading": "Wird hochgeladen … {percent} %",
+      "uploaded": "Hochgeladen: {name}",
+      "removeFile": "Datei entfernen",
+      "changeNoteLabel": "Änderungsnotiz (optional)",
+      "changeNotePlaceholder": "Was hast du geändert?",
+      "save": "Speichern",
+      "create": "Anlegen",
+      "saved": "Gespeichert",
+      "sourceUpload": "Upload",
+      "sourceUrl": "URL",
+      "errors": {
+        "titleRequired": "Bitte gib einen Titel an.",
+        "bodyRequired": "Bitte gib einen Text ein.",
+        "mediaRequired": "Bitte lade eine Datei hoch oder gib eine URL an.",
+        "urlInvalid": "Bitte gib eine gültige http(s)-URL an.",
+        "tooLarge": "Die Datei ist zu groß (max. {mb} MB).",
+        "unsupported": "Dieser Dateityp wird nicht unterstützt.",
+        "uploadFailed": "Upload fehlgeschlagen.",
+        "forbidden": "Du darfst diesen Inhalt nicht bearbeiten."
+      }
+    },
+    "view": {
+      "version": "Version {no}",
+      "versions": "{count, plural, =1 {# Version} other {# Versionen}}",
+      "history": "Verlauf",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "confirmDelete": "Diesen Inhalt wirklich löschen?",
+      "deleted": "Inhalt gelöscht.",
+      "openLink": "Link öffnen",
+      "lastEdited": "zuletzt bearbeitet {date}",
+      "createdBy": "erstellt von {name} am {date}",
+      "pin": "Anheften",
+      "unpin": "Lösen",
+      "pinned": "Angeheftet",
+      "downloadVideo": "Video herunterladen",
+      "videoUnsupported": "Dein Browser kann dieses Video nicht abspielen."
+    },
+    "history": {
+      "title": "Verlauf: {title}",
+      "current": "Aktuell",
+      "restore": "Diese Version wiederherstellen",
+      "restored": "Version wiederhergestellt.",
+      "restoreNote": "Wiederhergestellt aus Version {no}",
+      "changedBy": "{name}, {date}",
+      "noNote": "Ohne Notiz",
+      "diffWith": "Änderungen gegenüber Version {no}",
+      "noDiff": "Keine Textänderungen.",
+      "viewVersion": "Version anzeigen",
+      "back": "Zurück zum Inhalt"
+    }
   }
 }
