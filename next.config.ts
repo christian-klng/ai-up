@@ -18,6 +18,8 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   poweredByHeader: false,
+  // Dev only: allow opening the dev server via 127.0.0.1 as a second "browser identity" for multi-user testing.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
 };
 
 export default withNextIntl(nextConfig);

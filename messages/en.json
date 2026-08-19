@@ -87,7 +87,8 @@
     "searchPlaceholder": "Search members …",
     "empty": "No members found.",
     "memberSince": "Member since {date}",
-    "adminBadge": "Admin"
+    "adminBadge": "Admin",
+    "editOwnProfile": "Edit your profile"
   },
   "profile": {
     "title": "My profile",
@@ -295,5 +296,61 @@
       "viewVersion": "View version",
       "back": "Back to content"
     }
+  },
+  "contacts": {
+    "request": "Send contact request",
+    "requestTitle": "Contact request to {name}",
+    "requestIntro": "You can only message each other after they accept. A short note helps.",
+    "messagePlaceholder": "Hi, I'd like to connect about …",
+    "send": "Send request",
+    "requestSentToast": "Contact request sent to {name}.",
+    "requestSent": "Request sent",
+    "wantsToConnect": "{name} wants to connect with you.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "accepted": "Contact confirmed – you can message each other now.",
+    "declined": "Request declined.",
+    "connected": "Connected",
+    "sendMessage": "Send message",
+    "block": "Block",
+    "confirmBlock": "Really block {name}? You won't be able to message each other.",
+    "blocked": "Blocked.",
+    "youBlocked": "You blocked this member.",
+    "unblock": "Unblock",
+    "notAvailable": "Contact not available right now.",
+    "errors": {
+      "self": "That's you.",
+      "notFound": "Member not found.",
+      "blocked": "Contact not available right now.",
+      "alreadyContacts": "You are already connected.",
+      "alreadyPending": "Your request is already pending."
+    }
+  },
+  "messages": {
+    "title": "Messages",
+    "empty": "No conversations yet.",
+    "emptyHint": "Send a member a contact request – once accepted you can chat here.",
+    "selectConversation": "Select a conversation.",
+    "contacts": "Your contacts",
+    "noContacts": "No confirmed contacts yet.",
+    "startChat": "Start chat",
+    "you": "You",
+    "today": "Today",
+    "new": "New",
+    "placeholder": "Write a message … (Enter to send, Shift+Enter for a new line)",
+    "send": "Send",
+    "attach": "Attach image",
+    "typing": "{name} is typing …",
+    "seen": "Seen",
+    "loadOlder": "Load older messages",
+    "back": "Back",
+    "online": "online",
+    "offline": "offline",
+    "attachmentTooLarge": "File too large (max. {mb} MB).",
+    "attachmentUnsupported": "Only images can be attached.",
+    "uploadFailed": "Upload failed.",
+    "sendFailed": "Sending failed.",
+    "viewProfile": "View profile",
+    "noAccess": "This conversation does not exist or you are not a member."
   }
 }

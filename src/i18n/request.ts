@@ -32,5 +32,7 @@ export default getRequestConfig(async ({ locale: explicit }) => {
     locale,
     messages: (await import(`../../messages/${locale}.json`)).default,
     timeZone: process.env.APP_TIMEZONE ?? "Europe/Berlin",
+    // Global "now" for relativeTime on the server (client components use useNow()).
+    now: new Date(),
   };
 });

@@ -15,6 +15,13 @@
       "when": 1787051869746,
       "tag": "0001_knowledge",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787115436966,
+      "tag": "0002_messenger",
+      "breakpoints": true
     }
   ]
 }

@@ -173,3 +173,22 @@ export async function countUsersByStatus(): Promise<Record<User["status"], numbe
   for (const r of rows) out[r.status] = r.count;
   return out;
 }
+
+export async function getPublicUser(id: string): Promise<PublicUser | undefined> {
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      bio: users.bio,
+      avatarMediaId: users.avatarMediaId,
+      role: users.role,
+      status: users.status,
+      lastSeenAt: users.lastSeenAt,
+      createdAt: users.createdAt,
+      online: sql<boolean>`coalesce(${users.lastSeenAt} > now() - ${ONLINE_WINDOW}, false)`,
+    })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+  return rows[0];
+}

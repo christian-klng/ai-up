@@ -6,6 +6,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -208,6 +209,91 @@ export const notifications = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Messenger: contact requests, conversations, messages
+// ---------------------------------------------------------------------------
+
+export const contactStatusEnum = pgEnum("contact_status", ["pending", "accepted", "declined", "blocked"]);
+
+/**
+ * A contact relation between two members. Messaging requires an accepted request.
+ * One row per unordered pair: (requester, addressee) is unique and we look up both directions.
+ */
+export const contactRequests = pgTable(
+  "contact_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requesterId: text("requester_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addresseeId: text("addressee_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: contactStatusEnum("status").notNull().default("pending"),
+    message: text("message"),
+    /** who blocked (only when status = blocked) */
+    blockedBy: text("blocked_by"),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("contact_requests_pair_idx").on(t.requesterId, t.addresseeId),
+    index("contact_requests_addressee_idx").on(t.addresseeId, t.status),
+    index("contact_requests_requester_idx").on(t.requesterId, t.status),
+  ],
+);
+
+export const conversationKindEnum = pgEnum("conversation_kind", ["direct", "group"]);
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: conversationKindEnum("kind").notNull().default("direct"),
+    title: text("title"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    lastMessagePreview: text("last_message_preview"),
+    lastMessageSenderId: text("last_message_sender_id"),
+    ...timestamps,
+  },
+  (t) => [index("conversations_last_message_idx").on(t.lastMessageAt)],
+);
+
+export const conversationMembers = pgTable(
+  "conversation_members",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }),
+    muted: boolean("muted").notNull().default(false),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] }), index("conversation_members_user_idx").on(t.userId)],
+);
+
+export type MessageAttachment = { mediaId: string; kind: "image" | "file"; name: string; mime: string; size: number; width?: number | null; height?: number | null };
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: text("sender_id").references(() => users.id, { onDelete: "set null" }),
+    body: text("body").notNull().default(""),
+    attachments: jsonb("attachments").$type<MessageAttachment[]>().notNull().default([]),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("messages_conversation_created_idx").on(t.conversationId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit log
 // ---------------------------------------------------------------------------
 
@@ -353,12 +439,37 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }));
 
+export const contactRequestsRelations = relations(contactRequests, ({ one }) => ({
+  requester: one(users, { fields: [contactRequests.requesterId], references: [users.id] }),
+  addressee: one(users, { fields: [contactRequests.addresseeId], references: [users.id] }),
+}));
+
+export const conversationsRelations = relations(conversations, ({ many }) => ({
+  members: many(conversationMembers),
+  messages: many(messages),
+}));
+
+export const conversationMembersRelations = relations(conversationMembers, ({ one }) => ({
+  conversation: one(conversations, { fields: [conversationMembers.conversationId], references: [conversations.id] }),
+  user: one(users, { fields: [conversationMembers.userId], references: [users.id] }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
+  sender: one(users, { fields: [messages.senderId], references: [users.id] }),
+}));
+
 // Convenience types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AppSettings = typeof appSettings.$inferSelect;
 export type MediaFile = typeof mediaFiles.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type ContactRequest = typeof contactRequests.$inferSelect;
+export type ContactStatus = ContactRequest["status"];
+export type Conversation = typeof conversations.$inferSelect;
+export type ConversationMember = typeof conversationMembers.$inferSelect;
+export type Message = typeof messages.$inferSelect;
 
 export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
 export type Content = typeof contents.$inferSelect;

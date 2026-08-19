@@ -3,22 +3,26 @@ import type { CurrentUser } from "@/server/auth/session";
 import { getAppSettings } from "@/server/domain/settings";
 import { unreadNotificationCount } from "@/server/domain/notifications";
 import { listAreas } from "@/server/domain/knowledge";
+import { unreadMessagesCount } from "@/server/domain/messenger";
 import { signOut } from "@/server/actions/auth";
 import { AppShell } from "./app-shell";
+import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { BrandLogo } from "./brand-logo";
 
 /** Server wrapper: loads everything the shell needs (settings, nav data, counters) once per request. */
 export async function AppShellServer({ user, children }: { user: CurrentUser; children: React.ReactNode }) {
-  const [settings, tNav, tAuth, tCommon, unreadNotifications, areas] = await Promise.all([
+  const [settings, tNav, tAuth, tCommon, unreadNotifications, unreadMessages, areas] = await Promise.all([
     getAppSettings(),
     getTranslations("nav"),
     getTranslations("auth"),
     getTranslations("common"),
     unreadNotificationCount(user.id),
+    unreadMessagesCount(user.id),
     listAreas(),
   ]);
 
   return (
+    <RealtimeProvider userId={user.id} initialCounts={{ unreadMessages, unreadNotifications }}>
     <AppShell
       brand={{ name: settings.name, logo: <BrandLogo settings={settings} size={28} /> }}
       user={{ id: user.id, name: user.name, email: user.email, avatarMediaId: user.avatarMediaId, role: user.role }}
@@ -38,7 +42,6 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
         meetingSpaces: [],
         isAdmin: user.role === "admin",
       }}
-      counts={{ unreadMessages: 0, unreadNotifications }}
       labels={{
         messages: tNav("messages"),
         notifications: tNav("notifications"),
@@ -52,5 +55,6 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
     >
       {children}
     </AppShell>
+    </RealtimeProvider>
   );
 }

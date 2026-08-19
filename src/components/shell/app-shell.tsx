@@ -11,19 +11,21 @@ import { SidebarNav, type SidebarNavProps } from "./sidebar-nav";
 import { LocaleSwitcher } from "./locale-switcher";
 import { UserAvatar } from "./user-avatar";
 import { cn } from "@/lib/utils";
+import { useRealtime } from "@/components/realtime/realtime-provider";
 
 export type AppShellProps = {
   brand: { name: string; logo: React.ReactNode };
   user: { id: string; name: string; email: string; avatarMediaId: string | null; role: "member" | "admin" };
   nav: Omit<SidebarNavProps, "onNavigate">;
-  counts: { unreadMessages: number; unreadNotifications: number };
   labels: { messages: string; notifications: string; profile: string; admin: string; signOut: string; language: string; menu: string };
   signOutAction: () => Promise<void>;
   children: React.ReactNode;
 };
 
-export function AppShell({ brand, user, nav, counts, labels, signOutAction, children }: AppShellProps) {
+export function AppShell({ brand, user, nav, labels, signOutAction, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
+  // Live counters (SSE) – initial values come from the RealtimeProvider rendered by the server shell.
+  const { counts } = useRealtime();
 
   const sidebar = (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">

@@ -87,7 +87,8 @@
     "searchPlaceholder": "Mitglieder suchen …",
     "empty": "Keine Mitglieder gefunden.",
     "memberSince": "Mitglied seit {date}",
-    "adminBadge": "Admin"
+    "adminBadge": "Admin",
+    "editOwnProfile": "Eigenes Profil bearbeiten"
   },
   "profile": {
     "title": "Mein Profil",
@@ -295,5 +296,61 @@
       "viewVersion": "Version anzeigen",
       "back": "Zurück zum Inhalt"
     }
+  },
+  "contacts": {
+    "request": "Kontaktanfrage senden",
+    "requestTitle": "Kontaktanfrage an {name}",
+    "requestIntro": "Erst nach Bestätigung könnt ihr euch Nachrichten schreiben. Eine kurze Nachricht hilft.",
+    "messagePlaceholder": "Hallo, ich würde mich gern mit dir austauschen über …",
+    "send": "Anfrage senden",
+    "requestSentToast": "Kontaktanfrage an {name} gesendet.",
+    "requestSent": "Anfrage gesendet",
+    "wantsToConnect": "{name} möchte mit dir in Kontakt treten.",
+    "accept": "Annehmen",
+    "decline": "Ablehnen",
+    "accepted": "Kontakt bestätigt – ihr könnt jetzt Nachrichten schreiben.",
+    "declined": "Anfrage abgelehnt.",
+    "connected": "Verbunden",
+    "sendMessage": "Nachricht schreiben",
+    "block": "Blockieren",
+    "confirmBlock": "{name} wirklich blockieren? Ihr könnt euch dann keine Nachrichten mehr schreiben.",
+    "blocked": "Blockiert.",
+    "youBlocked": "Du hast dieses Mitglied blockiert.",
+    "unblock": "Blockierung aufheben",
+    "notAvailable": "Kontakt derzeit nicht möglich.",
+    "errors": {
+      "self": "Das bist du selbst.",
+      "notFound": "Mitglied nicht gefunden.",
+      "blocked": "Kontakt derzeit nicht möglich.",
+      "alreadyContacts": "Ihr seid bereits verbunden.",
+      "alreadyPending": "Deine Anfrage ist bereits unterwegs."
+    }
+  },
+  "messages": {
+    "title": "Nachrichten",
+    "empty": "Noch keine Unterhaltungen.",
+    "emptyHint": "Sende einem Mitglied eine Kontaktanfrage – nach der Bestätigung könnt ihr hier chatten.",
+    "selectConversation": "Wähle eine Unterhaltung aus.",
+    "contacts": "Deine Kontakte",
+    "noContacts": "Noch keine bestätigten Kontakte.",
+    "startChat": "Chat starten",
+    "you": "Du",
+    "today": "Heute",
+    "new": "Neu",
+    "placeholder": "Nachricht schreiben … (Enter senden, Shift+Enter neue Zeile)",
+    "send": "Senden",
+    "attach": "Bild anhängen",
+    "typing": "{name} schreibt …",
+    "seen": "Gesehen",
+    "loadOlder": "Ältere Nachrichten laden",
+    "back": "Zurück",
+    "online": "online",
+    "offline": "offline",
+    "attachmentTooLarge": "Datei zu groß (max. {mb} MB).",
+    "attachmentUnsupported": "Nur Bilder können angehängt werden.",
+    "uploadFailed": "Upload fehlgeschlagen.",
+    "sendFailed": "Senden fehlgeschlagen.",
+    "viewProfile": "Profil ansehen",
+    "noAccess": "Diese Unterhaltung gibt es nicht oder du bist kein Mitglied."
   }
 }

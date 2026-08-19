@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { Search } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
@@ -37,7 +38,8 @@ export default async function MembersPage({ searchParams }: PageProps<"/members"
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {members.map((m) => {
             return (
-              <li key={m.id} className="flex items-start gap-3 rounded-lg border bg-card p-4">
+              <li key={m.id}>
+                <Link href={`/members/${m.id}`} className="flex h-full items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-accent/40">
                 <span className="relative">
                   <UserAvatar user={m} size={44} variant="thumb" />
                   {m.online && <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 ring-2 ring-card" title={tCommon("online")} />}
@@ -53,6 +55,7 @@ export default async function MembersPage({ searchParams }: PageProps<"/members"
                     <p className="mt-0.5 text-xs text-muted-foreground">{t("memberSince", { date: format.dateTime(m.createdAt, { dateStyle: "medium" }) })}</p>
                   )}
                 </div>
+                </Link>
               </li>
             );
           })}
