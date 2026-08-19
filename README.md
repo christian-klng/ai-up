@@ -12,6 +12,7 @@ Community-Plattform (Circle.so-artig) mit Wissensbereichen, Meetings (Nextcloud 
 - Templates: LiquidJS – `{{ trigger.* }}`, `{{ steps.<id>.output.* }}`, `{{ app.name }}`, `{{ app.purpose }}`.
 - LLM: OpenAI-kompatible Provider unter Admin → LLM (Schlüssel AES-256-GCM-verschlüsselt mit `APP_ENCRYPTION_KEY`); Structured Output über `response_format` mit Fallback-Parsing.
 - Realtime-Events `workflow.run.started/finished` → Toasts oben rechts (min. 2 s), Fehler-Notifications an Admins.
+- Aktion `send_message`: Chat-Nachricht vom **System-Bot** (Name unter Verwaltung → Allgemein) an Empfänger; die Bot-Unterhaltung erscheint ohne Kontaktanfrage im Messenger. Antworten an den Bot feuern den Trigger `bot.message.received` (z. B. für LLM-Antworten).
 - Aktion `ask_user`: erzeugt eine Frage (Umfrage/Bewertung/CTA), die Mitgliedern unten links als Mini-Formular erscheint; Antworten feuern den Trigger `question.answered` (Filter `questionKey`). Auswertung unter Verwaltung → Fragen.
 
 ## MCP-Server

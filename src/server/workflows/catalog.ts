@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { users } from "@/server/db/schema";
 import { listAreas } from "@/server/domain/knowledge";
@@ -27,7 +27,7 @@ export async function getEditorCatalog(): Promise<EditorCatalog> {
   const [areas, providers, members, questionKeysDb, wfs] = await Promise.all([
     listAreas(),
     listProviders(),
-    db.select({ id: users.id, name: users.name }).from(users).where(eq(users.status, "active")).orderBy(asc(users.name)),
+    db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.status, "active"), eq(users.isBot, false))).orderBy(asc(users.name)),
     listQuestionKeys(),
     db.query.workflows.findMany({ columns: { steps: true } }),
   ]);

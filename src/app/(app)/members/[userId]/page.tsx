@@ -31,11 +31,12 @@ export default async function MemberProfilePage({ params }: PageProps<"/members/
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{member.name}</h1>
             {member.role === "admin" && <Badge variant="secondary">{t("adminBadge")}</Badge>}
+            {member.isBot && <Badge>{t("botBadge")}</Badge>}
             {member.online && <Badge variant="outline">{tc("online")}</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{t("memberSince", { date: format.dateTime(member.createdAt, { dateStyle: "long" }) })}</p>
           {member.bio && <p className="mt-4 whitespace-pre-line text-sm leading-relaxed">{member.bio}</p>}
-          {!isMe && (
+          {!isMe && !member.isBot && (
             <div className="mt-6">
               <ContactButton otherUserId={member.id} otherName={member.name} state={state} />
             </div>

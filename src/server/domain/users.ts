@@ -10,7 +10,7 @@ import { generateRandomAvatar } from "@/server/media/avatars";
 import { createNotifications } from "./notifications";
 import { getAppSettings } from "./settings";
 
-export type PublicUser = Pick<User, "id" | "name" | "bio" | "avatarMediaId" | "role" | "status" | "lastSeenAt" | "createdAt"> & { online: boolean };
+export type PublicUser = Pick<User, "id" | "name" | "bio" | "avatarMediaId" | "role" | "status" | "lastSeenAt" | "createdAt" | "isBot"> & { online: boolean };
 
 const ONLINE_WINDOW = sql`interval '3 minutes'`;
 
@@ -134,7 +134,7 @@ export async function touchLastSeen(userId: string): Promise<void> {
 }
 
 export async function listUsers(opts: { status?: User["status"]; query?: string; limit?: number } = {}): Promise<User[]> {
-  const conds = [];
+  const conds = [eq(users.isBot, false)];
   if (opts.status) conds.push(eq(users.status, opts.status));
   if (opts.query) {
     const q = `%${opts.query.trim()}%`;
@@ -148,7 +148,7 @@ export async function listUsers(opts: { status?: User["status"]; query?: string;
 }
 
 export async function listActiveMembers(query?: string): Promise<PublicUser[]> {
-  const conds = [eq(users.status, "active")];
+  const conds = [eq(users.status, "active"), eq(users.isBot, false)];
   if (query) conds.push(ilike(users.name, `%${query.trim()}%`));
   return db
     .select({
@@ -160,6 +160,7 @@ export async function listActiveMembers(query?: string): Promise<PublicUser[]> {
       status: users.status,
       lastSeenAt: users.lastSeenAt,
       createdAt: users.createdAt,
+      isBot: users.isBot,
       online: sql<boolean>`coalesce(${users.lastSeenAt} > now() - ${ONLINE_WINDOW}, false)`,
     })
     .from(users)
@@ -168,7 +169,7 @@ export async function listActiveMembers(query?: string): Promise<PublicUser[]> {
 }
 
 export async function countUsersByStatus(): Promise<Record<User["status"], number>> {
-  const rows = await db.select({ status: users.status, count: sql<number>`count(*)::int` }).from(users).groupBy(users.status);
+  const rows = await db.select({ status: users.status, count: sql<number>`count(*)::int` }).from(users).where(eq(users.isBot, false)).groupBy(users.status);
   const out: Record<User["status"], number> = { pending: 0, active: 0, suspended: 0 };
   for (const r of rows) out[r.status] = r.count;
   return out;
@@ -185,6 +186,7 @@ export async function getPublicUser(id: string): Promise<PublicUser | undefined>
       status: users.status,
       lastSeenAt: users.lastSeenAt,
       createdAt: users.createdAt,
+      isBot: users.isBot,
       online: sql<boolean>`coalesce(${users.lastSeenAt} > now() - ${ONLINE_WINDOW}, false)`,
     })
     .from(users)

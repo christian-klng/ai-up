@@ -18,7 +18,7 @@ export default async function MessagesLayout({ children }: { children: React.Rea
         unreadCount: c.unreadCount,
       }))}
       contacts={contacts.filter((c) => !c.conversationId).map((c) => ({ id: c.id, name: c.name, avatarMediaId: c.avatarMediaId, online: c.online }))}
-      labels={{ title: t("title"), empty: t("empty"), emptyHint: t("emptyHint"), contacts: t("contacts"), you: t("you"), startChat: t("startChat") }}
+      labels={{ title: t("title"), empty: t("empty"), emptyHint: t("emptyHint"), contacts: t("contacts"), you: t("you"), startChat: t("startChat"), bot: t("bot") }}
     >
       {children}
     </MessagesShell>

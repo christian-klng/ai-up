@@ -23,6 +23,7 @@ export type AdminFormState = { status: "idle" } | { status: "saved" } | { status
 const generalSchema = z.object({
   name: z.string().trim().min(1).max(80),
   tagline: z.string().trim().max(160).optional(),
+  botName: z.string().trim().min(2).max(60).default("Assistent"),
   primaryColor: z.string().refine(isValidHexColor),
   radius: z.coerce.number().min(0).max(1.5),
   mode: z.enum(["light", "dark", "system"]),
@@ -34,14 +35,18 @@ export async function saveGeneralSettingsAction(_prev: AdminFormState, formData:
   const parsed = generalSchema.safeParse({
     name: formData.get("name"),
     tagline: formData.get("tagline") || undefined,
+    botName: formData.get("botName") || undefined,
     primaryColor: formData.get("primaryColor"),
     radius: formData.get("radius"),
     mode: formData.get("mode"),
     defaultLocale: formData.get("defaultLocale"),
   });
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message };
-  const { name, tagline, primaryColor, radius, mode, defaultLocale } = parsed.data;
-  await updateAppSettings({ name, tagline: tagline ?? null, defaultLocale, theme: { primaryColor: primaryColor.toLowerCase(), radius, mode } });
+  const { name, tagline, botName, primaryColor, radius, mode, defaultLocale } = parsed.data;
+  await updateAppSettings({ name, tagline: tagline ?? null, botName, defaultLocale, theme: { primaryColor: primaryColor.toLowerCase(), radius, mode } });
+  // keep the bot user's display name in sync
+  const { ensureBotUser } = await import("@/server/domain/bot");
+  await ensureBotUser().catch(() => {});
   await db.insert(auditLog).values({ actorId: admin.id, action: "settings.general.updated", targetType: "settings", targetId: "default" });
   revalidatePath("/", "layout");
   return { status: "saved" };

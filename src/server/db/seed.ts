@@ -37,4 +37,10 @@ export async function seed(db: Db) {
       console.log(`[seed] promoted ${email} to active admin`);
     }
   }
+
+  // System bot (sender of workflow chat messages) – idempotent
+  await db
+    .insert(users)
+    .values({ id: "system-bot", email: "bot@system.local", name: "Assistent", emailVerified: true, role: "member", status: "active", isBot: true, locale: env.DEFAULT_LOCALE })
+    .onConflictDoNothing();
 }

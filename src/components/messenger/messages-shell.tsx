@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 export type ConversationRow = {
   id: string;
-  other: { id: string; name: string; avatarMediaId: string | null; online: boolean } | null;
+  other: { id: string; name: string; avatarMediaId: string | null; isBot?: boolean; online: boolean } | null;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
   lastMessageSenderId: string | null;
@@ -23,7 +23,7 @@ type Props = {
   meId: string;
   conversations: ConversationRow[];
   contacts: { id: string; name: string; avatarMediaId: string | null; online: boolean }[];
-  labels: { title: string; empty: string; emptyHint: string; contacts: string; you: string; startChat: string };
+  labels: { title: string; empty: string; emptyHint: string; contacts: string; you: string; startChat: string; bot: string };
   children: React.ReactNode;
 };
 
@@ -96,11 +96,14 @@ export function MessagesShell({ meId, conversations, contacts, labels, children 
                 >
                   <span className="relative shrink-0">
                     {other ? <UserAvatar user={other} size={40} variant="thumb" /> : <span className="block size-10 rounded-full bg-muted" />}
-                    {other?.online && <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 ring-2 ring-background" />}
+                    {other?.online && !other.isBot && <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 ring-2 ring-background" />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className={cn("truncate text-sm", c.unreadCount > 0 ? "font-semibold" : "font-medium")}>{other?.name ?? "–"}</span>
+                      <span className={cn("truncate text-sm", c.unreadCount > 0 ? "font-semibold" : "font-medium")}>
+                        {other?.name ?? "–"}
+                        {other?.isBot && <span className="ml-1.5 rounded bg-primary/10 px-1 text-[10px] font-medium uppercase text-primary">{labels.bot}</span>}
+                      </span>
                       {c.lastMessageAt && <span className="shrink-0 text-[11px] text-muted-foreground">{format.relativeTime(new Date(c.lastMessageAt), now)}</span>}
                     </span>
                     <span className="flex items-center justify-between gap-2">

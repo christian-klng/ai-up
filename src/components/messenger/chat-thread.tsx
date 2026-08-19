@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   conversationId: string;
   me: { id: string; name: string; avatarMediaId: string | null };
-  other: { id: string; name: string; avatarMediaId: string | null; online: boolean } | null;
+  other: { id: string; name: string; avatarMediaId: string | null; isBot?: boolean; online: boolean } | null;
   otherLastReadAt: string | null;
   initialMessages: ChatMessageDto[];
   initialHasMore: boolean;
@@ -190,11 +190,11 @@ export function ChatThread({ conversationId, me, other, otherLastReadAt, initial
           <Link href={`/members/${other.id}`} className="flex min-w-0 items-center gap-2.5" title={t("viewProfile")}>
             <span className="relative">
               <UserAvatar user={other} size={32} variant="thumb" />
-              {other.online && <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />}
+              {other.online && !other.isBot && <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{other.name}</span>
-              <span className="block text-xs text-muted-foreground">{typingName ? t("typing", { name: typingName }) : other.online ? t("online") : t("offline")}</span>
+              <span className="block text-xs text-muted-foreground">{other.isBot ? t("botHint") : typingName ? t("typing", { name: typingName }) : other.online ? t("online") : t("offline")}</span>
             </span>
           </Link>
         )}

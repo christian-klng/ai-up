@@ -88,7 +88,8 @@
     "empty": "Keine Mitglieder gefunden.",
     "memberSince": "Mitglied seit {date}",
     "adminBadge": "Admin",
-    "editOwnProfile": "Eigenes Profil bearbeiten"
+    "editOwnProfile": "Eigenes Profil bearbeiten",
+    "botBadge": "Bot"
   },
   "profile": {
     "title": "Mein Profil",
@@ -141,7 +142,9 @@
       "modeDark": "Dunkel",
       "modeSystem": "System",
       "defaultLocale": "Standardsprache",
-      "preview": "Vorschau"
+      "preview": "Vorschau",
+      "botName": "Name des System-Bots",
+      "botNameHint": "Absender für Chat-Nachrichten aus Workflows (Aktion „Nachricht senden“)."
     },
     "purpose": {
       "title": "Zweck der Community",
@@ -459,7 +462,9 @@
     "uploadFailed": "Upload fehlgeschlagen.",
     "sendFailed": "Senden fehlgeschlagen.",
     "viewProfile": "Profil ansehen",
-    "noAccess": "Diese Unterhaltung gibt es nicht oder du bist kein Mitglied."
+    "noAccess": "Diese Unterhaltung gibt es nicht oder du bist kein Mitglied.",
+    "bot": "Bot",
+    "botHint": "System-Bot · antwortet über Workflows"
   },
   "workflows": {
     "title": "Workflows",

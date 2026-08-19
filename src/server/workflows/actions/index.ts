@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { registerAction } from "../registry";
 import type { ActionRunContext } from "../types";
 import { db } from "@/server/db/client";
@@ -192,7 +192,7 @@ export async function resolveAudience(audience: NotifyConfig["audience"], ctx: P
     case "admins":
       return (await db.select({ id: users.id }).from(users).where(eq(users.role, "admin"))).map((r) => r.id);
     case "all":
-      return (await db.select({ id: users.id }).from(users).where(eq(users.status, "active"))).map((r) => r.id);
+      return (await db.select({ id: users.id }).from(users).where(and(eq(users.status, "active"), eq(users.isBot, false)))).map((r) => r.id);
     case "users":
       return audience.userIds;
   }
@@ -350,5 +350,37 @@ registerAction<AskUserConfig>({
       workflowName: ctx.workflowName,
     });
     return { output: { questionId: q.id, questionKey: q.questionKey, recipients: recipientIds.length } };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// send_message (system bot → messenger)
+// ---------------------------------------------------------------------------
+
+const sendMessageConfig = z.object({
+  audience: audienceSchema.default({ type: "triggerUser", userIds: [] }),
+  body: z.string().min(1, "body is required"),
+});
+registerAction<z.infer<typeof sendMessageConfig>>({
+  type: "send_message",
+  labels: { name: { de: "Nachricht senden (Bot)", en: "Send message (bot)" }, description: { de: "Schickt den Empfängern eine Chat-Nachricht vom System-Bot im Messenger – ohne Kontaktanfrage.", en: "Sends recipients a chat message from the system bot in the messenger – no contact request needed." } },
+  doc: "Sends a messenger message from the system bot (name configurable under Admin → General) to the audience. A direct conversation bot↔user is created on demand. Replies to the bot fire the `bot.message.received` trigger. `body` is a Liquid template; plain text with line breaks.",
+  configSchema: sendMessageConfig,
+  fields: [
+    { key: "audience", type: "audience", label: { de: "Empfänger", en: "Audience" }, required: true },
+    { key: "body", type: "template", label: { de: "Nachricht", en: "Message" }, required: true, placeholder: "Hallo {{ trigger.user.name }}, …" },
+  ],
+  templateKeys: ["body"],
+  outputDoc: { sent: "number of messages sent", conversationIds: "conversation ids per recipient" },
+  timeoutMs: 30_000,
+  async run(config, ctx) {
+    const { sendBotMessage } = await import("@/server/domain/bot");
+    const ids = [...new Set(await resolveAudience(config.audience, ctx))];
+    const conversationIds: string[] = [];
+    for (const userId of ids) {
+      const r = await sendBotMessage(userId, config.body.slice(0, 10_000));
+      if (r) conversationIds.push(r.conversationId);
+    }
+    return { output: { sent: conversationIds.length, conversationIds } };
   },
 });

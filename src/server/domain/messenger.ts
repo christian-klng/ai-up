@@ -15,7 +15,9 @@ import {
 } from "@/server/db/schema";
 import { publishToUser, publishToUsers } from "@/server/realtime/publish";
 import { createNotification, localized, resolveNotifications } from "./notifications";
+import { emitDomainEvent } from "@/server/events/bus";
 import type { ChatMessageDto } from "@/lib/realtime-events";
+import { BOT_USER_ID } from "@/lib/bot";
 
 // ---------------------------------------------------------------------------
 // Contacts
@@ -215,7 +217,7 @@ export async function getOrCreateDirectConversation(a: string, b: string): Promi
 export type ConversationListItem = {
   id: string;
   kind: Conversation["kind"];
-  other: { id: string; name: string; avatarMediaId: string | null; online: boolean } | null;
+  other: { id: string; name: string; avatarMediaId: string | null; isBot: boolean; online: boolean } | null;
   lastMessageAt: Date | null;
   lastMessagePreview: string | null;
   lastMessageSenderId: string | null;
@@ -227,7 +229,7 @@ export async function listConversations(meId: string): Promise<ConversationListI
     .select({
       conv: conversations,
       lastReadAt: cmA.lastReadAt,
-      other: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId, online: sql<boolean>`coalesce(${users.lastSeenAt} > now() - interval '3 minutes', false)` },
+      other: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId, isBot: users.isBot, online: sql<boolean>`coalesce(${users.lastSeenAt} > now() - interval '3 minutes', false)` },
       unreadCount: sql<number>`(select count(*)::int from ${messages} m where m.conversation_id = ${conversations}."id" and m.deleted_at is null and m.sender_id is distinct from ${cmA}."user_id" and (${cmA}."last_read_at" is null or m.created_at > ${cmA}."last_read_at"))`,
     })
     .from(cmA)
@@ -328,6 +330,9 @@ export async function sendMessage(me: Pick<User, "id" | "name" | "avatarMediaId"
   });
   const ids = await memberIds(conversationId);
   await Promise.all(ids.map(async (uid) => publishToUser(uid, "message.created", { message: dto, unreadMessages: await unreadMessagesCount(uid) })));
+  if (me.id !== BOT_USER_ID && ids.includes(BOT_USER_ID)) {
+    emitDomainEvent("bot.message.received", { conversationId, messageId: dto.id, text: dto.body, attachments: dto.attachments, user: { id: me.id, name: me.name }, actorId: me.id, origin: { kind: "user" } });
+  }
   return dto;
 }
 

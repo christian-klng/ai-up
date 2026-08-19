@@ -154,3 +154,19 @@ registerTrigger<z.infer<typeof questionAnsweredConfig>>({
   },
   eventTypes: ["question.answered"],
 });
+
+const botMessageConfig = z.object({
+  /** optional substring/regex the message must match (case-insensitive); empty = all */
+  contains: z.string().trim().default(""),
+});
+registerTrigger<z.infer<typeof botMessageConfig>>({
+  type: "bot.message.received",
+  labels: { name: { de: "Nachricht an den Bot", en: "Message to the bot" }, description: { de: "Startet, wenn ein Mitglied dem System-Bot im Messenger schreibt – z. B. um per LLM zu antworten (Aktion „Nachricht senden“).", en: "Fires when a member writes to the system bot in the messenger – e.g. to reply via LLM (action “Send message”)." } },
+  doc: "Fires for every message a member sends in a conversation with the system bot. Optional `contains` filter (case-insensitive substring). Payload: text, user {id,name}, conversationId, attachments. Reply with action send_message (audience triggerUser).",
+  configSchema: botMessageConfig,
+  fields: [{ key: "contains", type: "text", label: { de: "Enthält (optional)", en: "Contains (optional)" }, help: { de: "Nur auslösen, wenn die Nachricht diesen Text enthält.", en: "Only fire when the message contains this text." } }],
+  payloadDoc: { text: "message text", "user.id": "sender id", "user.name": "sender name", conversationId: "conversation id", attachments: "attachments array", messageId: "message id" },
+  samplePayload: { text: "Hallo Bot, was gibt es Neues?", user: { id: "…", name: "Jane" }, conversationId: "…", attachments: [], messageId: "…" },
+  matches: (config, payload) => !config.contains || String(payload.text ?? "").toLowerCase().includes(config.contains.toLowerCase()),
+  eventTypes: ["bot.message.received"],
+});

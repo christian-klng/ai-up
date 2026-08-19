@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const PRESETS = ["#2563eb", "#0f766e", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0f172a", "#b45309"];
 
-type Props = { settings: { name: string; tagline: string | null; theme: ThemeSettings; defaultLocale: "de" | "en" } };
+type Props = { settings: { name: string; tagline: string | null; botName: string; theme: ThemeSettings; defaultLocale: "de" | "en" } };
 
 export function GeneralSettingsForm({ settings }: Props) {
   const t = useTranslations("admin.general");
@@ -43,6 +43,11 @@ export function GeneralSettingsForm({ settings }: Props) {
           <div className="grid gap-2">
             <Label htmlFor="tagline">{t("tagline")}</Label>
             <Input id="tagline" name="tagline" defaultValue={settings.tagline ?? ""} maxLength={160} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="botName">{t("botName")}</Label>
+            <Input id="botName" name="botName" defaultValue={settings.botName} required maxLength={60} />
+            <p className="text-xs text-muted-foreground">{t("botNameHint")}</p>
           </div>
 
           <div className="grid gap-2">

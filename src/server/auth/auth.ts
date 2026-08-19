@@ -56,7 +56,7 @@ export const auth = betterAuth({
       rateLimit: { window: 60, max: 5 },
       async sendMagicLink({ email, url }) {
         const user = await getUserByEmail(email);
-        if (!user || user.status !== "active") {
+        if (!user || user.status !== "active" || user.isBot) {
           // Never leak account state; just don't send anything.
           logger.warn({ email, status: user?.status ?? "unknown" }, "magic link requested for non-active account");
           return;

@@ -52,6 +52,8 @@ export const users = pgTable(
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     approvedBy: text("approved_by"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /** System bot (workflow messages); hidden from member lists, cannot log in */
+    isBot: boolean("is_bot").notNull().default(false),
     ...timestamps,
   },
   (t) => [uniqueIndex("users_email_idx").on(t.email), index("users_status_idx").on(t.status)],
@@ -128,6 +130,8 @@ export const appSettings = pgTable("app_settings", {
   faviconMediaId: uuid("favicon_media_id"),
   theme: jsonb("theme").$type<ThemeSettings>().notNull().default({ primaryColor: "#2563eb", radius: 0.5, mode: "system" }),
   defaultLocale: localeEnum("default_locale").notNull().default("de"),
+  /** Display name of the system bot that sends workflow messages */
+  botName: text("bot_name").notNull().default("Assistent"),
   /** Encrypted JSON blobs for integrations are stored in dedicated tables later; keep generic extras here. */
   extra: jsonb("extra").$type<Record<string, unknown>>().notNull().default({}),
   ...timestamps,

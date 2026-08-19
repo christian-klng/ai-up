@@ -37,6 +37,8 @@ export type DomainEventMap = {
   "member.approved": { userId: string; actorId: string };
   "notification.created": { userId: string; notificationId: string };
   "question.answered": QuestionAnsweredPayload;
+  /** A member wrote to the system bot in the messenger */
+  "bot.message.received": { conversationId: string; messageId: string; text: string; attachments: unknown[]; user: { id: string; name: string }; actorId: string; origin: EventOrigin };
 };
 
 export type QuestionAnsweredPayload = {

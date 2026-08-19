@@ -88,7 +88,8 @@
     "empty": "No members found.",
     "memberSince": "Member since {date}",
     "adminBadge": "Admin",
-    "editOwnProfile": "Edit your profile"
+    "editOwnProfile": "Edit your profile",
+    "botBadge": "Bot"
   },
   "profile": {
     "title": "My profile",
@@ -141,7 +142,9 @@
       "modeDark": "Dark",
       "modeSystem": "System",
       "defaultLocale": "Default language",
-      "preview": "Preview"
+      "preview": "Preview",
+      "botName": "System bot name",
+      "botNameHint": "Sender of chat messages from workflows (action “Send message”)."
     },
     "purpose": {
       "title": "Community purpose",
@@ -459,7 +462,9 @@
     "uploadFailed": "Upload failed.",
     "sendFailed": "Sending failed.",
     "viewProfile": "View profile",
-    "noAccess": "This conversation does not exist or you are not a member."
+    "noAccess": "This conversation does not exist or you are not a member.",
+    "bot": "Bot",
+    "botHint": "System bot · replies via workflows"
   },
   "workflows": {
     "title": "Workflows",
