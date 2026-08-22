@@ -1,0 +1,32 @@
+# LiveKit server config for AI-Up (production). Values in ${...} are NOT substituted by LiveKit –
+# replace LIVEKIT_DOMAIN / NODE_IP / APP_WEBHOOK_URL / keys before deploying, or let Coolify render
+# this file via a "Configuration File" with template variables. Keys come from the LIVEKIT_KEYS env var.
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50200
+  use_external_ip: true
+  # node_ip: NODE_IP            # uncomment + set if auto-detection of the public IP fails
+redis:
+  address: redis:6379
+turn:
+  enabled: true
+  domain: LIVEKIT_DOMAIN        # DNS name that resolves to this host
+  udp_port: 3478
+  # TURN over TLS (443/5349) needs a certificate mounted into the container; add later if UDP is blocked
+  # for many participants (corporate networks). external_tls: true if a TCP load balancer terminates TLS.
+webhook:
+  api_key: LIVEKIT_API_KEY      # events are signed with this key's secret
+  urls:
+    - APP_WEBHOOK_URL
+room:
+  auto_create: true
+  empty_timeout: 300            # seconds a room stays open without participants
+  departure_timeout: 20
+  max_participants: 40
+logging:
+  level: info
+  json: true

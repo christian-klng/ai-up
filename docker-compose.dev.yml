@@ -32,6 +32,37 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # --- Media server for meetings (Phase 4). Start with: docker compose -f docker-compose.dev.yml --profile media up -d
+  livekit:
+    image: livekit/livekit-server:v1.13.5
+    profiles: ["media"]
+    command: ["--config", "/etc/livekit.yaml"]
+    ports:
+      - "7880:7880"
+      - "7881:7881/tcp"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./deploy/livekit/dev/livekit.yaml:/etc/livekit.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+
+  egress:
+    image: livekit/egress:v1.14.1
+    profiles: ["media"]
+    cap_add:
+      - SYS_ADMIN
+    shm_size: "1gb"
+    environment:
+      - EGRESS_CONFIG_FILE=/etc/egress.yaml
+    volumes:
+      - ./deploy/livekit/dev/egress.yaml:/etc/egress.yaml:ro
+      - ./data/recordings:/out
+    depends_on:
+      - redis
+      - livekit
+
 volumes:
   pgdata_dev:
   redisdata_dev:

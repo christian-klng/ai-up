@@ -35,6 +35,7 @@ Magic-Link-Mails landen lokal in Mailpit. Der erste Admin ist die Adresse aus `S
 
 - [docs/entwicklung.md](docs/entwicklung.md) – lokale Entwicklung, Skripte, Projektstruktur, Deployment auf Coolify, Sicherheit
 - [docs/workflows.md](docs/workflows.md) – Workflow-Engine, Trigger/Aktionen, LLM-Provider, MCP-Server
+- [docs/meetings-livekit.md](docs/meetings-livekit.md) – Media-Server (LiveKit) auf Coolify einrichten, Spike & Lasttest
 - [PLAN.md](PLAN.md) – Architektur- und Umsetzungsplan mit Phasen
 
 ## Lizenz

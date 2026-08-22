@@ -1,0 +1,54 @@
+# AI-Up media server: LiveKit + Egress + Redis – deploy as its OWN Coolify "Docker Compose" resource
+# (separate from the app), see docs/meetings-livekit.md for the step-by-step guide.
+#
+# Required env vars (Coolify → Environment Variables):
+#   LIVEKIT_API_KEY, LIVEKIT_API_SECRET   – generate with: node deploy/livekit/gen-keys.mjs
+#   LIVEKIT_DOMAIN                        – e.g. meet.example.com (Coolify domain of the `livekit` service, port 7880)
+#   APP_WEBHOOK_URL                       – e.g. https://app.example.com/api/livekit/webhook
+#   NODE_IP                               – public IPv4 of this host (advertised to clients for media)
+#   RECORDINGS_PATH                       – host path for audio recordings, e.g. /data/aiup/recordings
+#                                           (the app's `worker` mounts the same path read-only)
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.5
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    # LiveKit recommends host networking for media; Coolify/Traefik then proxies the signaling port (7880)
+    # from the host. We keep bridge networking for Traefik compatibility and publish the media ports directly.
+    ports:
+      - "7881:7881/tcp"          # ICE over TCP (fallback when UDP is blocked)
+      - "3478:3478/udp"          # TURN/UDP
+      - "50000-50200:50000-50200/udp"  # RTP/RTCP media (range small on purpose: ~100 participants)
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    environment:
+      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7880/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  egress:
+    image: livekit/egress:v1.14.1
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN               # required by egress >= 1.7.6 (Chrome sandbox)
+    shm_size: "1gb"
+    environment:
+      - EGRESS_CONFIG_FILE=/etc/egress.yaml
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+    volumes:
+      - ./egress.yaml:/etc/egress.yaml:ro
+      - ${RECORDINGS_PATH:-/data/aiup/recordings}:/out   # egress writes files here; the app picks them up
+    depends_on:
+      - redis
+      - livekit
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # pub/sub + transient state only

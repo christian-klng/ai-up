@@ -1,0 +1,7 @@
+# LiveKit Egress config for AI-Up. api_key/api_secret come from env (LIVEKIT_API_KEY/SECRET).
+ws_url: ws://livekit:7880
+redis:
+  address: redis:6379
+log_level: info
+# Local file output: the app requests `file_outputs[0].filepath = "/out/<meeting-id>/<timestamp>.ogg"`;
+# /out is the shared host directory (RECORDINGS_PATH). Switch to S3 later by adding an `s3:` block.

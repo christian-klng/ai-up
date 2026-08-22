@@ -206,7 +206,7 @@ Secrets (`api_key_encrypted`, Nextcloud-App-Passwort) werden mit AES-256-GCM und
 
 | Schritt | Inhalt |
 |---|---|
-| 4a Infrastruktur-Spike | LiveKit + Redis + Egress als Compose-Ressource auf Coolify (eigene Subdomain `meet.<domain>`, Traefik für WS, UDP-Range + 7881/tcp am Host, TURN), `lk load-test` mit 30 Publishern/Subscribern, Audio-only-Egress in Volume testen. Ergebnis: bestätigte Server-Größe, `docs/adr/0001-meeting-provider.md`. |
+| 4a Infrastruktur-Spike *(Vorlage + lokale Verifikation fertig, 22.08.2026: `deploy/livekit/`, `docs/meetings-livekit.md`; Audio-only-Egress lokal bestätigt)* | LiveKit + Redis + Egress als Compose-Ressource auf Coolify (eigene Subdomain `meet.<domain>`, Traefik für WS, UDP-Range + 7881/tcp am Host, TURN), `lk load-test` mit 30 Publishern/Subscribern, Audio-only-Egress in Volume testen. Ergebnis: bestätigte Server-Größe, `docs/adr/0001-meeting-provider.md`. |
 | 4b Datenmodell & Admin | `meeting_spaces`, `meetings`, `meeting_participants`, Integrations-Settings (verschlüsselt), Admin-CRUD für Bereiche, Sidebar aus DB. |
 | 4c Protokoll-Meetings | Meeting anlegen/bearbeiten, Markdown-Protokoll mit Versionen, Listen/Detailseiten (unabhängig vom Media-Server nutzbar). |
 | 4d Calls | Token-Endpunkt, Call-Seite mit LiveKit-Komponenten (de/en, Audio-/Video-Modus, Screen-Share), Start/Beitreten, Webhook-Endpunkt, Live-Punkt + Teilnehmer live, „Meeting beenden“ (Raum schließen). |
