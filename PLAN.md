@@ -169,22 +169,49 @@ Secrets (`api_key_encrypted`, Nextcloud-App-Passwort) werden mit AES-256-GCM und
 - Übersicht aller aktiven Mitglieder (Kacheln: Avatar, Name, Kurzbeschreibung, „online"-Punkt via `last_seen_at` < 3 Min).
 - Klick → Profil mit Buttons „Kontaktanfrage senden" / „Nachricht schreiben" (wenn bestätigt).
 
-### 5.5 Meeting-Bereiche & Nextcloud Talk
+### 5.5 Meeting-Bereiche & Video-Calls (Phase 4, neu geplant)
 
-- Admin legt Meeting-Bereiche an (Name, Zweck). Darin: Meetings/Seminare/Events.
-- **Meeting-Arten**:
-  - `protocol` – nur Markdown-Protokoll (Editor wie Inhalt, versioniert über dieselbe Mechanik).
-  - `audio` / `video` – Nextcloud-Talk-Call. Beim Start:
-    1. `POST /ocs/v2.php/apps/spreed/api/v4/room` (`roomType=3` öffentlich, `roomName=<Titel>`, ggf. Passwort) mit Service-Account → `token`, Join-URL `https://<nc>/call/<token>`.
-    2. Meeting → `status=live`, Event `meeting.started` → linkes Panel zeigt **grün blinkenden Punkt** am Bereich und am Meeting.
-    3. Mitglieder klicken „Beitreten" → neuer Tab mit Join-URL (Nextcloud-CSP verhindert i. d. R. iframes; wir versuchen zunächst Embed und fallen auf Tab zurück). Beitritt als Gast mit Anzeigename – oder, falls Mitglieder Nextcloud-Konten haben, als Nutzer.
-    4. **Aufzeichnung (nur Audio)**: `POST /ocs/v2.php/apps/spreed/api/v1/recording/<token>` mit `status=2` (audio) durch den Service-Account. Stopp bei Meeting-Ende (`DELETE`).
-    5. Worker pollt `GET room/<token>/participants` alle 30 s; ist der Raum > 5 Min leer oder Host beendet → `status=ended`, Aufzeichnung stoppen.
-    6. Die fertige Aufzeichnung landet in den Dateien des Service-Accounts (`Talk/Recording/…`). Worker pollt per WebDAV, lädt sie nach `/data/uploads/recordings/…`, legt `media_files` an, setzt `recording_status=available`, Event `meeting.recording.available` (Workflow-Trigger, z. B. später Transkription + Zusammenfassung per LLM).
-- Meeting-Seite: Status, Teilnehmende (aus unserer App + Nextcloud-Teilnehmerliste), Protokoll-Editor, Aufzeichnung als Audio-Player, Verlauf.
-- Konfiguration im Admin: Nextcloud-URL, Service-Nutzer, App-Passwort, „Verbindung testen" (ruft `/ocs/v2.php/cloud/capabilities` ab und zeigt an, ob `spreed.config.call.recording` verfügbar ist).
+**Ausgangslage (Stand 19.08.2026):** Die ursprünglich geplante Aufzeichnung über Nextcloud Talk ist auf der IONOS-Managed-Nextcloud nicht möglich (kein Recording-Backend, siehe Abschnitt 12). Ziel jetzt: **selbst gehostete Video-Calls für bis zu 30 Teilnehmende** mit serverseitigem **Audio-Mitschnitt**, eingebettet in die App.
 
-> **Risiko (muss in Phase 0 geprüft werden):** Die Talk-Aufzeichnung setzt das High-Performance-Backend + Recording-Server voraus. Bei einer Managed-Nextcloud über IONOS ist unklar, ob das aktiviert ist bzw. aktivierbar ist. Ohne HPB funktionieren Calls (bis ca. 4–6 Teilnehmende peer-to-peer), aber **keine serverseitige Aufzeichnung**. Fallback-Optionen, falls nicht verfügbar: (a) IONOS-Tarif mit HPB/Talk-Recording, (b) eigener Recording-Bot (Headless-Browser tritt dem Call bei und zeichnet Audio auf – aufwendig), (c) LiveKit/Jitsi selbst hosten statt Talk. Der Meeting-Code wird hinter einem `MeetingProvider`-Interface gekapselt, damit der Anbieter austauschbar bleibt.
+#### Recherche-Ergebnis: Jitsi vs. LiveKit
+
+| Kriterium | Jitsi Meet (JVB) | LiveKit |
+|---|---|---|
+| 30 Teilnehmende, Video | Ja. Ein Videobridge-Server reicht; Jitsi-Benchmarks zeigen ~20 % CPU bei 1000+ Streams, der Engpass ist Bandbreite (720p ≈ 2,5 Mbit/s pro Stream). Empfehlung laut Handbuch: ≥ 4 dedizierte Kerne, 8 GB RAM, 1 Gbit/s. | Ja, sehr effizient (SFU, ein Go-Binary). Kapazität skaliert mit abonnierten Tracks; 1-Gbit-Port begrenzt auf grob 200–400 Teilnehmende, weit vor der CPU. |
+| Komponenten | web (nginx) + prosody + jicofo + jvb (+ jibri für Recording) – 4–5 Container, Prosody nutzt nur 1 Kern | livekit-server + redis (+ egress für Recording) – 2–3 Container |
+| **Audio-only-Aufzeichnung** | Nur über **Jibri** (Headless-Chrome + ffmpeg): 4 Kerne / 8 GB **pro gleichzeitiger Aufzeichnung**, *eine* Aufzeichnung je Jibri-Instanz, kein Audio-only-Modus (Video aufnehmen, danach Tonspur extrahieren). | **Egress** mit `audio_only=true` liefert direkt eine gemischte Audiodatei (OGG/MP4) ins Dateisystem/S3; ressourcenintensiv (≈ 4 CPU/4 GB), aber nur während der Aufzeichnung aktiv. |
+| Einbettung in die App | IFrame-API (`external_api.js`) + JWT-Auth – fertige, vollständige Oberfläche (Kacheln, Screen-Share, Chat, Handheben, Breakout-Räume). | `@livekit/components-react` (fertige `VideoConference`-Komponente: Kacheln, Screen-Share, Chat) – UI läuft **in unserer App**, eigenes de/en, eigenes Design; keine Breakout-Räume out of the box. |
+| Ereignisse für Live-Punkt/Teilnehmer | Keine nativen Webhooks (nur IFrame-Events im Client oder Prosody-Module). | **Webhooks** (`room_started`, `participant_joined/left`, `room_finished`, `egress_ended`) → saubere Server-seitige Zustände. |
+| Lasttest | jitsi-meet-torture (aufwendig) | `lk load-test` im CLI enthalten (z. B. 30 Publisher/Subscriber simulieren) |
+| Netzwerk | 80/443 (Websockets `/xmpp-websocket`, `/colibri-ws` über Traefik), **10000/udp direkt** am Host | 7880 (WS, über Traefik), 7881/tcp + **UDP-Range (z. B. 50000–50200) direkt** am Host, optional eingebauter TURN auf 443/3478 |
+| Betrieb auf Coolify | Kein offizielles Template; Community berichtet Probleme (Port-Exposure, Compose-Validierung). Machbar als eigene Compose-Ressource, aber fummelig. | Eigene Compose-Ressource mit 2–3 Services; keine bekannten Coolify-Sonderfälle außer UDP-Port-Mapping. |
+
+**Antwort auf die Kernfrage:** Ja – der Media-Server (Jitsi-Videobridge *oder* LiveKit) gehört in jedem Fall in einen **separaten Service** (eigene Compose-Ressource in Coolify, bei Bedarf auf einem eigenen Server): Er braucht direkt am Host geöffnete UDP-Ports (nicht über Traefik), soll CPU-/Netzlast von der Next.js-App fernhalten und unabhängig skaliert werden können. Für **30 Teilnehmende in einem Call** reicht ein einzelner Media-Server; mehrere Bridges/Nodes werden erst bei vielen parallelen großen Calls nötig.
+
+**Größenordnung:** 30 × 720p ≈ 30 × 2,5 Mbit/s ≈ 75–100 Mbit/s Upload vom Server (mit Simulcast/Last-N deutlich weniger) – ein VPS mit 1 Gbit/s genügt. Empfehlung: Media-Server 4 vCPU / 8 GB; solange aufgezeichnet wird zusätzlich ≈ 4 vCPU / 4–8 GB für Jibri bzw. Egress. Praktisch: **App-VPS (bestehend) + Media-VPS 8 vCPU / 16 GB** oder ein großer Host mit zwei Coolify-Ressourcen.
+
+**Empfehlung: LiveKit.** Ausschlaggebend sind die native Audio-only-Aufzeichnung, die Webhooks (Live-Punkt, Teilnehmerstand, „Aufzeichnung fertig“ ohne Polling), der geringere Ressourcenbedarf und die Einbettung als Teil unserer UI. Jitsi bleibt eine gute Wahl, wenn die fertige Jitsi-Oberfläche (Breakout-Räume, Lobby-Features) wichtiger ist als Audio-Mitschnitt und Integration – dann mit Jibri (Video-Aufzeichnung, Tonspur im Worker extrahieren) und deutlich mehr Betriebsaufwand. Der Code kapselt den Anbieter weiterhin in einem `MeetingProvider`-Interface.
+
+#### Zielbild (mit LiveKit)
+
+1. **Meeting-Bereiche** (Admin: Name, Zweck) enthalten **Meetings** der Arten `protocol` (nur Markdown-Protokoll), `audio`, `video`.
+2. **Starten/Beitreten:** Jedes aktive Mitglied kann ein Meeting starten oder beitreten. Die App erzeugt serverseitig ein LiveKit-Access-Token (API-Key/-Secret, Raum = Meeting-ID, Identität = Nutzer-ID, Name/Avatar als Metadaten, Host = `roomAdmin`). Der Call läuft **in der App** (`/meetings/[space]/[meeting]/call`) mit `@livekit/components-react`; Audio-Meetings ohne Kamera-Kacheln.
+3. **Live-Status:** LiveKit-Webhook → `/api/livekit/webhook` (signiert) → `meetings.status = live|ended`, `meeting_participants` (joined/left) → Realtime-Event `meeting.started/ended/participants` → **grün blinkender Punkt** im linken Menü am Meeting-Bereich und am Meeting, Teilnehmerzahl live. Fallback: Raum per LiveKit-API abfragen (`listRooms`) beim Laden.
+4. **Aufzeichnung (nur Audio):** Beim Start (oder vom Host per Knopf) startet die App eine Room-Composite-Egress mit `audio_only=true` in eine Datei auf dem gemeinsamen Volume (`/data/recordings`), optional S3. `egress_ended`-Webhook → Worker verschiebt die Datei nach `media_files` (purpose `recording`), setzt `recording_status=available`, emittiert `meeting.recording.available` → Workflows (später Transkription + Zusammenfassung per LLM).
+5. **Meeting-Seite:** Status/Teilnehmende, Protokoll-Editor (Markdown, versioniert wie Inhalte), Audio-Player für die Aufzeichnung, Verlauf.
+6. **Konfiguration** (Admin → Integrationen): LiveKit-URL (wss), API-Key/-Secret (verschlüsselt), Egress-Zielpfad, „Verbindung testen“ (Rooms auflisten). Aufzeichnung pro Meeting-Bereich standardmäßig an/aus.
+7. **Workflows:** Trigger `meeting.started`, `meeting.ended`, `meeting.recording.available`; Aktion `create_meeting` (später).
+
+#### Umsetzungsschritte Phase 4
+
+| Schritt | Inhalt |
+|---|---|
+| 4a Infrastruktur-Spike | LiveKit + Redis + Egress als Compose-Ressource auf Coolify (eigene Subdomain `meet.<domain>`, Traefik für WS, UDP-Range + 7881/tcp am Host, TURN), `lk load-test` mit 30 Publishern/Subscribern, Audio-only-Egress in Volume testen. Ergebnis: bestätigte Server-Größe, `docs/adr/0001-meeting-provider.md`. |
+| 4b Datenmodell & Admin | `meeting_spaces`, `meetings`, `meeting_participants`, Integrations-Settings (verschlüsselt), Admin-CRUD für Bereiche, Sidebar aus DB. |
+| 4c Protokoll-Meetings | Meeting anlegen/bearbeiten, Markdown-Protokoll mit Versionen, Listen/Detailseiten (unabhängig vom Media-Server nutzbar). |
+| 4d Calls | Token-Endpunkt, Call-Seite mit LiveKit-Komponenten (de/en, Audio-/Video-Modus, Screen-Share), Start/Beitreten, Webhook-Endpunkt, Live-Punkt + Teilnehmer live, „Meeting beenden“ (Raum schließen). |
+| 4e Aufzeichnung | Egress-Start/Stop, Abholung per Worker, Player, Aufbewahrungsfrist, Event + Workflow-Trigger; Admin-Schalter je Bereich. |
+| 4f Abschluss | E2E mit zwei Browsern, Lasttest-Protokoll, Doku (Betrieb, Ports, Backup der Aufzeichnungen). |
 
 ### 5.6 Messenger
 
@@ -444,7 +471,7 @@ ai-up/
 | **1 – Fundament** | Auth (Magic Link, Freigabe, Middleware), Datenbank-Basis, App-Shell (Panel/Topbar), i18n, Admin: Allgemein/Branding/Zweck/Mitglieder, Profil + Avatare, Mitgliederübersicht, Mail-Versand, Health/Logs, Deploy-Pipeline. | Nutzer registriert sich, wird freigegeben, loggt sich per Link ein, App ist gebrandet und zweisprachig. |
 | **2 – Wissen** | Wissensbereiche (Admin), Inhalte aller vier Typen, Upload-Pipeline (Bilder/Videos, Thumbnails, Streaming), Link-Vorschau, Versionierung + Verlauf, Suche. | Inhalte anlegen/bearbeiten mit Historie; Medien liegen persistent im Volume. |
 | **3 – Realtime, Messenger, Notifications** | SSE-Hub + Redis, Notifications-Center, Kontaktanfragen, 1:1-Chat, Ungelesen-Punkt, Präsenz. | Zwei Nutzer chatten live; Anfrage-Flow und Badges funktionieren. |
-| **4 – Meetings** | Meeting-Bereiche, Protokoll-Meetings, Nextcloud-Talk-Integration (Raum, Beitritt, Live-Punkt, Teilnehmer-Polling, Audio-Recording, WebDAV-Abholung), Aufzeichnungs-Player. | Meeting starten/beitreten, blinkender Punkt, Aufzeichnung erscheint am Meeting (sofern HPB verfügbar). |
+| **4 – Meetings** (neu geplant, siehe 5.5) | Meeting-Bereiche, Protokoll-Meetings, **LiveKit** als separater Coolify-Service (Spike + Lasttest 30 Teilnehmende), Calls in der App, Webhooks → Live-Punkt/Teilnehmer, Audio-only-Egress → Aufzeichnung am Meeting, Workflow-Trigger. | Meeting starten/beitreten mit bis zu 30 Personen, blinkender Punkt, Audio-Aufzeichnung erscheint am Meeting. |
 | **5 – Workflow-Engine** | Registry, Engine, Worker, Trigger `content.*`/`schedule`/`manual`, Aktionen `llm`/`read_webpage`/`notify_user`/`create_content`, LLM-Provider-Admin, Workflow-Editor (schema-getriebene Formulare), Toasts, Historie, Statistik, Mitglieder-Ansicht. | Beispiel „Link speichern → Webseite lesen → LLM-Zusammenfassung → Notification" läuft Ende-zu-Ende. |
 | **6 – Fragen & MCP** | Aktion `ask_user` + Fragen-Dock unten links + dynamischer Trigger `question.answered`, Ergebnisse; MCP-Server, API-Keys, Tool-Set, Doku, Test mit Claude Code. | Admin editiert per Claude Code eine LLM-Aktion; Umfrage-Workflow mit Folge-Notification funktioniert. |
 | **7 – Härtung & Betrieb** | Tests (Engine, Auth, Upload), Sicherheits-Review, Backups/Restore-Probe, Performance (Indizes, Caching), Barrierefreiheit-Grundlagen, Doku, Onboarding-Texte. | Produktivfreigabe. |
@@ -455,7 +482,7 @@ Reihenfolge ist so gewählt, dass nach Phase 2 bereits eine nutzbare Wissensplat
 
 ## 12. Risiken & offene Punkte
 
-1. **Nextcloud-Talk-Aufzeichnung** auf IONOS-Managed-Nextcloud (HPB/Recording-Backend). → Spike in Phase 0, Fallbacks siehe 5.5.
+1. ~~Nextcloud-Talk-Aufzeichnung~~ – Spike (18.08.2026): HPB vorhanden, **Recording-Backend nicht konfiguriert**, IONOS-Verwaltung bietet keine Option → Phase 4 auf selbst gehosteten Media-Server (LiveKit, Alternative Jitsi) umgeplant, siehe 5.5. Neues Risiko: UDP-Port-Exposure/Validierung von Compose-Ressourcen in Coolify → im Spike 4a zuerst klären; Fallback: Media-Server auf eigenem VPS außerhalb von Coolify.
 2. **Große Video-Uploads** hinter Coolify/Traefik: Body-Limits, Timeouts. → Chunk-Upload, Limits konfigurierbar.
 3. **LLM-Provider-Unterschiede** (Structured Output, Reasoning-Parameter). → Capability-Erkennung + Fallback-Parser; pro Provider kleine Adapter.
 4. **Toasts für alle Nutzer** bei vielen Workflow-Läufen könnten stören. → Admin-Setting: „Toasts an alle | nur Betroffene + Admins", Zusammenfassen bei > 3 gleichzeitigen Läufen.
