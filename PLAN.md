@@ -1,10 +1,10 @@
 # AI-Up – Architektur- und Umsetzungsplan
 
-Community-Plattform nach dem Vorbild von Circle.so mit Wissensbereichen, Meetings (Nextcloud Talk), Messenger, Notifications und einem Workflow-„Maschinenraum" (Trigger/Aktionen, LLM, MCP). Deployment auf Coolify.
+Community-Plattform nach dem Vorbild von Circle.so mit Wissensbereichen, Meetings (Video-Calls, selbst gehostet), Messenger, Notifications und einem Workflow-„Maschinenraum" (Trigger/Aktionen, LLM, MCP). Deployment auf Coolify.
 
-> Stand: 18.08.2026 · Status: **Phase 0/1 umgesetzt** (Grundgerüst, Auth mit Freigabe, Shell, Admin-Basis – siehe README.md) · Arbeitsname „AI-Up" (Produktname wird vom Admin in der App gesetzt)
+> Stand: 19.08.2026 · Status: **Phasen 1–3, 5, 6 + System-Bot umgesetzt** (siehe README.md); **Phase 4 neu geplant** (Abschnitt 5.5: selbst gehosteter Media-Server, Empfehlung LiveKit); Phase 7 offen · Arbeitsname „AI-Up" (Produktname wird vom Admin in der App gesetzt)
 >
-> Abweichungen vom ursprünglichen Plan: Next.js **16** statt 15 (`proxy.ts` statt Middleware); Nextcloud-Spike ergab: HPB vorhanden, **Recording-Backend nicht konfiguriert** – Klärung mit IONOS läuft (siehe 5.5/12).
+> Abweichungen vom ursprünglichen Plan: Next.js **16** statt 15 (`proxy.ts` statt Middleware); Nextcloud-Talk-Aufzeichnung auf IONOS nicht möglich → Meetings über eigenen Media-Server; Messenger-Zähler in Primärfarbe statt blauem Punkt.
 
 ---
 
