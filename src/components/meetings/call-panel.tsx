@@ -5,15 +5,15 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { LogIn, Play, RotateCcw, Square } from "lucide-react";
-import { endMeetingAction, reopenMeetingAction } from "@/server/actions/meetings";
+import { Circle, Disc, LogIn, Play, RotateCcw, Square } from "lucide-react";
+import { endMeetingAction, reopenMeetingAction, startRecordingAction, stopRecordingAction } from "@/server/actions/meetings";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { LiveDot } from "./meeting-badges";
 
 type Participant = { id: string; identity: string; displayName: string | null; user: { id: string; name: string; avatarMediaId: string | null } | null };
 
-export function CallPanel({ meetingId, callHref, status, kind, canHost, callsAvailable, participants, participantCount }: { meetingId: string; callHref: string; status: "scheduled" | "live" | "ended"; kind: "audio" | "video"; canHost: boolean; callsAvailable: boolean; participants: Participant[]; participantCount: number }) {
+export function CallPanel({ meetingId, callHref, status, kind, canHost, callsAvailable, participants, participantCount, recording }: { meetingId: string; callHref: string; status: "scheduled" | "live" | "ended"; kind: "audio" | "video"; canHost: boolean; callsAvailable: boolean; participants: Participant[]; participantCount: number; recording: { enabled: boolean; status: "none" | "recording" | "processing" | "available" | "failed"; error: string | null } }) {
   const t = useTranslations("meetings.call");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -47,6 +47,27 @@ export function CallPanel({ meetingId, callHref, status, kind, canHost, callsAva
             </Button>
           )}
         </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        {recording.status === "recording" && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600">
+            <Circle className="size-2 fill-current animate-pulse" /> {t("rec.recording")}
+          </span>
+        )}
+        {recording.status === "processing" && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{t("rec.processing")}</span>}
+        {recording.status === "available" && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">{t("rec.available")}</span>}
+        {recording.status === "failed" && <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600" title={recording.error ?? undefined}>{t("rec.failed")}</span>}
+        {status === "live" && canHost && callsAvailable && recording.status !== "recording" && recording.status !== "processing" && (
+          <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => { const r = await startRecordingAction(meetingId); if (!r.ok) toast.error(r.error ?? tc("unexpectedError")); router.refresh(); })}>
+            <Disc className="size-4" /> {t("rec.start")}
+          </Button>
+        )}
+        {status === "live" && canHost && recording.status === "recording" && (
+          <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => { await stopRecordingAction(meetingId); router.refresh(); })}>
+            <Square className="size-4" /> {t("rec.stop")}
+          </Button>
+        )}
+        {status === "scheduled" && recording.enabled && <span className="text-xs text-muted-foreground">{t("rec.autoHint")}</span>}
       </div>
       {!callsAvailable && <p className="mt-2 text-sm text-muted-foreground">{t("unavailable")}</p>}
       {status === "scheduled" && callsAvailable && <p className="mt-2 text-sm text-muted-foreground">{t("notStartedHint")}</p>}

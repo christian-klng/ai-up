@@ -683,7 +683,16 @@
       "endedHint": "This meeting has ended.",
       "inCall": "In the call",
       "wasInCall": "Attended",
-      "deviceError": "Camera/microphone unavailable or not allowed – you are connected but others cannot hear you."
+      "deviceError": "Camera/microphone unavailable or not allowed – you are connected but others cannot hear you.",
+      "rec": {
+        "recording": "Recording",
+        "processing": "Processing recording …",
+        "available": "Recording available",
+        "failed": "Recording failed",
+        "start": "Start recording",
+        "stop": "Stop recording",
+        "autoHint": "Audio recording starts automatically when the first person joins."
+      }
     },
     "confirmDelete": "Really delete this meeting?",
     "deleted": "Meeting deleted.",

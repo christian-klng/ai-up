@@ -170,3 +170,34 @@ registerTrigger<z.infer<typeof botMessageConfig>>({
   matches: (config, payload) => !config.contains || String(payload.text ?? "").toLowerCase().includes(config.contains.toLowerCase()),
   eventTypes: ["bot.message.received"],
 });
+
+// ---------------------------------------------------------------------------
+// Meetings
+// ---------------------------------------------------------------------------
+const meetingTriggerConfig = z.object({ spaceIds: z.array(z.string().uuid()).default([]), kinds: z.array(z.enum(["protocol", "audio", "video"])).default([]) });
+type MeetingTriggerConfig = z.infer<typeof meetingTriggerConfig>;
+const meetingFields = [
+  { key: "spaceIds", type: "area" as const, label: { de: "Meeting-Bereiche", en: "Meeting spaces" }, help: { de: "Leer = alle Bereiche (IDs der Meeting-Bereiche).", en: "Empty = all spaces (meeting space ids)." } },
+];
+const meetingPayloadDoc = { "meeting.id": "meeting id", "meeting.title": "title", "meeting.kind": "protocol | audio | video", "meeting.status": "scheduled | live | ended", "meeting.spaceId": "space id", "meeting.spaceName": "space name", "meeting.hostId": "host user id", "meeting.href": "app-relative link" };
+const meetingSample = { meeting: { id: "…", title: "Weekly sync", kind: "video", status: "live", spaceId: "…", spaceSlug: "community", spaceName: "Community", hostId: "…", href: "/meetings/community/…" } };
+const matchesMeeting = (config: MeetingTriggerConfig, payload: Record<string, unknown>) => {
+  const m = payload.meeting as { spaceId?: string; kind?: string } | undefined;
+  if (!m) return false;
+  if (config.spaceIds.length && !config.spaceIds.includes(m.spaceId ?? "")) return false;
+  if (config.kinds.length && !config.kinds.includes(m.kind as never)) return false;
+  return true;
+};
+registerTrigger<MeetingTriggerConfig>({ type: "meeting.started", labels: { name: { de: "Meeting gestartet", en: "Meeting started" }, description: { de: "Startet, wenn ein Meeting live geht (erste Person im Call).", en: "Fires when a meeting goes live (first person in the call)." } }, doc: "Fires when a meeting becomes live. Filter by spaceIds.", configSchema: meetingTriggerConfig, fields: meetingFields, payloadDoc: meetingPayloadDoc, samplePayload: meetingSample, matches: matchesMeeting, eventTypes: ["meeting.started"] });
+registerTrigger<MeetingTriggerConfig>({ type: "meeting.ended", labels: { name: { de: "Meeting beendet", en: "Meeting ended" }, description: { de: "Startet, wenn ein Meeting beendet wurde.", en: "Fires when a meeting has ended." } }, doc: "Fires when a meeting ends (room closed). Filter by spaceIds.", configSchema: meetingTriggerConfig, fields: meetingFields, payloadDoc: meetingPayloadDoc, samplePayload: { meeting: { ...meetingSample.meeting, status: "ended" } }, matches: matchesMeeting, eventTypes: ["meeting.ended"] });
+registerTrigger<MeetingTriggerConfig>({
+  type: "meeting.recording.available",
+  labels: { name: { de: "Aufzeichnung verfügbar", en: "Recording available" }, description: { de: "Startet, wenn der Audio-Mitschnitt eines Meetings bereitliegt (z. B. für Transkription/Zusammenfassung).", en: "Fires when a meeting's audio recording is ready (e.g. for transcription/summary)." } },
+  doc: "Fires after the audio recording of a meeting has been imported. Payload adds mediaId, durationSeconds and recordingUrl (app-relative /api/files/<id>).",
+  configSchema: meetingTriggerConfig,
+  fields: meetingFields,
+  payloadDoc: { ...meetingPayloadDoc, mediaId: "media file id", durationSeconds: "length in seconds", recordingUrl: "/api/files/<mediaId>" },
+  samplePayload: { meeting: { ...meetingSample.meeting, status: "ended" }, mediaId: "…", durationSeconds: 1800, recordingUrl: "/api/files/…" },
+  matches: matchesMeeting,
+  eventTypes: ["meeting.recording.available"],
+});

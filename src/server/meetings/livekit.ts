@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { AccessToken, RoomServiceClient, WebhookReceiver, type WebhookEvent } from "livekit-server-sdk";
+import { ParticipantInfo_Kind } from "@livekit/protocol";
 import { db } from "@/server/db/client";
 import { meetingParticipants, meetings, users, type Meeting } from "@/server/db/schema";
 import { getLiveKitConfig, livekitHttpUrl } from "@/server/domain/integrations";
@@ -116,7 +117,8 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
     }
     case "participant_joined": {
       const p = ev.participant;
-      if (!p) break;
+      // Egress/ingress/agents join as hidden participants – they are not attendees
+      if (!p || p.kind !== ParticipantInfo_Kind.STANDARD) break;
       const userRow = await db.query.users.findFirst({ where: eq(users.id, p.identity), columns: { id: true } });
       await db.insert(meetingParticipants).values({ meetingId: meeting.id, userId: userRow?.id ?? null, identity: p.identity, displayName: p.name || null });
       const [m] = await db
@@ -126,11 +128,15 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
         .returning();
       if (meeting.status !== "live") emitDomainEvent("meeting.started", { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
       await broadcastMeeting(m);
+      if (m.recordingEnabled && (m.recordingStatus === "none" || m.recordingStatus === "failed")) {
+        const { startRecording } = await import("./recording");
+        await startRecording(m);
+      }
       break;
     }
     case "participant_left": {
       const p = ev.participant;
-      if (!p) break;
+      if (!p || p.kind !== ParticipantInfo_Kind.STANDARD) break;
       await db
         .update(meetingParticipants)
         .set({ leftAt: new Date() })
@@ -144,6 +150,10 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
       break;
     }
     case "room_finished": {
+      {
+        const { stopRecording } = await import("./recording");
+        await stopRecording(meeting);
+      }
       await db.update(meetingParticipants).set({ leftAt: new Date() }).where(and(eq(meetingParticipants.meetingId, meeting.id), isNull(meetingParticipants.leftAt)));
       const [m] = await db.update(meetings).set({ status: "ended", endedAt: new Date(), participantCount: 0 }).where(eq(meetings.id, meeting.id)).returning();
       emitDomainEvent("meeting.ended", { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
@@ -165,6 +175,11 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
 
 /** Marks a meeting ended locally (used by "end meeting" for instant feedback; webhook confirms). */
 export async function markMeetingEnded(meetingId: string): Promise<Meeting | undefined> {
+  const current = await db.query.meetings.findFirst({ where: eq(meetings.id, meetingId) });
+  if (current) {
+    const { stopRecording } = await import("./recording");
+    await stopRecording(current);
+  }
   await db.update(meetingParticipants).set({ leftAt: new Date() }).where(and(eq(meetingParticipants.meetingId, meetingId), isNull(meetingParticipants.leftAt)));
   const [m] = await db.update(meetings).set({ status: "ended", endedAt: new Date(), participantCount: 0 }).where(eq(meetings.id, meetingId)).returning();
   if (m) {

@@ -78,6 +78,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
             canHost={editable}
             callsAvailable={callsAvailable}
             participantCount={meeting.participantCount}
+            recording={{ enabled: meeting.recordingEnabled, status: meeting.recordingStatus, error: meeting.recordingError }}
             participants={(meeting.status === "live" ? participants.filter((p) => !p.leftAt) : dedupe(participants)).map((p) => ({ id: p.id, identity: p.identity, displayName: p.displayName, user: p.user }))}
           />
           {meeting.recording && (

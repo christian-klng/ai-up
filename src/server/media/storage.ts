@@ -127,3 +127,34 @@ export async function readMediaFile(media: MediaFile, variant?: string): Promise
   const s = await stat(abs);
   return { buffer: await readFile(abs), size: s.size, path: abs };
 }
+
+/**
+ * Imports an existing file from disk (e.g. a recording written by LiveKit egress) into the media store
+ * without buffering it in memory. The source file is left untouched.
+ */
+export async function storeFileFromPath(input: { sourcePath: string; mime: string; originalName: string; purpose: MediaPurpose; uploadedBy?: string | null; durationSeconds?: number | null }): Promise<MediaFile> {
+  const { createReadStream, createWriteStream } = await import("node:fs");
+  const { pipeline } = await import("node:stream/promises");
+  const { stat } = await import("node:fs/promises");
+  const id = crypto.randomUUID();
+  const storagePath = newStoragePath(input.purpose, id, extensionForMime(input.mime, input.originalName));
+  const abs = absolutePath(storagePath);
+  await mkdir(path.dirname(abs), { recursive: true });
+  const hash = createHash("sha256");
+  await pipeline(
+    createReadStream(input.sourcePath),
+    async function* (source) {
+      for await (const chunk of source) {
+        hash.update(chunk as Buffer);
+        yield chunk;
+      }
+    },
+    createWriteStream(abs),
+  );
+  const size = (await stat(abs)).size;
+  const [row] = await db
+    .insert(mediaFiles)
+    .values({ id, kind: kindForMime(input.mime), storagePath, originalName: input.originalName.slice(0, 255), mime: input.mime, size, sha256: hash.digest("hex"), durationSeconds: input.durationSeconds ?? null, purpose: input.purpose, uploadedBy: input.uploadedBy ?? null })
+    .returning();
+  return row;
+}

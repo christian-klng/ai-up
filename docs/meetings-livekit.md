@@ -57,10 +57,10 @@ docker run --rm livekit/livekit-cli load-test --url wss://meet.<domain> --api-ke
 Im Lasttest-Report interessieren *Latency*, *Dropped Packets* und die CPU/Netzlast des Hosts (Coolify → Metrics oder `htop`/`iftop`).
 Erwartung für 30 × 720p: ≈ 75–100 Mbit/s Upload, CPU des `livekit`-Containers deutlich unter einem Kern pro 10 Teilnehmende.
 
-## 5. Was die App braucht (4b–4d umgesetzt, 4e folgt)
+## 5. Was die App braucht (4b–4e umgesetzt)
 
 - Verwaltung → Integrationen: Server-URL (`wss://meet.<domain>`), API-Key/-Secret (verschlüsselt gespeichert), Aufzeichnungspfad, „Calls aktiviert“ – erst dann sind Audio-/Video-Meetings wählbar.
-- App-Compose: `worker` mountet `RECORDINGS_PATH` read-only nach `/data/recordings`, um fertige Aufzeichnungen in `media_files` zu übernehmen.
+- App-Compose: `web` mountet `RECORDINGS_PATH` read-only nach `/data/recordings` (in `docker-compose.yml` bereits vorbereitet; Env `RECORDINGS_PATH` in der App-Ressource setzen). In *Verwaltung → Integrationen* als Aufzeichnungs-Verzeichnis **`/data/recordings`** eintragen (Container-Pfad). Fertige Aufzeichnungen werden beim `egress_ended`-Webhook in `media_files` übernommen.
 - Webhook-Endpunkt `/api/livekit/webhook` (signiert mit API-Key/-Secret): `room_started`, `participant_joined/left`, `room_finished` setzen Status/Teilnehmer (Live-Punkt); `egress_*` für Aufzeichnungen (4e). In `livekit.yaml` muss `webhook.urls` auf `https://<app-domain>/api/livekit/webhook` zeigen und `webhook.api_key` dem App-Key entsprechen.
 
 ## 6. Lokal entwickeln

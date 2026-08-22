@@ -128,3 +128,23 @@ export async function reopenMeetingAction(meetingId: string): Promise<{ ok: bool
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+export async function startRecordingAction(meetingId: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await assertUser();
+  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  if (!meeting || !canEditMeeting(user, meeting) || meeting.kind === "protocol") return { ok: false, error: "forbidden" };
+  const { startRecording } = await import("@/server/meetings/recording");
+  const res = await startRecording(meeting, { manual: true });
+  revalidatePath(`/meetings/${meeting.spaceSlug}/${meeting.id}`, "layout");
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+export async function stopRecordingAction(meetingId: string): Promise<{ ok: boolean }> {
+  const user = await assertUser();
+  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
+  const { stopRecording } = await import("@/server/meetings/recording");
+  await stopRecording(meeting);
+  revalidatePath(`/meetings/${meeting.spaceSlug}/${meeting.id}`, "layout");
+  return { ok: true };
+}

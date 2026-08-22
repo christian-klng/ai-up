@@ -683,7 +683,16 @@
       "endedHint": "Dieses Meeting ist beendet.",
       "inCall": "Im Call",
       "wasInCall": "Teilgenommen",
-      "deviceError": "Kamera/Mikrofon nicht verfügbar oder nicht erlaubt – du bist verbunden, andere hören dich aber nicht."
+      "deviceError": "Kamera/Mikrofon nicht verfügbar oder nicht erlaubt – du bist verbunden, andere hören dich aber nicht.",
+      "rec": {
+        "recording": "Aufzeichnung läuft",
+        "processing": "Aufzeichnung wird verarbeitet …",
+        "available": "Aufzeichnung verfügbar",
+        "failed": "Aufzeichnung fehlgeschlagen",
+        "start": "Aufzeichnung starten",
+        "stop": "Aufzeichnung stoppen",
+        "autoHint": "Audio-Mitschnitt startet automatisch, sobald die erste Person im Call ist."
+      }
     },
     "confirmDelete": "Dieses Meeting wirklich löschen?",
     "deleted": "Meeting gelöscht.",

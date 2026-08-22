@@ -28,6 +28,9 @@ services:
       - WORKFLOW_CONCURRENCY=${WORKFLOW_CONCURRENCY:-4}
     volumes:
       - uploads:/data/uploads
+      # Meeting recordings written by the LiveKit egress service (separate compose resource) –
+      # same host directory as RECORDINGS_PATH there; the app imports files from /data/recordings.
+      - ${RECORDINGS_PATH:-/data/aiup/recordings}:/data/recordings:ro
     depends_on:
       postgres:
         condition: service_healthy
