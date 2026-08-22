@@ -51,6 +51,8 @@ export type RealtimeEventMap = {
   /** Workflow run lifecycle (toasts top-right, run pages) */
   "workflow.run.started": { runId: string; workflowId: string; workflowName: string; triggerType: string; startedAt: string };
   "workflow.run.finished": { runId: string; workflowId: string; workflowName: string; status: "succeeded" | "failed" | "cancelled"; durationMs: number; error: string | null; finishedAt: string };
+  /** Meeting status/participants changed (webhooks) – refresh lists, sidebar dot, meeting pages */
+  "meeting.updated": { meetingId: string; spaceId: string; spaceSlug: string; status: "scheduled" | "live" | "ended"; participantCount: number; recordingStatus: string };
   /** Server hint: reload current data (used after reconnect) */
   "sync": Record<string, never>;
 };

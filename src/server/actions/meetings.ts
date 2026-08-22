@@ -86,3 +86,45 @@ export async function deleteMeetingAction(meetingId: string): Promise<{ ok: bool
   revalidatePath("/", "layout");
   return { ok: true, spaceSlug: meeting.spaceSlug };
 }
+
+export type JoinResult = { ok: true; token: string; url: string; roomName: string; isHost: boolean } | { ok: false; error: "notConfigured" | "notFound" | "ended" | "protocol" };
+
+/** Issues a LiveKit access token for the current user to join (or start) the meeting's room. */
+export async function joinMeetingAction(meetingId: string): Promise<JoinResult> {
+  const user = await assertUser();
+  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  if (!meeting) return { ok: false, error: "notFound" };
+  if (meeting.kind === "protocol") return { ok: false, error: "protocol" };
+  if (meeting.status === "ended") return { ok: false, error: "ended" };
+  const { createMeetingToken, LiveKitNotConfiguredError } = await import("@/server/meetings/livekit");
+  try {
+    const isHost = canEditMeeting(user, meeting);
+    const t = await createMeetingToken(meeting, user, isHost);
+    return { ok: true, ...t, isHost };
+  } catch (err) {
+    if (err instanceof LiveKitNotConfiguredError) return { ok: false, error: "notConfigured" };
+    throw err;
+  }
+}
+
+export async function endMeetingAction(meetingId: string): Promise<{ ok: boolean }> {
+  const user = await assertUser();
+  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
+  const { endRoom, markMeetingEnded } = await import("@/server/meetings/livekit");
+  await endRoom(meeting);
+  await markMeetingEnded(meeting.id);
+  revalidatePath(`/meetings/${meeting.spaceSlug}/${meeting.id}`, "layout");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function reopenMeetingAction(meetingId: string): Promise<{ ok: boolean }> {
+  const user = await assertUser();
+  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
+  const { reopenMeeting } = await import("@/server/meetings/livekit");
+  await reopenMeeting(meeting.id);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

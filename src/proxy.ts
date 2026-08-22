@@ -6,7 +6,7 @@ import { getSessionCookie } from "better-auth/cookies";
  * Real authorization (active status, admin role) happens in layouts, server actions and route handlers
  * via requireUser()/requireAdmin() – never rely on this file alone.
  */
-const PUBLIC_PREFIXES = ["/login", "/register", "/pending", "/api/auth", "/api/health", "/api/files", "/api/mcp", "/auth"];
+const PUBLIC_PREFIXES = ["/login", "/register", "/pending", "/api/auth", "/api/health", "/api/files", "/api/mcp", "/api/livekit", "/auth"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

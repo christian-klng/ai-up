@@ -100,6 +100,11 @@ export function RealtimeProvider({ userId, initialCounts, children }: { userId: 
           router.refresh();
           break;
         }
+        case "meeting.updated": {
+          // sidebar live dot + meeting pages are server-rendered
+          router.refresh();
+          break;
+        }
         default:
           break;
       }

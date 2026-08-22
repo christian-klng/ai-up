@@ -11,6 +11,7 @@ import { UserAvatar } from "@/components/shell/user-avatar";
 import { MeetingActions } from "@/components/meetings/meeting-actions";
 import { MeetingKindIcon, MeetingStatusBadge } from "@/components/meetings/meeting-badges";
 import { ProtocolEditor } from "@/components/meetings/protocol-editor";
+import { CallPanel } from "@/components/meetings/call-panel";
 
 export default async function MeetingDetailPage({ params }: PageProps<"/meetings/[slug]/[id]">) {
   const user = await requireUser();
@@ -68,26 +69,24 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
       </div>
 
       {meeting.kind !== "protocol" && (
-        <section className="mb-6 rounded-lg border bg-card p-5">
-          <h2 className="mb-1 text-base font-semibold">{t("call.title")}</h2>
-          <p className="text-sm text-muted-foreground">{callsAvailable ? t("call.comingSoon") : t("callsUnavailable")}</p>
-          {participants.length > 0 && (
-            <ul className="mt-3 flex flex-wrap gap-2">
-              {participants.map((p) => (
-                <li key={p.id} className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
-                  {p.user ? <UserAvatar user={p.user} size={16} variant="thumb" /> : null}
-                  {p.user?.name ?? p.displayName ?? p.identity}
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="mb-6 grid gap-4">
+          <CallPanel
+            meetingId={meeting.id}
+            callHref={`/meetings/${space.slug}/${meeting.id}/call`}
+            status={meeting.status}
+            kind={meeting.kind}
+            canHost={editable}
+            callsAvailable={callsAvailable}
+            participantCount={meeting.participantCount}
+            participants={(meeting.status === "live" ? participants.filter((p) => !p.leftAt) : dedupe(participants)).map((p) => ({ id: p.id, identity: p.identity, displayName: p.displayName, user: p.user }))}
+          />
           {meeting.recording && (
-            <div className="mt-4 grid gap-2">
-              <h3 className="text-sm font-medium">{t("recording")}</h3>
+            <section className="rounded-lg border bg-card p-5">
+              <h3 className="mb-2 text-sm font-medium">{t("recording")}</h3>
               <audio controls preload="metadata" src={`/api/files/${meeting.recording.id}`} className="w-full" />
-            </div>
+            </section>
           )}
-        </section>
+        </div>
       )}
 
       <section className="rounded-lg border bg-card p-5">
@@ -99,4 +98,10 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
       </section>
     </article>
   );
+}
+
+/** One chip per person for past meetings (people may have joined several times). */
+function dedupe<T extends { identity: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  return list.filter((p) => (seen.has(p.identity) ? false : (seen.add(p.identity), true)));
 }
