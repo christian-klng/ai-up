@@ -1,8 +1,13 @@
-import { Book, BookOpen, Brain, Code2, Compass, FolderOpen, GraduationCap, Lightbulb, Megaphone, Newspaper, Rocket, Star, Wrench, type LucideProps } from "lucide-react";
+import { Book, BookOpen, Brain, CalendarClock, Code2, Compass, FolderOpen, GraduationCap, Lightbulb, Megaphone, Mic, Newspaper, Presentation, Rocket, Star, Users, Video, Wrench, type LucideProps } from "lucide-react";
 
 export const AREA_ICONS = {
   book: Book,
   "book-open": BookOpen,
+  calendar: CalendarClock,
+  video: Video,
+  mic: Mic,
+  users: Users,
+  presentation: Presentation,
   brain: Brain,
   code: Code2,
   compass: Compass,

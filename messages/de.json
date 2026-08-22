@@ -302,6 +302,55 @@
       "mcpTitle": "MCP-Server verbinden",
       "mcpIntro": "Der MCP-Server erlaubt es, Workflows per Claude Code (oder anderen MCP-Clients) einzusehen und zu bearbeiten – Felder und Doku auf Englisch.",
       "mcpHint": "Endpunkt: {url} (Streamable HTTP). Auth: Authorization: Bearer API-KEY."
+    },
+    "meetings": {
+      "title": "Meeting-Bereiche",
+      "intro": "Bereiche, in denen Meetings, Seminare oder Events stattfinden. Jeder Bereich braucht einen Zweck.",
+      "create": "Bereich anlegen",
+      "edit": "Bereich bearbeiten",
+      "dialogIntro": "Name, Zweck, Icon und Aufzeichnungs-Vorgabe.",
+      "name": "Name",
+      "purpose": "Zweck",
+      "purposePlaceholder": "z. B. „Wöchentlicher Austausch der Mitglieder zu aktuellen KI-Themen.“",
+      "purposeHint": "Pflichtfeld. Wird Mitgliedern angezeigt.",
+      "description": "Beschreibung (optional)",
+      "icon": "Icon",
+      "recordingDefault": "Audio-Aufzeichnung standardmäßig an",
+      "recordingDefaultHint": "Vorgabe für neue Audio-/Video-Meetings in diesem Bereich (pro Meeting änderbar).",
+      "empty": "Noch keine Meeting-Bereiche. Lege den ersten an.",
+      "contentCount": "{count, plural, =1 {# Meeting} other {# Meetings}}",
+      "meetingCount": "{count, plural, =1 {# Meeting} other {# Meetings}}",
+      "liveCount": "{count, plural, =1 {# live} other {# live}}",
+      "confirmDelete": "Bereich „{name}“ wirklich löschen?",
+      "deleted": "Bereich gelöscht.",
+      "notEmpty": "Der Bereich enthält noch Meetings und kann nicht gelöscht werden.",
+      "errors": {
+        "nameRequired": "Bitte gib einen Namen an (mind. 2 Zeichen).",
+        "purposeRequired": "Bitte beschreibe den Zweck (mind. 5 Zeichen)."
+      }
+    },
+    "integrations": {
+      "title": "Integrationen",
+      "intro": "Externe Dienste, die die App nutzt.",
+      "livekit": {
+        "title": "LiveKit (Meetings: Audio-/Video-Calls & Aufzeichnung)",
+        "intro": "Der Media-Server läuft als eigener Dienst (siehe docs/meetings-livekit.md). Hier die Verbindungsdaten eintragen.",
+        "enabled": "Calls aktiviert",
+        "enabledHint": "Erst wenn aktiviert, können Mitglieder Audio-/Video-Meetings anlegen und starten.",
+        "url": "Server-URL",
+        "urlHint": "wss://meet.deine-domain.de – wird für Browser-Clients und Server-API verwendet.",
+        "apiKey": "API-Key",
+        "apiSecret": "API-Secret",
+        "secretKeep": "Gesetzt ({masked}) – leer lassen zum Behalten",
+        "recordingsPath": "Aufzeichnungs-Verzeichnis",
+        "recordingsPathHint": "Pfad, den Egress beschreibt und der Worker liest (in beiden Compose-Ressourcen als gleiches Host-Verzeichnis eingebunden).",
+        "recordingDefault": "Aufzeichnung standardmäßig an",
+        "recordingDefaultHint": "Globale Vorgabe; Meeting-Bereiche und Meetings können abweichen.",
+        "test": "Verbindung testen",
+        "testOk": "Verbunden – {rooms} aktive Räume, {ms} ms.",
+        "testFailed": "Fehler: {error}",
+        "lastTest": "Letzter Test: {result}"
+      }
     }
   },
   "status": {
@@ -565,5 +614,91 @@
     "thanks": "Danke für deine Antwort!",
     "yes": "Ja",
     "no": "Nein"
+  },
+  "meetings": {
+    "title": "Meetings",
+    "intro": "Alle Meeting-Bereiche im Überblick.",
+    "noSpaces": "Es gibt noch keine Meeting-Bereiche.",
+    "noSpacesAdminHint": "Lege in der Verwaltung den ersten Bereich an.",
+    "liveNow": "{count, plural, =1 {# läuft gerade} other {# laufen gerade}}",
+    "create": "Neues Meeting",
+    "createSubmit": "Meeting anlegen",
+    "edit": "Meeting bearbeiten",
+    "dialogIntro": "Art, Titel und optional ein Termin. Protokolle lassen sich jederzeit schreiben; Calls starten die Teilnehmenden selbst.",
+    "kind": "Art",
+    "kinds": {
+      "protocol": "Protokoll",
+      "audio": "Audio-Call",
+      "video": "Video-Call"
+    },
+    "kindHints": {
+      "protocol": "Nur ein Markdown-Protokoll – für Treffen außerhalb der App.",
+      "audio": "Audio-Call in der App, optional mit Mitschnitt.",
+      "video": "Video-Call in der App, optional mit Audio-Mitschnitt."
+    },
+    "callsUnavailable": "Audio-/Video-Calls sind noch nicht eingerichtet (Verwaltung → Integrationen).",
+    "titleLabel": "Titel",
+    "titlePlaceholder": "z. B. Wöchentlicher Austausch",
+    "descriptionLabel": "Beschreibung (optional)",
+    "descriptionPlaceholder": "Worum geht es, wer sollte dabei sein?",
+    "startsAt": "Termin (optional)",
+    "startsAtHint": "Leer lassen für spontane Meetings.",
+    "recordingEnabled": "Audio-Mitschnitt",
+    "recordingEnabledHint": "Der Ton des Calls wird aufgezeichnet und nach dem Meeting hier abgelegt.",
+    "empty": "Noch keine Meetings in diesem Bereich.",
+    "sections": {
+      "live": "Läuft gerade",
+      "upcoming": "Geplant",
+      "past": "Vergangen"
+    },
+    "status": {
+      "scheduled": "Geplant",
+      "live": "Live",
+      "ended": "Beendet"
+    },
+    "participants": "{count, plural, =1 {# Teilnehmer:in} other {# Teilnehmende}}",
+    "endedAt": "beendet {date}",
+    "hasRecording": "Aufzeichnung vorhanden",
+    "startsAtLabel": "Termin: {date}",
+    "host": "Gastgeber:in: {name}",
+    "recordingOn": "Audio-Mitschnitt an",
+    "recordingOff": "ohne Mitschnitt",
+    "recording": "Aufzeichnung",
+    "call": {
+      "title": "Call",
+      "comingSoon": "Starten und Beitreten folgt im nächsten Schritt (Call-Seite in der App)."
+    },
+    "confirmDelete": "Dieses Meeting wirklich löschen?",
+    "deleted": "Meeting gelöscht.",
+    "errors": {
+      "titleRequired": "Bitte gib einen Titel an.",
+      "forbidden": "Du darfst dieses Meeting nicht bearbeiten."
+    },
+    "protocol": {
+      "title": "Protokoll",
+      "empty": "Noch kein Protokoll. Jedes Mitglied kann mitschreiben.",
+      "start": "Protokoll beginnen",
+      "edit": "Bearbeiten",
+      "write": "Schreiben",
+      "preview": "Vorschau",
+      "nothingToPreview": "Noch nichts zu sehen.",
+      "placeholder": "# Protokoll\n\n- Teilnehmende: …\n- Themen: …\n- Ergebnisse/To-dos: …",
+      "changeNote": "Änderungsnotiz (optional)",
+      "changeNotePlaceholder": "Was hast du ergänzt?",
+      "saveVersion": "Neue Version speichern",
+      "saved": "Protokoll gespeichert (Version {version}).",
+      "version": "Version {no}",
+      "history": "Verlauf",
+      "historyTitle": "Protokoll-Verlauf: {title}",
+      "versions": "{count, plural, =0 {Keine Versionen} =1 {# Version} other {# Versionen}}",
+      "noVersions": "Noch keine Protokoll-Versionen.",
+      "current": "Aktuell",
+      "noNote": "Ohne Notiz",
+      "diffWith": "Änderungen gegenüber Version {no}",
+      "noDiff": "Keine Textänderungen.",
+      "restore": "Diese Version wiederherstellen",
+      "restored": "Version wiederhergestellt.",
+      "restoreNote": "Wiederhergestellt aus Version {no}"
+    }
   }
 }

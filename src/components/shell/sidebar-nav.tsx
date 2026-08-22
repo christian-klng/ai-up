@@ -83,7 +83,7 @@ export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, isAdmin, onN
 
       <NavSection title={labels.meetings}>
         {meetingSpaces.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground">{labels.noSpacesYet}</p>}
-        {meetingSpaces.map((s) => item(`/meetings/${s.slug}`, undefined, s.name, s.live))}
+        {meetingSpaces.map((s) => item(`/meetings/${s.slug}`, undefined, s.name, s.live, s.icon))}
       </NavSection>
 
       <div className="grid gap-0.5 pt-4">

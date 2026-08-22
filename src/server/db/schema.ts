@@ -511,6 +511,115 @@ export const questionDismissals = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Meetings: spaces, meetings (protocol / audio / video), protocol versions, participants
+// ---------------------------------------------------------------------------
+
+export const meetingSpaces = pgTable(
+  "meeting_spaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    purpose: text("purpose").notNull(),
+    description: text("description"),
+    icon: text("icon").notNull().default("calendar"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** default for new audio/video meetings in this space */
+    recordingDefault: boolean("recording_default").notNull().default(true),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("meeting_spaces_slug_idx").on(t.slug), index("meeting_spaces_sort_idx").on(t.sortOrder)],
+);
+
+export const meetingKindEnum = pgEnum("meeting_kind", ["protocol", "audio", "video"]);
+export const meetingStatusEnum = pgEnum("meeting_status", ["scheduled", "live", "ended"]);
+export const recordingStatusEnum = pgEnum("recording_status", ["none", "recording", "processing", "available", "failed"]);
+
+export const meetings = pgTable(
+  "meetings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => meetingSpaces.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    kind: meetingKindEnum("kind").notNull().default("protocol"),
+    status: meetingStatusEnum("status").notNull().default("scheduled"),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    hostId: text("host_id").references(() => users.id, { onDelete: "set null" }),
+    /** current protocol (markdown); history in meeting_protocol_versions */
+    protocolMarkdown: text("protocol_markdown"),
+    protocolVersion: integer("protocol_version").notNull().default(0),
+    /** LiveKit room name (= meeting id by convention) */
+    roomName: text("room_name"),
+    recordingEnabled: boolean("recording_enabled").notNull().default(false),
+    recordingStatus: recordingStatusEnum("recording_status").notNull().default("none"),
+    recordingEgressId: text("recording_egress_id"),
+    recordingMediaId: uuid("recording_media_id").references(() => mediaFiles.id, { onDelete: "set null" }),
+    recordingError: text("recording_error"),
+    /** live participant count (maintained by webhooks) */
+    participantCount: integer("participant_count").notNull().default(0),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("meetings_space_idx").on(t.spaceId, t.startsAt), index("meetings_status_idx").on(t.status), index("meetings_room_idx").on(t.roomName)],
+);
+
+export const meetingProtocolVersions = pgTable(
+  "meeting_protocol_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    versionNo: integer("version_no").notNull(),
+    body: text("body").notNull(),
+    changeNote: text("change_note"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("meeting_protocol_versions_idx").on(t.meetingId, t.versionNo)],
+);
+
+export const meetingParticipants = pgTable(
+  "meeting_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    /** LiveKit participant identity / sid for matching webhook events */
+    identity: text("identity").notNull(),
+    displayName: text("display_name"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+  },
+  (t) => [index("meeting_participants_meeting_idx").on(t.meetingId, t.joinedAt), index("meeting_participants_user_idx").on(t.userId)],
+);
+
+// ---------------------------------------------------------------------------
+// Integrations (LiveKit, later Nextcloud …): public config as JSON + encrypted secrets
+// ---------------------------------------------------------------------------
+
+export const integrations = pgTable("integrations", {
+  /** e.g. "livekit" */
+  id: text("id").primaryKey(),
+  enabled: boolean("enabled").notNull().default(false),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+  /** AES-256-GCM encrypted JSON of secret fields */
+  secretsEncrypted: text("secrets_encrypted"),
+  lastTestAt: timestamp("last_test_at", { withTimezone: true }),
+  lastTestResult: text("last_test_result"),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
 // Audit log
 // ---------------------------------------------------------------------------
 
@@ -683,6 +792,22 @@ export const workflowRunStepsRelations = relations(workflowRunSteps, ({ one }) =
   run: one(workflowRuns, { fields: [workflowRunSteps.runId], references: [workflowRuns.id] }),
 }));
 
+export const meetingSpacesRelations = relations(meetingSpaces, ({ many }) => ({ meetings: many(meetings) }));
+export const meetingsRelations = relations(meetings, ({ one, many }) => ({
+  space: one(meetingSpaces, { fields: [meetings.spaceId], references: [meetingSpaces.id] }),
+  host: one(users, { fields: [meetings.hostId], references: [users.id] }),
+  recording: one(mediaFiles, { fields: [meetings.recordingMediaId], references: [mediaFiles.id] }),
+  protocolVersions: many(meetingProtocolVersions),
+  participants: many(meetingParticipants),
+}));
+export const meetingProtocolVersionsRelations = relations(meetingProtocolVersions, ({ one }) => ({
+  meeting: one(meetings, { fields: [meetingProtocolVersions.meetingId], references: [meetings.id] }),
+}));
+export const meetingParticipantsRelations = relations(meetingParticipants, ({ one }) => ({
+  meeting: one(meetings, { fields: [meetingParticipants.meetingId], references: [meetings.id] }),
+  user: one(users, { fields: [meetingParticipants.userId], references: [users.id] }),
+}));
+
 export const messagesRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
   sender: one(users, { fields: [messages.senderId], references: [users.id] }),
@@ -708,6 +833,13 @@ export type LlmProvider = typeof llmProviders.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type QuestionResponse = typeof questionResponses.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
+export type MeetingSpace = typeof meetingSpaces.$inferSelect;
+export type Meeting = typeof meetings.$inferSelect;
+export type MeetingKind = Meeting["kind"];
+export type MeetingStatus = Meeting["status"];
+export type MeetingProtocolVersion = typeof meetingProtocolVersions.$inferSelect;
+export type MeetingParticipant = typeof meetingParticipants.$inferSelect;
+export type Integration = typeof integrations.$inferSelect;
 
 export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
 export type Content = typeof contents.$inferSelect;

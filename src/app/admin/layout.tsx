@@ -14,11 +14,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/purpose", label: tAdmin("nav.purpose") },
     { href: "/admin/members", label: tAdmin("nav.members"), badge: counts.pending || undefined },
     { href: "/admin/knowledge", label: tAdmin("nav.knowledge") },
-    { href: "/admin/meetings", label: tAdmin("nav.meetings"), disabled: true },
+    { href: "/admin/meetings", label: tAdmin("nav.meetings") },
     { href: "/admin/workflows", label: tAdmin("nav.workflows") },
     { href: "/admin/questions", label: tAdmin("nav.questions") },
     { href: "/admin/llm", label: tAdmin("nav.llm") },
-    { href: "/admin/integrations", label: tAdmin("nav.integrations"), disabled: true },
+    { href: "/admin/integrations", label: tAdmin("nav.integrations") },
     { href: "/admin/api-keys", label: tAdmin("nav.apiKeys") },
     { href: "/admin/audit", label: tAdmin("nav.audit"), disabled: true },
   ];
