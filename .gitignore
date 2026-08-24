@@ -30,3 +30,6 @@ next-env.d.ts
 *.pem
 npm-debug.log*
 .vercel
+
+# Lokale Betriebsnotizen (Server-IPs, Zugangswege)
+CLAUDE.local.md

@@ -3,5 +3,8 @@ ws_url: ws://livekit:7880
 redis:
   address: redis:6379
 log_level: info
-# Local file output: the app requests `file_outputs[0].filepath = "/out/<meeting-id>/<timestamp>.ogg"`;
-# /out is the shared host directory (RECORDINGS_PATH). Switch to S3 later by adding an `s3:` block.
+# The app sends the destination with every egress request, so nothing is configured here:
+#  - separate servers: an S3 upload (endpoint/bucket/credentials from the app's integration settings),
+#    which keeps the credentials out of this file and off the media server
+#  - single host: a local file under /out, the shared host directory (RECORDINGS_PATH)
+# An `s3:` block would only act as a default the app never falls back to – deliberately omitted.

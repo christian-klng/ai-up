@@ -6,8 +6,9 @@
 #   LIVEKIT_DOMAIN                        – e.g. meet.example.com (Coolify domain of the `livekit` service, port 7880)
 #   APP_WEBHOOK_URL                       – e.g. https://app.example.com/api/livekit/webhook
 #   NODE_IP                               – public IPv4 of this host (advertised to clients for media)
-#   RECORDINGS_PATH                       – host path for audio recordings, e.g. /data/aiup/recordings
-#                                           (the app's `worker` mounts the same path read-only)
+#   RECORDINGS_PATH                       – host path for audio recordings, e.g. /data/aiup/recordings.
+#                                           Only relevant when the app runs on this same host; with the
+#                                           S3 handover configured in the app, recordings bypass it.
 services:
   livekit:
     image: livekit/livekit-server:v1.13.5
@@ -43,7 +44,9 @@ services:
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
     volumes:
       - ./egress.yaml:/etc/egress.yaml:ro
-      - ${RECORDINGS_PATH:-/data/aiup/recordings}:/out   # egress writes files here; the app picks them up
+      # Single-host setups only: egress writes here and the app reads the same directory.
+      # With S3 configured in the app, recordings go straight to the bucket and never touch this mount.
+      - ${RECORDINGS_PATH:-/data/aiup/recordings}:/out
     depends_on:
       - redis
       - livekit

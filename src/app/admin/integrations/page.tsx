@@ -11,7 +11,21 @@ export default async function AdminIntegrationsPage() {
     <div className="max-w-3xl">
       <PageHeader title={t("title")} description={t("intro")} />
       <LiveKitForm
-        initial={{ enabled: lk.enabled, url: lk.url, apiKey: lk.apiKey, recordingsPath: lk.recordingsPath, recordingDefault: lk.recordingDefault, hasSecret: lk.hasSecret, secretMasked: lk.secretMasked }}
+        initial={{
+          enabled: lk.enabled,
+          url: lk.url,
+          apiKey: lk.apiKey,
+          recordingsPath: lk.recordingsPath,
+          recordingDefault: lk.recordingDefault,
+          s3Endpoint: lk.s3Endpoint,
+          s3Region: lk.s3Region,
+          s3Bucket: lk.s3Bucket,
+          s3AccessKey: lk.s3AccessKey,
+          hasSecret: lk.hasSecret,
+          secretMasked: lk.secretMasked,
+          hasS3Secret: lk.hasS3Secret,
+          s3SecretMasked: lk.s3SecretMasked,
+        }}
         lastTest={lk.lastTestAt ? `${format.dateTime(lk.lastTestAt, { dateStyle: "medium", timeStyle: "short" })} – ${lk.lastTestResult ?? ""}` : null}
       />
     </div>

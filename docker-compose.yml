@@ -28,8 +28,9 @@ services:
       - WORKFLOW_CONCURRENCY=${WORKFLOW_CONCURRENCY:-4}
     volumes:
       - uploads:/data/uploads
-      # Meeting recordings written by the LiveKit egress service (separate compose resource) –
-      # same host directory as RECORDINGS_PATH there; the app imports files from /data/recordings.
+      # Only needed when the media server runs on this same host: egress writes to RECORDINGS_PATH
+      # and the app imports from /data/recordings. With the S3 handover configured under
+      # admin → integrations (app and media on separate servers), this mount stays unused.
       - ${RECORDINGS_PATH:-/data/aiup/recordings}:/data/recordings:ro
     depends_on:
       postgres:

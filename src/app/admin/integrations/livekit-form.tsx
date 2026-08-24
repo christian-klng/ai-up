@@ -13,7 +13,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-type Initial = { enabled: boolean; url: string; apiKey: string; recordingsPath: string; recordingDefault: boolean; hasSecret: boolean; secretMasked: string | null };
+type Initial = {
+  enabled: boolean;
+  url: string;
+  apiKey: string;
+  recordingsPath: string;
+  recordingDefault: boolean;
+  s3Endpoint: string;
+  s3Region: string;
+  s3Bucket: string;
+  s3AccessKey: string;
+  hasSecret: boolean;
+  secretMasked: string | null;
+  hasS3Secret: boolean;
+  s3SecretMasked: string | null;
+};
 
 export function LiveKitForm({ initial, lastTest }: { initial: Initial; lastTest: string | null }) {
   const t = useTranslations("admin.integrations");
@@ -63,6 +77,44 @@ export function LiveKitForm({ initial, lastTest }: { initial: Initial; lastTest:
             <Label htmlFor="lk-path">{t("livekit.recordingsPath")}</Label>
             <Input id="lk-path" name="recordingsPath" defaultValue={initial.recordingsPath} required className="font-mono text-sm" />
             <p className="text-xs text-muted-foreground">{t("livekit.recordingsPathHint")}</p>
+          </div>
+          <div className="grid gap-4 rounded-md border p-4">
+            <div className="grid gap-0.5">
+              <p className="text-sm font-medium">{t("livekit.s3Title")}</p>
+              <p className="text-xs text-muted-foreground">{t("livekit.s3Hint")}</p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="lk-s3-endpoint">{t("livekit.s3Endpoint")}</Label>
+              <Input id="lk-s3-endpoint" name="s3Endpoint" defaultValue={initial.s3Endpoint} placeholder="https://fsn1.your-objectstorage.com" className="font-mono text-sm" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="lk-s3-bucket">{t("livekit.s3Bucket")}</Label>
+                <Input id="lk-s3-bucket" name="s3Bucket" defaultValue={initial.s3Bucket} className="font-mono text-sm" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="lk-s3-region">{t("livekit.s3Region")}</Label>
+                <Input id="lk-s3-region" name="s3Region" defaultValue={initial.s3Region} placeholder="fsn1" className="font-mono text-sm" />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="lk-s3-key">{t("livekit.s3AccessKey")}</Label>
+                <Input id="lk-s3-key" name="s3AccessKey" defaultValue={initial.s3AccessKey} className="font-mono text-sm" autoComplete="off" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="lk-s3-secret">{t("livekit.s3SecretKey")}</Label>
+                <Input
+                  id="lk-s3-secret"
+                  name="s3SecretKey"
+                  type="password"
+                  defaultValue={initial.hasS3Secret ? "__keep__" : ""}
+                  placeholder={initial.hasS3Secret ? t("livekit.secretKeep", { masked: initial.s3SecretMasked ?? "" }) : ""}
+                  className="font-mono text-sm"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
           </div>
           <div className="flex items-start gap-3">
             <Switch id="lk-rec" name="recordingDefault" defaultChecked={initial.recordingDefault} />

@@ -13,7 +13,17 @@ const schema = z.object({
   apiSecret: z.string().optional(),
   recordingsPath: z.string().trim().min(1).max(300),
   recordingDefault: z.boolean(),
+  s3Endpoint: z.string().trim().max(300).refine((v) => v === "" || /^https?:\/\//.test(v), "s3Endpoint must be empty or start with https://"),
+  s3Region: z.string().trim().max(60),
+  s3Bucket: z.string().trim().max(120),
+  s3AccessKey: z.string().trim().max(200),
+  s3SecretKey: z.string().optional(),
 });
+
+/** A submitted secret is only stored when it is neither empty nor the "keep current value" marker. */
+function keepable(value: string | undefined): value is string {
+  return value !== undefined && value !== "__keep__" && value !== "";
+}
 
 export type LiveKitFormState = { status: "idle" } | { status: "saved" } | { status: "error"; message: string };
 
@@ -26,13 +36,34 @@ export async function saveLiveKitAction(_prev: LiveKitFormState, formData: FormD
     apiSecret: formData.get("apiSecret") ?? undefined,
     recordingsPath: formData.get("recordingsPath"),
     recordingDefault: formData.get("recordingDefault") === "on",
+    s3Endpoint: formData.get("s3Endpoint") ?? "",
+    s3Region: formData.get("s3Region") ?? "",
+    s3Bucket: formData.get("s3Bucket") ?? "",
+    s3AccessKey: formData.get("s3AccessKey") ?? "",
+    s3SecretKey: formData.get("s3SecretKey") ?? undefined,
   });
   if (!parsed.success) return { status: "error", message: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ") };
   const d = parsed.data;
   const url = d.url.replace(/^https:/, "wss:").replace(/^http:/, "ws:").replace(/\/$/, "");
+  const secrets: Record<string, string> = {};
+  if (keepable(d.apiSecret)) secrets.apiSecret = d.apiSecret;
+  if (keepable(d.s3SecretKey)) secrets.s3SecretKey = d.s3SecretKey;
   await saveIntegration(
     "livekit",
-    { enabled: d.enabled, config: { url, apiKey: d.apiKey, recordingsPath: d.recordingsPath, recordingDefault: d.recordingDefault }, secrets: d.apiSecret !== undefined && d.apiSecret !== "__keep__" && d.apiSecret !== "" ? { apiSecret: d.apiSecret } : undefined },
+    {
+      enabled: d.enabled,
+      config: {
+        url,
+        apiKey: d.apiKey,
+        recordingsPath: d.recordingsPath,
+        recordingDefault: d.recordingDefault,
+        s3Endpoint: d.s3Endpoint.replace(/\/$/, ""),
+        s3Region: d.s3Region,
+        s3Bucket: d.s3Bucket,
+        s3AccessKey: d.s3AccessKey,
+      },
+      secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
+    },
     admin.id,
   );
   revalidatePath("/admin/integrations");

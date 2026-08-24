@@ -8,7 +8,9 @@ direkt am Host geöffnete UDP-Ports, unabhängig skalierbar. Vorlage: [`deploy/l
 - Host mit öffentlicher IPv4 (`NODE_IP`), 4 vCPU / 8 GB empfohlen (+ ≈ 4 vCPU / 4 GB während Aufzeichnungen).
 - DNS: `meet.<domain>` → Host-IP (A-Record). Der App-Host darf derselbe sein.
 - Firewall/Security-Group des Hosts: **7881/tcp**, **3478/udp**, **50000–50200/udp** offen (zusätzlich zu 80/443).
-- Ein Host-Verzeichnis für Aufzeichnungen, z. B. `/data/aiup/recordings` (wird von Egress beschrieben und vom App-Worker gelesen).
+- Für Aufzeichnungen einen Übergabeweg – siehe Abschnitt 5:
+  - **App und Media auf getrennten Servern:** einen S3-kompatiblen Bucket (z. B. Hetzner Object Storage).
+  - **Beides auf einem Host:** ein gemeinsames Host-Verzeichnis, z. B. `/data/aiup/recordings`.
 
 ## 2. Schlüssel erzeugen
 
@@ -60,7 +62,8 @@ Erwartung für 30 × 720p: ≈ 75–100 Mbit/s Upload, CPU des `livekit`-Contain
 ## 5. Was die App braucht (4b–4e umgesetzt)
 
 - Verwaltung → Integrationen: Server-URL (`wss://meet.<domain>`), API-Key/-Secret (verschlüsselt gespeichert), Aufzeichnungspfad, „Calls aktiviert“ – erst dann sind Audio-/Video-Meetings wählbar.
-- App-Compose: `web` mountet `RECORDINGS_PATH` read-only nach `/data/recordings` (in `docker-compose.yml` bereits vorbereitet; Env `RECORDINGS_PATH` in der App-Ressource setzen). In *Verwaltung → Integrationen* als Aufzeichnungs-Verzeichnis **`/data/recordings`** eintragen (Container-Pfad). Fertige Aufzeichnungen werden beim `egress_ended`-Webhook in `media_files` übernommen.
+- Aufzeichnungen, Variante **S3** (getrennte Server, empfohlen): In *Verwaltung → Integrationen* Endpunkt, Bucket, Region, Access Key und Secret Key eintragen. Die App schickt diese Daten mit jeder Egress-Anfrage mit – der Media-Server speichert also keine Zugangsdaten, und in `deploy/livekit/egress.yaml` ist nichts zu konfigurieren. Beim `egress_ended`-Webhook lädt die App das Objekt herunter, übernimmt es in `media_files` und **löscht es anschließend im Bucket**. Der Bucket muss privat sein: Ausgeliefert wird ausschließlich über `/api/files/:id` mit Rechteprüfung.
+- Aufzeichnungen, Variante **gemeinsames Verzeichnis** (ein Host): S3-Felder leer lassen. `web` mountet `RECORDINGS_PATH` read-only nach `/data/recordings` (in `docker-compose.yml` vorbereitet), als Aufzeichnungs-Verzeichnis **`/data/recordings`** eintragen (Container-Pfad). Die Quelldatei wird nach erfolgreichem Import gelöscht.
 - Webhook-Endpunkt `/api/livekit/webhook` (signiert mit API-Key/-Secret): `room_started`, `participant_joined/left`, `room_finished` setzen Status/Teilnehmer (Live-Punkt); `egress_*` für Aufzeichnungen (4e). In `livekit.yaml` muss `webhook.urls` auf `https://<app-domain>/api/livekit/webhook` zeigen und `webhook.api_key` dem App-Key entsprechen.
 
 ## 6. Lokal entwickeln
