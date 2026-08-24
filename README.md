@@ -11,7 +11,8 @@ Selbst gehostete Community-Plattform nach dem Vorbild von Circle.so – mit eine
 - **System-Bot** – schickt Nachrichten aus Workflows in den Messenger; Antworten an den Bot können Workflows auslösen.
 - **Workflows** – Trigger (Inhalt erstellt/aktualisiert, Zeitplan, Frage beantwortet, Nachricht an den Bot, Meeting gestartet/beendet, Aufzeichnung verfügbar, manuell) + Aktionen (LLM über OpenAI-kompatible Endpunkte wie OpenRouter/Cortecs, Webseite lesen, Benachrichtigung, Bot-Nachricht, Inhalt anlegen, Frage stellen). Live-Toasts, Historie und Statistik; Mitglieder sehen jede Definition.
 - **Fragen & Umfragen** – Mini-Formulare unten links (Auswahl, Text, Bewertung, Ja/Nein, Call-to-Action) mit Auswertung.
-- **MCP-Server** – API-Schlüssel für Admins; Workflows per Claude Code einsehen, anlegen, ändern, starten.
+- **Landing Page** – optionale öffentliche Startseite auf `/` (Admin schaltet sie frei; sonst geht es direkt zum Login). Aufgebaut aus strukturierten Sektionen (Hero, Features, Text, CTA, FAQ, Bild), übernimmt Farbschema und Logo automatisch; Inhalte werden per MCP gepflegt (z. B. mit Claude Code) und sind versioniert mit Wiederherstellen.
+- **MCP-Server** – API-Schlüssel für Admins; Workflows und Landing Page per Claude Code einsehen, anlegen, ändern, starten.
 - **Zweisprachig** (Deutsch/Englisch), Branding (Name, Logo, Favicon, Farbschema) durch den Admin.
 
 Läuft produktiv auf zwei VPS: die App auf dem einen, der Media-Server für Calls und Aufzeichnungen auf dem anderen. Offen: Lasttest mit 30 Teilnehmenden sowie Härtung, Tests und Sicherheits-Review (siehe [PLAN.md](PLAN.md), Phasen 4f und 7).
