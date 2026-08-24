@@ -19,6 +19,9 @@ RUN npm ci --omit=dev
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Belt and braces: the runner stage copies /app/public, but Git drops the directory whenever it is
+# empty, which fails the build from a fresh clone. public/.gitkeep covers it; this covers the rest.
+RUN mkdir -p public
 # Build-time placeholders: `next build` imports server modules (auth, db client) which read the
 # environment at module load. Real values are injected by Coolify at runtime; nothing here is baked
 # into the bundle (only NEXT_PUBLIC_* variables would be).

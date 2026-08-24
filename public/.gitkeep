@@ -1,0 +1,2 @@
+# Keeps the (currently empty) public/ directory in Git: Next.js serves static assets from here,
+# and the Docker build copies /app/public. Git drops empty directories, which broke the image build.
