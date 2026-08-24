@@ -32,7 +32,7 @@ Alle Mails (Magic Links!) landen im lokalen Mailpit unter http://localhost:8025.
 ```
 src/app/(auth)      Login, Registrierung, Warten-auf-Freigabe
 src/app/(app)       eingeloggter Bereich (Start, Wissen, Mitglieder, Meetings inkl. Call-Seite, Nachrichten, Notifications, Workflows, Profil)
-src/app/admin       Verwaltung (Allgemein/Branding, Zweck, Mitglieder, Wissensbereiche, Meeting-Bereiche, Fragen, LLM, Workflows, Integrationen, API-Schlüssel)
+src/app/admin       Verwaltung (Allgemein/Branding, Zweck, Mitglieder, Sammlungen, Meeting-Bereiche, Fragen, LLM, Workflows, Integrationen, API-Schlüssel)
 src/app/api         auth (Better Auth), files (Medien), upload, events (SSE), mcp, livekit/webhook, health
 src/server/auth     Better-Auth-Konfiguration, Session-Guards
 src/server/db       Drizzle-Schema, Client, Migrate/Seed

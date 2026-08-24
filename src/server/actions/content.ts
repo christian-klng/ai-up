@@ -14,6 +14,7 @@ import {
   softDeleteContent,
   type ContentVersionInput,
 } from "@/server/domain/knowledge";
+import { getStructureByAreaId } from "@/server/domain/structures";
 import { getMedia } from "@/server/media/storage";
 import { fetchLinkPreview } from "@/server/webreader/link-preview";
 import { assertPublicUrl } from "@/server/webreader/safe-fetch";
@@ -62,6 +63,9 @@ export async function saveContentAction(_prev: ContentFormState, formData: FormD
   const d = parsed.data;
   const area = await getAreaById(d.areaId);
   if (!area) return { status: "error", code: "unexpected" };
+
+  // Collections with a structure only accept new entries through the structure form.
+  if (!d.contentId && (await getStructureByAreaId(area.id))) return { status: "error", code: "forbidden" };
 
   // Build version input by type
   const input: ContentVersionInput = { title: d.title, changeNote: d.changeNote ?? null, meta: {} };

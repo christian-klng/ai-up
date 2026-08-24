@@ -5,6 +5,7 @@ import { ArrowLeft, History, Pencil } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
 import { ContentBody } from "@/components/content/content-body";
+import { StructuredContentView } from "@/components/structures/structured-content-view";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
                 </Link>
               </Button>
             )}
-            <ContentActions contentId={content.id} areaSlug={area.slug} pinned={content.pinned} canEdit={editable} isAdmin={user.role === "admin"} />
+            <ContentActions contentId={content.id} areaSlug={area.slug} pinned={content.pinned} canEdit={editable} isAdmin={user.role === "admin"} markdown={v?.bodyMarkdown ?? null} title={content.title} />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -60,16 +61,20 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
         </div>
       </header>
 
-      {v && (
-        <ContentBody
-          type={content.type}
-          title={content.title}
-          bodyMarkdown={v.bodyMarkdown}
-          url={v.url}
-          media={content.media}
-          meta={v.meta}
-          labels={{ openLink: t("view.openLink"), downloadVideo: t("view.downloadVideo"), videoUnsupported: t("view.videoUnsupported") }}
-        />
+      {v && content.type === "structured" && v.meta.structure ? (
+        <StructuredContentView meta={v.meta.structure} />
+      ) : (
+        v && (
+          <ContentBody
+            type={content.type}
+            title={content.title}
+            bodyMarkdown={v.bodyMarkdown}
+            url={v.url}
+            media={content.media}
+            meta={v.meta}
+            labels={{ openLink: t("view.openLink"), downloadVideo: t("view.downloadVideo"), videoUnsupported: t("view.videoUnsupported") }}
+          />
+        )
       )}
     </article>
   );

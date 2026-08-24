@@ -35,8 +35,10 @@ type Props = {
   maxUploadMb: number;
 };
 
+// The free-form editor never handles structured entries (they use the structure form).
+type FreeContentType = Exclude<ContentType, "structured">;
 const TYPE_ICONS = { markdown: FileText, image: ImageIcon, video: Video, link: Link2 } as const;
-const TYPES: ContentType[] = ["markdown", "image", "video", "link"];
+const TYPES: FreeContentType[] = ["markdown", "image", "video", "link"];
 
 export function ContentEditor({ areaId, areaSlug, initial, maxUploadMb }: Props) {
   const t = useTranslations("knowledge");

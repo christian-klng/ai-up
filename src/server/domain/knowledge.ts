@@ -15,6 +15,7 @@ import {
   type MediaFile,
 } from "@/server/db/schema";
 import { emitDomainEvent, type ContentEventPayload, type EventOrigin } from "@/server/events/bus";
+import { flattenAnswersText } from "@/lib/structures/markdown";
 import { slugify } from "@/lib/slug";
 
 // ---------------------------------------------------------------------------
@@ -140,7 +141,9 @@ export type ContentListItem = Content & {
 };
 
 function buildSearchText(type: ContentType, v: ContentVersionInput): string {
-  const parts = [v.title, v.bodyMarkdown ?? "", v.url ?? "", v.meta?.preview?.title ?? "", v.meta?.preview?.description ?? "", v.meta?.alt ?? "", type];
+  // Structured entries index the flattened answers instead of the generated markdown (no mermaid noise).
+  const body = type === "structured" && v.meta?.structure ? flattenAnswersText(v.meta.structure.definition, v.meta.structure.answers) : (v.bodyMarkdown ?? "");
+  const parts = [v.title, body, v.url ?? "", v.meta?.preview?.title ?? "", v.meta?.preview?.description ?? "", v.meta?.alt ?? "", type];
   return parts.filter(Boolean).join("\n").slice(0, 20000);
 }
 

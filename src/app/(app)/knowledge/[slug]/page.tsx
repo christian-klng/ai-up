@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { FileText, Image as ImageIcon, Link2, Pin, Plus, Search, Video } from "lucide-react";
+import { FileText, Image as ImageIcon, Link2, ListChecks, Pin, Plus, Search, Video } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { getAreaBySlug, listContents } from "@/server/domain/knowledge";
 import type { ContentType } from "@/server/db/schema";
@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-const TYPE_ICONS = { markdown: FileText, image: ImageIcon, video: Video, link: Link2 } as const;
-const TYPES: ContentType[] = ["markdown", "image", "video", "link"];
+const TYPE_ICONS = { markdown: FileText, image: ImageIcon, video: Video, link: Link2, structured: ListChecks } as const;
+const TYPES: ContentType[] = ["markdown", "image", "video", "link", "structured"];
 
 export default async function AreaPage({ params, searchParams }: PageProps<"/knowledge/[slug]">) {
   await requireUser();

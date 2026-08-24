@@ -13,7 +13,7 @@ type ContentConfig = z.infer<typeof contentConfig>;
 
 const contentFields = [
   { key: "contentTypes", type: "content-types" as const, label: { de: "Inhaltstypen", en: "Content types" }, help: { de: "Leer = alle Typen.", en: "Empty = all types." } },
-  { key: "areaIds", type: "area" as const, label: { de: "Wissensbereiche", en: "Knowledge areas" }, help: { de: "Leer = alle Bereiche.", en: "Empty = all areas." } },
+  { key: "areaIds", type: "area" as const, label: { de: "Sammlungen", en: "Collections" }, help: { de: "Leer = alle Sammlungen.", en: "Empty = all collections." } },
   { key: "includeWorkflowOrigin", type: "boolean" as const, label: { de: "Auch von Workflows erzeugte Inhalte", en: "Also content created by workflows" }, help: { de: "Vorsicht: kann Schleifen erzeugen.", en: "Careful: can create loops." } },
 ];
 
@@ -23,9 +23,9 @@ const contentPayloadDoc = {
   "content.title": "title",
   "content.url": "external url (link/video/image by url) or null",
   "content.body": "markdown body or note (may be null)",
-  "content.areaId": "knowledge area id",
-  "content.areaName": "knowledge area name",
-  "content.areaPurpose": "purpose text of the area",
+  "content.areaId": "collection (knowledge area) id",
+  "content.areaName": "collection name",
+  "content.areaPurpose": "purpose text of the collection",
   "content.authorId": "user id of the author",
   "content.authorName": "author display name",
   "content.versionNo": "version number",
@@ -50,7 +50,7 @@ function matchesContent(config: ContentConfig, payload: Record<string, unknown>)
 registerTrigger<ContentConfig>({
   type: "content.created",
   labels: { name: { de: "Inhalt erstellt", en: "Content created" }, description: { de: "Startet, wenn ein neuer Inhalt (Text, Bild, Video oder Link) gespeichert wird.", en: "Fires when a new content item (text, image, video or link) is saved." } },
-  doc: "Fires when a member creates a content item in a knowledge area. Filter by content type and/or area.",
+  doc: "Fires when a member creates a content item in a collection (knowledge area). Filter by content type and/or collection.",
   configSchema: contentConfig,
   fields: contentFields,
   payloadDoc: contentPayloadDoc,
@@ -62,7 +62,7 @@ registerTrigger<ContentConfig>({
 registerTrigger<ContentConfig>({
   type: "content.updated",
   labels: { name: { de: "Inhalt aktualisiert", en: "Content updated" }, description: { de: "Startet, wenn eine neue Version eines Inhalts gespeichert wird.", en: "Fires when a new version of a content item is saved." } },
-  doc: "Fires when a content item gets a new version. Filter by content type and/or area.",
+  doc: "Fires when a content item gets a new version. Filter by content type and/or collection.",
   configSchema: contentConfig,
   fields: contentFields,
   payloadDoc: contentPayloadDoc,

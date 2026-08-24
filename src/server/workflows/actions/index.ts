@@ -241,11 +241,11 @@ const createContentConfig = z.object({
 });
 registerAction<z.infer<typeof createContentConfig>>({
   type: "create_content",
-  labels: { name: { de: "Inhalt anlegen", en: "Create content" }, description: { de: "Legt einen neuen Markdown- oder Link-Inhalt in einem Wissensbereich an (z. B. eine Zusammenfassung).", en: "Creates a new markdown or link content item in a knowledge area (e.g. a summary)." } },
-  doc: "Creates content in a knowledge area. type markdown needs body; type link needs url (+ optional body as note). Author = the run's triggering user, otherwise none. Emits content.created with origin.kind=workflow (triggers ignore it unless includeWorkflowOrigin).",
+  labels: { name: { de: "Inhalt anlegen", en: "Create content" }, description: { de: "Legt einen neuen Markdown- oder Link-Inhalt in einer Sammlung an (z. B. eine Zusammenfassung).", en: "Creates a new markdown or link content item in a collection (e.g. a summary)." } },
+  doc: "Creates content in a collection (knowledge area). type markdown needs body; type link needs url (+ optional body as note). Author = the run's triggering user, otherwise none. Emits content.created with origin.kind=workflow (triggers ignore it unless includeWorkflowOrigin).",
   configSchema: createContentConfig,
   fields: [
-    { key: "areaId", type: "area", label: { de: "Wissensbereich", en: "Knowledge area" }, required: true },
+    { key: "areaId", type: "area", label: { de: "Sammlung", en: "Collection" }, required: true },
     { key: "type", type: "select", label: { de: "Typ", en: "Type" }, options: [
       { value: "markdown", label: { de: "Text", en: "Text" } },
       { value: "link", label: { de: "Link", en: "Link" } },

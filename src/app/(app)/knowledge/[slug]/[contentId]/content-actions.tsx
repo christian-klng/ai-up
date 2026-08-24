@@ -4,17 +4,31 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { MoreHorizontal, Pin, PinOff, Trash2 } from "lucide-react";
+import { Copy, Download, MoreHorizontal, Pin, PinOff, Trash2 } from "lucide-react";
 import { deleteContentAction, togglePinAction } from "@/server/actions/content";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-export function ContentActions({ contentId, areaSlug, pinned, canEdit, isAdmin }: { contentId: string; areaSlug: string; pinned: boolean; canEdit: boolean; isAdmin: boolean }) {
+export function ContentActions({ contentId, areaSlug, pinned, canEdit, isAdmin, markdown, title }: { contentId: string; areaSlug: string; pinned: boolean; canEdit: boolean; isAdmin: boolean; markdown?: string | null; title?: string }) {
   const t = useTranslations("knowledge.view");
+  const ts = useTranslations("knowledge.structured");
   const tc = useTranslations("common");
   const router = useRouter();
   const [pending, start] = useTransition();
-  if (!canEdit && !isAdmin) return null;
+  const hasMarkdown = !!markdown?.trim();
+  if (!canEdit && !isAdmin && !hasMarkdown) return null;
+
+  const downloadMarkdown = () => {
+    if (!markdown) return;
+    const name = `${(title ?? "entry").replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-+|-+$/g, "").toLowerCase() || "entry"}.md`;
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <DropdownMenu>
@@ -24,6 +38,23 @@ export function ContentActions({ contentId, areaSlug, pinned, canEdit, isAdmin }
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {hasMarkdown && (
+          <>
+            <DropdownMenuItem
+              onSelect={() =>
+                start(async () => {
+                  await navigator.clipboard.writeText(markdown!);
+                  toast.success(ts("copied"));
+                })
+              }
+            >
+              <Copy className="size-4" /> {ts("copyMarkdown")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={downloadMarkdown}>
+              <Download className="size-4" /> {ts("downloadMarkdown")}
+            </DropdownMenuItem>
+          </>
+        )}
         {isAdmin && (
           <DropdownMenuItem
             onSelect={() =>

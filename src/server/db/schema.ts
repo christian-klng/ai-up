@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import type { LandingDefinition } from "@/lib/landing-schema";
+import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
 import {
   boolean,
   index,
@@ -682,7 +683,44 @@ export const knowledgeAreas = pgTable(
   (t) => [uniqueIndex("knowledge_areas_slug_idx").on(t.slug), index("knowledge_areas_sort_idx").on(t.sortOrder)],
 );
 
-export const contentTypeEnum = pgEnum("content_type", ["markdown", "image", "video", "link"]);
+export const contentTypeEnum = pgEnum("content_type", ["markdown", "image", "video", "link", "structured"]);
+
+/**
+ * Optional structure ("Struktur") per collection: an admin-authored template
+ * of interactive elements. When present, new entries in the collection are
+ * created only through the structure form. Definition JSON lives in
+ * src/lib/structures/types.ts; validated via src/lib/structures/validate.ts.
+ */
+export const knowledgeStructures = pgTable(
+  "knowledge_structures",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => knowledgeAreas.id, { onDelete: "cascade" }),
+    definition: jsonb("definition").$type<StructureDefinition>().notNull(),
+    version: integer("version").notNull().default(1),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("knowledge_structures_area_idx").on(t.areaId)],
+);
+
+export const knowledgeStructureVersions = pgTable(
+  "knowledge_structure_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    structureId: uuid("structure_id")
+      .notNull()
+      .references(() => knowledgeStructures.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    definition: jsonb("definition").$type<StructureDefinition>().notNull(),
+    changeNote: text("change_note"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("knowledge_structure_versions_no_idx").on(t.structureId, t.version)],
+);
 
 /** Type-specific metadata stored on each version. */
 export type LinkPreview = {
@@ -704,6 +742,8 @@ export type ContentVersionMeta = {
   height?: number;
   /** optional caption/alt text for images */
   alt?: string;
+  /** structured entries: definition snapshot + answers (self-contained) */
+  structure?: StructureEntryMeta;
 };
 
 export const contents = pgTable(
@@ -759,6 +799,16 @@ export const contentVersions = pgTable(
 
 export const knowledgeAreasRelations = relations(knowledgeAreas, ({ many }) => ({
   contents: many(contents),
+  structures: many(knowledgeStructures),
+}));
+
+export const knowledgeStructuresRelations = relations(knowledgeStructures, ({ one, many }) => ({
+  area: one(knowledgeAreas, { fields: [knowledgeStructures.areaId], references: [knowledgeAreas.id] }),
+  versions: many(knowledgeStructureVersions),
+}));
+
+export const knowledgeStructureVersionsRelations = relations(knowledgeStructureVersions, ({ one }) => ({
+  structure: one(knowledgeStructures, { fields: [knowledgeStructureVersions.structureId], references: [knowledgeStructures.id] }),
 }));
 
 export const contentsRelations = relations(contents, ({ one, many }) => ({
@@ -865,6 +915,8 @@ export type MeetingParticipant = typeof meetingParticipants.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 
 export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
+export type KnowledgeStructure = typeof knowledgeStructures.$inferSelect;
+export type KnowledgeStructureVersion = typeof knowledgeStructureVersions.$inferSelect;
 export type Content = typeof contents.$inferSelect;
 export type ContentType = Content["type"];
 export type ContentVersion = typeof contentVersions.$inferSelect;

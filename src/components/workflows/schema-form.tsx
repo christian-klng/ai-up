@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 type Loc = "de" | "en";
 type Values = Record<string, unknown>;
 
-const CONTENT_TYPES = ["markdown", "image", "video", "link"] as const;
+const CONTENT_TYPES = ["markdown", "image", "video", "link", "structured"] as const;
 
 /**
  * Renders a list of FieldSpecs (from the trigger/action registry) as form controls.

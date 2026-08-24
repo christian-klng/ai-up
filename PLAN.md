@@ -150,7 +150,9 @@ Secrets (`api_key_encrypted`, Nextcloud-App-Passwort) werden mit AES-256-GCM und
 - Profilseite: Name, Kurzbeschreibung, Sprache, Foto-Upload (Zuschneiden im Browser, quadratisch, max. 5 MB, Ausgabe WebP 512 px + 96 px).
 - Ohne Upload wird der generierte SVG-Avatar genutzt; „Zufälligen Avatar neu würfeln" als Button.
 
-### 5.3 Wissensbereiche & Inhalte
+### 5.3 Sammlungen (früher „Wissensbereiche") & Inhalte
+
+> Umbenennung 24.08.2026: UI-seitig heißen Wissensbereiche jetzt **Sammlungen** (en: Collections). Routen (`/knowledge`), DB-Tabellen (`knowledge_areas`) und Code-Bezeichner sind unverändert.
 
 - Admin legt Wissensbereiche an (Name, **Zweck – Pflichtfeld**, Beschreibung, Icon, Reihenfolge). Der Zweck fließt zusammen mit dem Community-Zweck in LLM-System-Prompts ein und wird Mitgliedern angezeigt.
 - Linkes Panel: Abschnitt „Wissen" listet Bereiche; „Mitglieder"; Abschnitt „Meetings" listet Meeting-Bereiche; unten „Workflows" (Lesezugriff).
@@ -163,6 +165,7 @@ Secrets (`api_key_encrypted`, Nextcloud-App-Passwort) werden mit AES-256-GCM und
 - **Versionierung**: Jede Speicherung erzeugt eine neue `content_versions`-Zeile. Mediendateien werden nie überschrieben; jede Version zeigt auf ihre Datei. UI: „Verlauf"-Tab mit Diff für Markdown, Vorschau alter Bild-/Videoversionen, „Diese Version wiederherstellen" (erzeugt neue Version).
 - Bearbeiten dürfen: Autor, Admins (später Moderatoren-Rolle).
 - Domain-Events: `content.created`, `content.updated`, `content.deleted` (mit `type` als Filter) → Workflow-Trigger.
+- **Strukturen** (seit 24.08.2026): Optional pro Sammlung ein vom Admin visuell definiertes Formular (`knowledge_structures` + versionierte Snapshots in `knowledge_structure_versions`; Definition als JSON, Typen in `src/lib/structures/`). Elemente: Infotext, Textfeld, Langtext, Dropdown, Chips, Checkbox, Frage-Antwort-Paare, Prozessdiagramm (@xyflow/react, verzweigte Graphen); Bedingungen über `showIf`. Hat eine Sammlung eine Struktur, entstehen neue Einträge nur noch über das Formular (Inhaltstyp `structured`); die Antworten werden deterministisch zu Markdown gerendert (`body_markdown`, Prozesse als Mermaid + Text-Outline) und samt Definitions-Snapshot in `content_versions.meta.structure` gespeichert – Strukturänderungen brechen alte Einträge nie. Jeder Eintrag ist als Markdown kopier-/downloadbar (Ausgangsmaterial für System Prompts / Skill-Dateien).
 
 ### 5.4 Mitglieder
 

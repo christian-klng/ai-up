@@ -4,9 +4,11 @@ import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
+import { getStructureByAreaId } from "@/server/domain/structures";
 import { env } from "@/server/env";
 import { PageHeader } from "@/components/common/page-header";
 import { ContentEditor } from "@/components/content/content-editor";
+import { StructureFillForm } from "@/components/structures/structure-fill-form";
 
 export default async function EditContentPage({ params }: PageProps<"/knowledge/[slug]/[contentId]/edit">) {
   const user = await requireUser();
@@ -14,9 +16,27 @@ export default async function EditContentPage({ params }: PageProps<"/knowledge/
   const [area, content] = await Promise.all([getAreaBySlug(slug), getContent(contentId)]);
   if (!area || !content || content.areaId !== area.id) notFound();
   if (!canEditContent(user, content)) redirect(`/knowledge/${slug}/${contentId}`);
-  const t = await getTranslations("knowledge.editor");
   const v = content.version;
   const m = content.media;
+
+  if (content.type === "structured") {
+    const structureMeta = v?.meta.structure;
+    if (!structureMeta) notFound();
+    const [ts, structure] = await Promise.all([getTranslations("knowledge.structured"), getStructureByAreaId(area.id)]);
+    const changed = structure ? structure.version > structureMeta.structureVersion : true;
+    return (
+      <div className="mx-auto max-w-3xl">
+        <Link href={`/knowledge/${area.slug}/${content.id}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-4" /> {content.title}
+        </Link>
+        <PageHeader title={ts("editTitle")} />
+        {changed && <p className="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">{ts("structureChanged")}</p>}
+        <StructureFillForm def={structureMeta.definition} mode="edit" areaId={area.id} areaSlug={area.slug} contentId={content.id} initialTitle={content.title} initialAnswers={structureMeta.answers} />
+      </div>
+    );
+  }
+
+  const t = await getTranslations("knowledge.editor");
   return (
     <div className="mx-auto max-w-3xl">
       <Link href={`/knowledge/${area.slug}/${content.id}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
