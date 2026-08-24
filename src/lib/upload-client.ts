@@ -15,7 +15,7 @@ export type UploadedMedia = {
 export type UploadError = { code: "too_large" | "unsupported_type" | "unauthorized" | "upload_failed" | "network"; maxBytes?: number };
 
 /** Uploads a file via PUT /api/upload with progress callback (XHR because fetch has no upload progress). */
-export function uploadFile(file: File, purpose: "content" | "message", onProgress?: (fraction: number) => void): Promise<UploadedMedia> {
+export function uploadFile(file: File, purpose: "content" | "message" | "landing", onProgress?: (fraction: number) => void): Promise<UploadedMedia> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const url = `/api/upload?purpose=${encodeURIComponent(purpose)}&name=${encodeURIComponent(file.name)}`;

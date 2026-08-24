@@ -1,4 +1,5 @@
 import { relations } from "drizzle-orm";
+import type { LandingDefinition } from "@/lib/landing-schema";
 import {
   boolean,
   index,
@@ -132,10 +133,31 @@ export const appSettings = pgTable("app_settings", {
   defaultLocale: localeEnum("default_locale").notNull().default("de"),
   /** Display name of the system bot that sends workflow messages */
   botName: text("bot_name").notNull().default("Assistent"),
+  /** Serve the public landing page at "/"; when false, "/" redirects to /login resp. /home. */
+  landingEnabled: boolean("landing_enabled").notNull().default(false),
   /** Encrypted JSON blobs for integrations are stored in dedicated tables later; keep generic extras here. */
   extra: jsonb("extra").$type<Record<string, unknown>>().notNull().default({}),
   ...timestamps,
 });
+
+// ---------------------------------------------------------------------------
+// Landing page (singleton like app_settings; append-only versions, current = max version)
+// ---------------------------------------------------------------------------
+
+export const landingPageVersions = pgTable(
+  "landing_page_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: integer("version").notNull(),
+    definition: jsonb("definition").$type<LandingDefinition>().notNull(),
+    /** ui | mcp */
+    source: text("source").notNull().default("ui"),
+    changeNote: text("change_note"),
+    changedBy: text("changed_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("landing_page_versions_version_idx").on(t.version)],
+);
 
 // ---------------------------------------------------------------------------
 // Media files (uploads live on the volume; never overwritten)
@@ -817,6 +839,7 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AppSettings = typeof appSettings.$inferSelect;
+export type LandingPageVersion = typeof landingPageVersions.$inferSelect;
 export type MediaFile = typeof mediaFiles.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type ContactRequest = typeof contactRequests.$inferSelect;

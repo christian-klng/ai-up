@@ -41,7 +41,7 @@ export function LoginForm({ next, error }: { next?: string; error?: string }) {
           </Alert>
         )}
         <form action={action} className="grid gap-4">
-          <input type="hidden" name="next" value={next ?? "/"} />
+          <input type="hidden" name="next" value={next ?? "/home"} />
           <div className="grid gap-2">
             <Label htmlFor="email">{t("emailLabel")}</Label>
             <Input id="email" name="email" type="email" autoComplete="email" required autoFocus placeholder="name@example.com" />

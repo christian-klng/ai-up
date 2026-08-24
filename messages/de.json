@@ -81,6 +81,11 @@
     "pendingMembers": "{count, plural, =0 {Keine wartenden Registrierungen} =1 {Eine wartende Registrierung} other {# wartende Registrierungen}}",
     "openAdmin": "Zur Verwaltung"
   },
+  "landing": {
+    "toApp": "Zur App",
+    "signIn": "Anmelden",
+    "register": "Registrieren"
+  },
   "members": {
     "title": "Mitglieder",
     "count": "{count, plural, =1 {# Mitglied} other {# Mitglieder}}",
@@ -115,6 +120,7 @@
     "nav": {
       "general": "Allgemein",
       "purpose": "Zweck",
+      "landing": "Landing Page",
       "members": "Mitglieder",
       "knowledge": "Wissensbereiche",
       "meetings": "Meeting-Bereiche",
@@ -152,6 +158,33 @@
       "label": "Zweck",
       "placeholder": "z. B. „Wir sind ein Netzwerk von KI-Beratern und teilen hier Wissen, Erfahrungen und Werkzeuge rund um den Einsatz von KI im Mittelstand.“",
       "hint": "Auf Englisch oder Deutsch – LLM-Instruktionen selbst sind Englisch, der Zweck wird eingebettet."
+    },
+    "landing": {
+      "title": "Landing Page",
+      "intro": "Öffentliche Startseite auf „/“. Inhalte werden per MCP bearbeitet (z. B. mit Claude Code); hier steuerst du Aktivierung, Bilder und Versionen.",
+      "statusTitle": "Status",
+      "statusHint": "Aktuelle Version: v{version}. Die Seite ist ohne Login sichtbar, sobald sie aktiviert ist.",
+      "noContentYet": "Noch kein Inhalt vorhanden – erstelle die erste Version per MCP (Resource aiup://docs/landing-page).",
+      "enableLabel": "Landing Page aktivieren",
+      "preview": "Vorschau",
+      "viewPublic": "Öffentliche Seite ansehen",
+      "mcpHint": "Bearbeitung per MCP: API-Schlüssel mit den Scopes landing:read und landing:write anlegen, dann liest das LLM die Resource aiup://docs/landing-page und nutzt update_landing_page.",
+      "imagesTitle": "Bilder",
+      "imagesHint": "Bilder für die Landing Page sind öffentlich abrufbar. Die ID im MCP-Inhalt als mediaId referenzieren.",
+      "uploadImage": "Bild hochladen",
+      "uploading": "Lädt hoch …",
+      "imageUploaded": "Bild hochgeladen",
+      "copyId": "ID kopieren",
+      "idCopied": "ID kopiert",
+      "historyTitle": "Versionen",
+      "historyHint": "Jede Änderung erzeugt eine neue Version. Wiederherstellen kopiert eine alte Version als neue nach vorn.",
+      "version": "Version",
+      "date": "Datum",
+      "source": "Quelle",
+      "editor": "Bearbeitet von",
+      "note": "Änderungsnotiz",
+      "restore": "Wiederherstellen",
+      "confirmRestore": "Version v{version} als neue aktuelle Version wiederherstellen?"
     },
     "members": {
       "title": "Mitglieder",
@@ -344,25 +377,25 @@
         "secretKeep": "Gesetzt ({masked}) – leer lassen zum Behalten",
         "recordingsPath": "Aufzeichnungs-Verzeichnis",
         "recordingsPathHint": "Nur ohne S3-Übergabe: Pfad, den Egress beschreibt und die App liest (in beiden Compose-Ressourcen dasselbe Host-Verzeichnis).",
-    "s3Title": "Übergabe über S3 (getrennte Server)",
-    "s3Hint": "Laufen App und Media-Server auf getrennten Hosts, teilen sie kein Dateisystem. Egress lädt die Aufzeichnung dann in diesen Bucket, die App holt sie ab und löscht sie dort nach dem Import. Für den Betrieb auf einem einzelnen Host leer lassen.",
-    "s3Endpoint": "Endpunkt",
-    "s3Bucket": "Bucket",
-    "s3Region": "Region",
-    "s3AccessKey": "Access Key",
-    "s3SecretKey": "Secret Key",
+        "s3Title": "Übergabe über S3 (getrennte Server)",
+        "s3Hint": "Laufen App und Media-Server auf getrennten Hosts, teilen sie kein Dateisystem. Egress lädt die Aufzeichnung dann in diesen Bucket, die App holt sie ab und löscht sie dort nach dem Import. Für den Betrieb auf einem einzelnen Host leer lassen.",
+        "s3Endpoint": "Endpunkt",
+        "s3Bucket": "Bucket",
+        "s3Region": "Region",
+        "s3AccessKey": "Access Key",
+        "s3SecretKey": "Secret Key",
         "recordingDefault": "Aufzeichnung standardmäßig an",
         "recordingDefaultHint": "Globale Vorgabe; Meeting-Bereiche und Meetings können abweichen.",
         "test": "Verbindung testen",
         "testOk": "Verbunden – {rooms} aktive Räume, {ms} ms.",
         "testFailed": "Fehler: {error}",
         "lastTest": "Letzter Test: {result}",
-    "errors": {
-      "urlInvalid": "Bitte gib eine gültige Server-URL an, beginnend mit wss:// oder https://.",
-      "apiKeyRequired": "Bitte gib den API-Key an.",
-      "recordingsPathRequired": "Bitte gib das Aufzeichnungs-Verzeichnis an.",
-      "s3EndpointInvalid": "Der S3-Endpunkt muss mit https:// beginnen. Lass das Feld leer, wenn du keine Übergabe über S3 nutzt."
-    }
+        "errors": {
+          "urlInvalid": "Bitte gib eine gültige Server-URL an, beginnend mit wss:// oder https://.",
+          "apiKeyRequired": "Bitte gib den API-Key an.",
+          "recordingsPathRequired": "Bitte gib das Aufzeichnungs-Verzeichnis an.",
+          "s3EndpointInvalid": "Der S3-Endpunkt muss mit https:// beginnen. Lass das Feld leer, wenn du keine Übergabe über S3 nutzt."
+        }
       }
     }
   },

@@ -7,7 +7,7 @@ import { absolutePath, getMedia } from "@/server/media/storage";
 
 export const dynamic = "force-dynamic";
 
-const PUBLIC_PURPOSES = new Set(["logo", "favicon", "avatar"]);
+const PUBLIC_PURPOSES = new Set(["logo", "favicon", "avatar", "landing"]);
 
 /**
  * Serves stored media. Branding assets and avatars are public (needed on the login page and in e-mails);

@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default async function PendingPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.status === "active") redirect("/");
+  if (user.status === "active") redirect("/home");
   const t = await getTranslations("auth");
   const suspended = user.status === "suspended";
 

@@ -10,7 +10,8 @@ const PUBLIC_PREFIXES = ["/login", "/register", "/pending", "/api/auth", "/api/h
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  // "/" is public (landing page); the page itself redirects to /login or /home when the landing is disabled.
+  if (pathname === "/" || PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }
   const cookie = getSessionCookie(request);

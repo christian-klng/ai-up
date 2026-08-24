@@ -29,7 +29,7 @@ export function AppShell({ brand, user, nav, labels, signOutAction, children }: 
 
   const sidebar = (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <Link href="/" className="flex items-center gap-2.5 px-4 py-4" onClick={() => setOpen(false)}>
+      <Link href="/home" className="flex items-center gap-2.5 px-4 py-4" onClick={() => setOpen(false)}>
         {brand.logo}
         <span className="truncate font-semibold tracking-tight">{brand.name}</span>
       </Link>

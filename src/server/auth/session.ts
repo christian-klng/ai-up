@@ -46,7 +46,7 @@ export async function requireUser(): Promise<CurrentUser> {
 /** Requires an active admin. */
 export async function requireAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
-  if (user.role !== "admin") redirect("/");
+  if (user.role !== "admin") redirect("/home");
   return user;
 }
 

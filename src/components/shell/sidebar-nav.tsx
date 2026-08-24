@@ -74,7 +74,7 @@ export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, isAdmin, onN
 
   return (
     <nav className="grid gap-0.5 px-2 pb-6" aria-label="Main">
-      {item("/", "home", labels.home)}
+      {item("/home", "home", labels.home)}
 
       <NavSection title={labels.knowledge}>
         {knowledgeAreas.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground">{labels.noAreasYet}</p>}

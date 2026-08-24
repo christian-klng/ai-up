@@ -138,7 +138,7 @@ export async function approveMemberAction(userId: string): Promise<MemberActionR
     const hdrs = await headers();
     const user = await approveUser(userId, admin.id, async (email) => {
       // Send a first magic link straight away so the member can sign in from the approval mail.
-      await auth.api.signInMagicLink({ headers: hdrs, body: { email, callbackURL: "/" } });
+      await auth.api.signInMagicLink({ headers: hdrs, body: { email, callbackURL: "/home" } });
     });
     if (!user) return { ok: false, reason: "notFound" };
     revalidatePath("/admin/members");

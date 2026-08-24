@@ -81,6 +81,11 @@
     "pendingMembers": "{count, plural, =0 {No pending registrations} =1 {One pending registration} other {# pending registrations}}",
     "openAdmin": "Open admin"
   },
+  "landing": {
+    "toApp": "Open app",
+    "signIn": "Sign in",
+    "register": "Register"
+  },
   "members": {
     "title": "Members",
     "count": "{count, plural, =1 {# member} other {# members}}",
@@ -115,6 +120,7 @@
     "nav": {
       "general": "General",
       "purpose": "Purpose",
+      "landing": "Landing page",
       "members": "Members",
       "knowledge": "Knowledge areas",
       "meetings": "Meeting spaces",
@@ -152,6 +158,33 @@
       "label": "Purpose",
       "placeholder": "e.g. “We are a network of AI consultants sharing knowledge, experience and tools around AI adoption in mid-sized companies.”",
       "hint": "German or English – LLM instructions themselves are English, the purpose is embedded as-is."
+    },
+    "landing": {
+      "title": "Landing page",
+      "intro": "Public start page at “/”. Content is edited via MCP (e.g. with Claude Code); manage activation, images and versions here.",
+      "statusTitle": "Status",
+      "statusHint": "Current version: v{version}. Once enabled, the page is visible without login.",
+      "noContentYet": "No content yet – create the first version via MCP (resource aiup://docs/landing-page).",
+      "enableLabel": "Enable landing page",
+      "preview": "Preview",
+      "viewPublic": "View public page",
+      "mcpHint": "Editing via MCP: create an API key with the scopes landing:read and landing:write, then the LLM reads the resource aiup://docs/landing-page and uses update_landing_page.",
+      "imagesTitle": "Images",
+      "imagesHint": "Landing page images are publicly accessible. Reference the ID as mediaId in the MCP content.",
+      "uploadImage": "Upload image",
+      "uploading": "Uploading …",
+      "imageUploaded": "Image uploaded",
+      "copyId": "Copy ID",
+      "idCopied": "ID copied",
+      "historyTitle": "Versions",
+      "historyHint": "Every change creates a new version. Restore copies an old version forward as the new current one.",
+      "version": "Version",
+      "date": "Date",
+      "source": "Source",
+      "editor": "Edited by",
+      "note": "Change note",
+      "restore": "Restore",
+      "confirmRestore": "Restore version v{version} as the new current version?"
     },
     "members": {
       "title": "Members",
@@ -344,25 +377,25 @@
         "secretKeep": "Set ({masked}) – leave empty to keep",
         "recordingsPath": "Recordings directory",
         "recordingsPathHint": "Only without S3 handover: path written by egress and read by the app (the same host directory in both compose resources).",
-    "s3Title": "Handover via S3 (separate servers)",
-    "s3Hint": "When the app and the media server run on separate hosts they share no filesystem. Egress then uploads the recording to this bucket, the app fetches it and deletes it there after the import. Leave empty when running on a single host.",
-    "s3Endpoint": "Endpoint",
-    "s3Bucket": "Bucket",
-    "s3Region": "Region",
-    "s3AccessKey": "Access key",
-    "s3SecretKey": "Secret key",
+        "s3Title": "Handover via S3 (separate servers)",
+        "s3Hint": "When the app and the media server run on separate hosts they share no filesystem. Egress then uploads the recording to this bucket, the app fetches it and deletes it there after the import. Leave empty when running on a single host.",
+        "s3Endpoint": "Endpoint",
+        "s3Bucket": "Bucket",
+        "s3Region": "Region",
+        "s3AccessKey": "Access key",
+        "s3SecretKey": "Secret key",
         "recordingDefault": "Recording on by default",
         "recordingDefaultHint": "Global default; meeting spaces and meetings may override.",
         "test": "Test connection",
         "testOk": "Connected – {rooms} active rooms, {ms} ms.",
         "testFailed": "Error: {error}",
         "lastTest": "Last test: {result}",
-    "errors": {
-      "urlInvalid": "Enter a valid server URL starting with wss:// or https://.",
-      "apiKeyRequired": "Enter the API key.",
-      "recordingsPathRequired": "Enter the recordings directory.",
-      "s3EndpointInvalid": "The S3 endpoint must start with https://. Leave it empty if you are not using the S3 handover."
-    }
+        "errors": {
+          "urlInvalid": "Enter a valid server URL starting with wss:// or https://.",
+          "apiKeyRequired": "Enter the API key.",
+          "recordingsPathRequired": "Enter the recordings directory.",
+          "s3EndpointInvalid": "The S3 endpoint must start with https://. Leave it empty if you are not using the S3 handover."
+        }
       }
     }
   },

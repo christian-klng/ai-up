@@ -21,8 +21,8 @@ const emailSchema = z.string().trim().toLowerCase().email();
 export async function requestMagicLink(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const email = emailSchema.safeParse(formData.get("email"));
   if (!email.success) return { status: "error", code: "invalidEmail" };
-  const next = typeof formData.get("next") === "string" ? String(formData.get("next")) : "/";
-  const callbackURL = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const next = typeof formData.get("next") === "string" ? String(formData.get("next")) : "/home";
+  const callbackURL = next.startsWith("/") && !next.startsWith("//") ? next : "/home";
 
   try {
     const user = await getUserByEmail(email.data);

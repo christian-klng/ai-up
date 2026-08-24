@@ -15,7 +15,8 @@ Technische Referenz zum „Maschinenraum“. Nutzersicht: Verwaltung → Workflo
 
 ## MCP-Server
 
-- Endpunkt `POST /api/mcp` (Streamable HTTP, stateless), Auth `Authorization: Bearer aiup_…` (API-Schlüssel unter Verwaltung → API-Schlüssel; nur Admins, Scopes `workflows:read|write`, `runs:read|trigger`, `llm:read`, `questions:read`).
-- Tools: `list_triggers`, `list_actions`, `describe_action`, `describe_trigger`, `list_llm_providers`, `list_llm_models`, `list_workflows`, `get_workflow`, `validate_workflow`, `create_workflow`, `update_workflow`, `set_workflow_status`, `delete_workflow`, `list_runs`, `get_run`, `trigger_workflow`, `get_workflow_stats`, `list_questions`, `get_question_results`. Resource `aiup://docs/workflow-schema`.
+- Endpunkt `POST /api/mcp` (Streamable HTTP, stateless), Auth `Authorization: Bearer aiup_…` (API-Schlüssel unter Verwaltung → API-Schlüssel; nur Admins, Scopes `workflows:read|write`, `runs:read|trigger`, `llm:read`, `questions:read`, `landing:read|write`).
+- Tools: `list_triggers`, `list_actions`, `describe_action`, `describe_trigger`, `list_llm_providers`, `list_llm_models`, `list_workflows`, `get_workflow`, `validate_workflow`, `create_workflow`, `update_workflow`, `set_workflow_status`, `delete_workflow`, `list_runs`, `get_run`, `trigger_workflow`, `get_workflow_stats`, `list_questions`, `get_question_results`, `get_landing_page`, `validate_landing_page`, `update_landing_page`, `list_landing_page_versions`, `restore_landing_page_version`, `set_landing_enabled`, `list_landing_media`. Resources `aiup://docs/workflow-schema`, `aiup://docs/landing-page`.
+- Landing Page: strukturierte Sektionen (zod-validiert, versioniert in `landing_page_versions`); Design-Regeln + aktuelle App-Variablen (Name, Zweck, Theme) liefert die Resource `aiup://docs/landing-page` dynamisch. Aktivierung unter Verwaltung → Landing Page oder per `set_landing_enabled`.
 - Claude Code: `claude mcp add --transport http aiup https://<domain>/api/mcp --header "Authorization: Bearer <KEY>"`.
 
