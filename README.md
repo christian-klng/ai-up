@@ -42,4 +42,6 @@ Magic-Link-Mails landen lokal in Mailpit. Der erste Admin ist die Adresse aus `S
 
 ## Lizenz
 
-Noch nicht festgelegt.
+[GNU Affero General Public License v3.0](LICENSE). Für eine selbst gehostete Anwendung bewusst die AGPL und
+nicht die GPL: Wer AI-Up verändert und die geänderte Fassung über ein Netzwerk als Dienst anbietet, muss deren
+Quellcode zugänglich machen – auch ohne die Software selbst weiterzugeben.
