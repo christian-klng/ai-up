@@ -356,7 +356,13 @@
         "test": "Test connection",
         "testOk": "Connected – {rooms} active rooms, {ms} ms.",
         "testFailed": "Error: {error}",
-        "lastTest": "Last test: {result}"
+        "lastTest": "Last test: {result}",
+    "errors": {
+      "urlInvalid": "Enter a valid server URL starting with wss:// or https://.",
+      "apiKeyRequired": "Enter the API key.",
+      "recordingsPathRequired": "Enter the recordings directory.",
+      "s3EndpointInvalid": "The S3 endpoint must start with https://. Leave it empty if you are not using the S3 handover."
+    }
       }
     }
   },

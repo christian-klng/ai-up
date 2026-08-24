@@ -40,7 +40,7 @@ export function LiveKitForm({ initial, lastTest }: { initial: Initial; lastTest:
     if (s.status === "saved") {
       toast.success(tc("saved"));
       router.refresh();
-    } else if (s.status === "error") toast.error(s.message);
+    } else if (s.status === "error") toast.error(s.code === "unexpected" ? tc("unexpectedError") : t(`livekit.errors.${s.code}`));
   });
 
   return (

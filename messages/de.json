@@ -356,7 +356,13 @@
         "test": "Verbindung testen",
         "testOk": "Verbunden – {rooms} aktive Räume, {ms} ms.",
         "testFailed": "Fehler: {error}",
-        "lastTest": "Letzter Test: {result}"
+        "lastTest": "Letzter Test: {result}",
+    "errors": {
+      "urlInvalid": "Bitte gib eine gültige Server-URL an, beginnend mit wss:// oder https://.",
+      "apiKeyRequired": "Bitte gib den API-Key an.",
+      "recordingsPathRequired": "Bitte gib das Aufzeichnungs-Verzeichnis an.",
+      "s3EndpointInvalid": "Der S3-Endpunkt muss mit https:// beginnen. Lass das Feld leer, wenn du keine Übergabe über S3 nutzt."
+    }
       }
     }
   },

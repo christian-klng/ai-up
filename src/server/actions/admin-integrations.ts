@@ -25,7 +25,24 @@ function keepable(value: string | undefined): value is string {
   return value !== undefined && value !== "__keep__" && value !== "";
 }
 
-export type LiveKitFormState = { status: "idle" } | { status: "saved" } | { status: "error"; message: string };
+export type LiveKitErrorCode = "urlInvalid" | "apiKeyRequired" | "recordingsPathRequired" | "s3EndpointInvalid" | "unexpected";
+export type LiveKitFormState = { status: "idle" } | { status: "saved" } | { status: "error"; code: LiveKitErrorCode };
+
+/** Maps the first failing field to a key the form resolves via `errors.<code>` in both locales. */
+function errorCodeFor(field: PropertyKey | undefined): LiveKitErrorCode {
+  switch (field) {
+    case "url":
+      return "urlInvalid";
+    case "apiKey":
+      return "apiKeyRequired";
+    case "recordingsPath":
+      return "recordingsPathRequired";
+    case "s3Endpoint":
+      return "s3EndpointInvalid";
+    default:
+      return "unexpected";
+  }
+}
 
 export async function saveLiveKitAction(_prev: LiveKitFormState, formData: FormData): Promise<LiveKitFormState> {
   const admin = await assertAdmin();
@@ -42,7 +59,7 @@ export async function saveLiveKitAction(_prev: LiveKitFormState, formData: FormD
     s3AccessKey: formData.get("s3AccessKey") ?? "",
     s3SecretKey: formData.get("s3SecretKey") ?? undefined,
   });
-  if (!parsed.success) return { status: "error", message: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ") };
+  if (!parsed.success) return { status: "error", code: errorCodeFor(parsed.error.issues[0]?.path[0]) };
   const d = parsed.data;
   const url = d.url.replace(/^https:/, "wss:").replace(/^http:/, "ws:").replace(/\/$/, "");
   const secrets: Record<string, string> = {};
