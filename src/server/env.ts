@@ -39,7 +39,12 @@ let cached: Env | undefined;
 
 function load(): Env {
   if (cached) return cached;
-  const parsed = schema.safeParse(process.env);
+  // Deployment platforms (Coolify, docker compose) pass variables that have no value as empty
+  // strings rather than leaving them out. Drop those so `.optional()` and `.default()` behave as
+  // intended – otherwise an unset SEED_ADMIN_EMAIL fails as "invalid email" and an unset SMTP_HOST
+  // silently becomes "" instead of its default.
+  const present = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ""));
+  const parsed = schema.safeParse(present);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
