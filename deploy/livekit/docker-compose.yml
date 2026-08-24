@@ -23,7 +23,9 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
-      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+      # Quoted on purpose: the ": " inside would otherwise make YAML read this list item as a
+      # mapping instead of a string, and compose would drop LIVEKIT_KEYS entirely.
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     depends_on:
       - redis
     healthcheck:
