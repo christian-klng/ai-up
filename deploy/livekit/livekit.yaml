@@ -1,6 +1,8 @@
-# LiveKit server config for AI-Up (production). Values in ${...} are NOT substituted by LiveKit –
-# replace LIVEKIT_DOMAIN / NODE_IP / APP_WEBHOOK_URL / keys before deploying, or let Coolify render
-# this file via a "Configuration File" with template variables. Keys come from the LIVEKIT_KEYS env var.
+# LiveKit server config for AI-Up (production) – TEMPLATE, do not fill in and commit.
+# LIVEKIT_DOMAIN / LIVEKIT_API_KEY / APP_WEBHOOK_URL below are placeholders that LiveKit does not
+# substitute. Filling them in here would commit one installation's API key and domain to the repo,
+# which is public. Provide the completed file through Coolify instead: Storages -> file mount with
+# destination /etc/livekit.yaml. The API secret never appears here; it comes from LIVEKIT_KEYS.
 port: 7880
 bind_addresses:
   - ""
