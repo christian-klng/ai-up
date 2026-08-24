@@ -14,7 +14,7 @@ Selbst gehostete Community-Plattform nach dem Vorbild von Circle.so – mit eine
 - **MCP-Server** – API-Schlüssel für Admins; Workflows per Claude Code einsehen, anlegen, ändern, starten.
 - **Zweisprachig** (Deutsch/Englisch), Branding (Name, Logo, Favicon, Farbschema) durch den Admin.
 
-Offen: Abnahme des Media-Servers auf dem Coolify-Host (Lasttest) und Härtung/Tests (siehe [PLAN.md](PLAN.md), Phasen 4f und 7).
+Läuft produktiv auf zwei VPS: die App auf dem einen, der Media-Server für Calls und Aufzeichnungen auf dem anderen. Offen: Lasttest mit 30 Teilnehmenden sowie Härtung, Tests und Sicherheits-Review (siehe [PLAN.md](PLAN.md), Phasen 4f und 7).
 
 ## Stack
 
