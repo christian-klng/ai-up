@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { auditLog, users, type User } from "@/server/db/schema";
+import { emitDomainEvent, type MemberEventPayload } from "@/server/events/bus";
 import { env } from "@/server/env";
 import type { Locale } from "@/i18n/config";
 import { logger } from "@/server/logger";
@@ -24,6 +25,15 @@ export async function getUserById(id: string): Promise<User | undefined> {
 
 export async function listAdmins(): Promise<User[]> {
   return db.query.users.findMany({ where: and(eq(users.role, "admin"), eq(users.status, "active")) });
+}
+
+function memberEventPayload(user: User, href: string, actorId: string | null): MemberEventPayload {
+  return {
+    user: { id: user.id, name: user.name, email: user.email, locale: user.locale, registrationMessage: user.registrationMessage },
+    href,
+    actorId,
+    origin: { kind: "user" },
+  };
 }
 
 export type RegisterInput = { email: string; name: string; locale: Locale; message?: string | null };
@@ -61,6 +71,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
   }
 
   await db.insert(auditLog).values({ actorId: id, action: "user.registered", targetType: "user", targetId: id });
+  emitDomainEvent("member.registered", memberEventPayload(user, "/admin/members?status=pending", id));
 
   // Notify admins in-app + by mail (best effort)
   try {
@@ -95,12 +106,13 @@ export async function approveUser(userId: string, actorId: string, sendLink: (em
   if (!user) return undefined;
 
   await db.insert(auditLog).values({ actorId, action: "user.approved", targetType: "user", targetId: userId });
+  emitDomainEvent("member.approved", memberEventPayload(user, `/members/${user.id}`, actorId));
   await createNotifications([
     {
       userId,
       type: "member.approved",
       title: user.locale === "en" ? "Your account has been approved" : "Dein Konto wurde freigeschaltet",
-      data: { href: "/" },
+      data: { href: "/home" },
     },
   ]);
   try {

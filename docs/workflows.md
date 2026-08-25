@@ -5,7 +5,7 @@ Technische Referenz zum „Maschinenraum“. Nutzersicht: Verwaltung → Workflo
 ## Workflow-Engine
 
 - Definitionen (Trigger + Schritte) liegen in `workflows` (JSON), jede Änderung als Version in `workflow_versions`; Läufe in `workflow_runs` / `workflow_run_steps`.
-- Registry: `src/server/workflows/triggers` (content.created, content.updated, schedule, manual, question.answered, bot.message.received) und `src/server/workflows/actions` (llm, read_webpage, notify_user, send_message, create_content, ask_user). Neue Trigger/Aktionen = eine Datei mit zod-Schema, Feldbeschreibung (de/en) und `run()`.
+- Registry: `src/server/workflows/triggers` (content.created, content.updated, schedule, manual, question.answered, bot.message.received, member.registered, member.approved, meeting.started, meeting.ended, meeting.recording.available) und `src/server/workflows/actions` (llm, read_webpage, notify_user, send_message, create_content, ask_user). Neue Trigger/Aktionen = eine Datei mit zod-Schema, Feldbeschreibung (de/en) und `run()`.
 - Ausführung im **Worker** (`npm run worker`, BullMQ-Queue `workflow-runs`); Zeit-Trigger als BullMQ Job Scheduler, Abgleich bei jeder Workflow-Änderung und beim Worker-Start.
 - Templates: LiquidJS – `{{ trigger.* }}`, `{{ steps.<id>.output.* }}`, `{{ app.name }}`, `{{ app.purpose }}`.
 - LLM: OpenAI-kompatible Provider unter Admin → LLM (Schlüssel AES-256-GCM-verschlüsselt mit `APP_ENCRYPTION_KEY`); Structured Output über `response_format` mit Fallback-Parsing.

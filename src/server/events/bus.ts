@@ -33,8 +33,8 @@ export type DomainEventMap = {
   "content.created": ContentEventPayload;
   "content.updated": ContentEventPayload;
   "content.deleted": { contentId: string; areaId: string; actorId: string };
-  "member.registered": { userId: string };
-  "member.approved": { userId: string; actorId: string };
+  "member.registered": MemberEventPayload;
+  "member.approved": MemberEventPayload;
   "notification.created": { userId: string; notificationId: string };
   "question.answered": QuestionAnsweredPayload;
   "meeting.created": { meeting: MeetingEventMeeting; actorId: string | null; origin: EventOrigin };
@@ -46,6 +46,15 @@ export type DomainEventMap = {
 };
 
 export type MeetingEventMeeting = { id: string; title: string; kind: string; status: string; spaceId: string; spaceSlug: string; spaceName: string; hostId: string | null; href: string };
+
+export type MemberEventPayload = {
+  user: { id: string; name: string; email: string; locale: string; registrationMessage: string | null };
+  /** app-relative link: pending list (registered) resp. member profile (approved) */
+  href: string;
+  /** registering user (registered) resp. approving admin (approved) */
+  actorId: string | null;
+  origin: EventOrigin;
+};
 
 export type QuestionAnsweredPayload = {
   question: { id: string; key: string; title: string; workflowId: string | null; fields: unknown[] };

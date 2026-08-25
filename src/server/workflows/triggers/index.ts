@@ -172,6 +172,41 @@ registerTrigger<z.infer<typeof botMessageConfig>>({
 });
 
 // ---------------------------------------------------------------------------
+// Members
+// ---------------------------------------------------------------------------
+const memberTriggerConfig = z.object({});
+const memberPayloadDoc = {
+  "user.id": "user id",
+  "user.name": "display name",
+  "user.email": "e-mail address",
+  "user.locale": "de | en",
+  "user.registrationMessage": "optional message entered at registration (may be null)",
+  href: "app-relative link (pending list resp. member profile)",
+};
+
+registerTrigger<z.infer<typeof memberTriggerConfig>>({
+  type: "member.registered",
+  labels: { name: { de: "Neue Registrierung", en: "New registration" }, description: { de: "Startet, wenn sich jemand registriert und auf Freigabe wartet – z. B. um Admins zu benachrichtigen.", en: "Fires when someone registers and awaits approval – e.g. to notify admins." } },
+  doc: "Fires when a new registration is created (user status pending, not yet approved). Typical use: notify_user or send_message to admins. The person cannot sign in yet – do not message them.",
+  configSchema: memberTriggerConfig,
+  fields: [],
+  payloadDoc: memberPayloadDoc,
+  samplePayload: { user: { id: "00000000-0000-0000-0000-000000000000", name: "Jane Doe", email: "jane@example.com", locale: "de", registrationMessage: "Ich komme aus dem KI-Stammtisch München." }, href: "/admin/members?status=pending" },
+  eventTypes: ["member.registered"],
+});
+
+registerTrigger<z.infer<typeof memberTriggerConfig>>({
+  type: "member.approved",
+  labels: { name: { de: "Neues Mitglied", en: "New member" }, description: { de: "Startet, wenn ein Admin eine Registrierung freigeschaltet hat – z. B. um das neue Mitglied allen vorzustellen.", en: "Fires when an admin has approved a registration – e.g. to introduce the new member to everyone." } },
+  doc: "Fires when an admin approves a pending registration (user becomes active). Typical use: send_message or notify_user to everyone to welcome the new member. actorId in the run is the approving admin.",
+  configSchema: memberTriggerConfig,
+  fields: [],
+  payloadDoc: memberPayloadDoc,
+  samplePayload: { user: { id: "00000000-0000-0000-0000-000000000000", name: "Jane Doe", email: "jane@example.com", locale: "de", registrationMessage: null }, href: "/members/00000000-0000-0000-0000-000000000000" },
+  eventTypes: ["member.approved"],
+});
+
+// ---------------------------------------------------------------------------
 // Meetings
 // ---------------------------------------------------------------------------
 const meetingTriggerConfig = z.object({ spaceIds: z.array(z.string().uuid()).default([]), kinds: z.array(z.enum(["protocol", "audio", "video"])).default([]) });
