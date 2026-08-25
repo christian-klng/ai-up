@@ -18,6 +18,13 @@ export async function listStructuredAreaIds(): Promise<string[]> {
   return rows.map((r) => r.areaId);
 }
 
+export type StructureListItem = { areaId: string; structureId: string; version: number; updatedAt: Date };
+
+/** All structures with their area and version (for the MCP collections context). */
+export async function listStructures(): Promise<StructureListItem[]> {
+  return db.select({ areaId: knowledgeStructures.areaId, structureId: knowledgeStructures.id, version: knowledgeStructures.version, updatedAt: knowledgeStructures.updatedAt }).from(knowledgeStructures);
+}
+
 /** Creates or updates the collection's structure and writes a version snapshot. */
 export async function saveStructure(areaId: string, definition: StructureDefinition, actorId: string, changeNote?: string | null): Promise<KnowledgeStructure> {
   const result = await db.transaction(async (tx) => {
