@@ -282,6 +282,16 @@ export async function listContents(opts: ListContentsOptions = {}): Promise<Cont
   return rows.map((r) => ({ ...r.content, version: r.version, media: r.media, author: r.author?.id ? r.author : null }));
 }
 
+/** Non-deleted content count per type for one area (types without entries are absent). */
+export async function countContentsByType(areaId: string): Promise<Partial<Record<ContentType, number>>> {
+  const rows = await db
+    .select({ type: contents.type, count: sql<number>`count(*)::int` })
+    .from(contents)
+    .where(and(eq(contents.areaId, areaId), isNull(contents.deletedAt)))
+    .groupBy(contents.type);
+  return Object.fromEntries(rows.map((r) => [r.type, r.count]));
+}
+
 export type VersionWithMeta = ContentVersion & { media: MediaFile | null; createdByUser: { id: string; name: string; avatarMediaId: string | null } | null };
 
 export async function listContentVersions(contentId: string): Promise<VersionWithMeta[]> {

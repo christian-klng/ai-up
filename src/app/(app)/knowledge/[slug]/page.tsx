@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { FileText, Image as ImageIcon, Link2, ListChecks, Pin, Plus, Search, Video } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
-import { getAreaBySlug, listContents } from "@/server/domain/knowledge";
+import { countContentsByType, getAreaBySlug, listContents } from "@/server/domain/knowledge";
 import type { ContentType } from "@/server/db/schema";
 import { PageHeader } from "@/components/common/page-header";
 import { AreaIcon } from "@/components/knowledge/area-icon";
@@ -23,7 +23,15 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
   if (!area) notFound();
   const type = TYPES.includes(sp.type as ContentType) ? (sp.type as ContentType) : undefined;
   const q = typeof sp.q === "string" ? sp.q : "";
-  const [t, tc, format, items] = await Promise.all([getTranslations("knowledge"), getTranslations("common"), getFormatter(), listContents({ areaId: area.id, type, query: q || undefined })]);
+  const [t, tc, format, items, typeCounts] = await Promise.all([
+    getTranslations("knowledge"),
+    getTranslations("common"),
+    getFormatter(),
+    listContents({ areaId: area.id, type, query: q || undefined }),
+    countContentsByType(area.id),
+  ]);
+  const availableTypes = TYPES.filter((tp) => (typeCounts[tp] ?? 0) > 0);
+  const hasAnyContent = availableTypes.length > 0;
 
   const filterHref = (tp?: ContentType) => `/knowledge/${area.slug}${tp ? `?type=${tp}` : ""}${q ? `${tp ? "&" : "?"}q=${encodeURIComponent(q)}` : ""}`;
 
@@ -41,26 +49,28 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
         }
       />
 
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1">
-          <FilterChip href={filterHref()} active={!type}>
-            {t("all")}
-          </FilterChip>
-          {TYPES.map((tp) => {
-            const Icon = TYPE_ICONS[tp];
-            return (
-              <FilterChip key={tp} href={filterHref(tp)} active={type === tp}>
-                <Icon className="size-3.5" /> {t(`types.${tp}`)}
-              </FilterChip>
-            );
-          })}
+      {hasAnyContent && (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-1">
+            <FilterChip href={filterHref()} active={!type}>
+              {t("all")}
+            </FilterChip>
+            {availableTypes.map((tp) => {
+              const Icon = TYPE_ICONS[tp];
+              return (
+                <FilterChip key={tp} href={filterHref(tp)} active={type === tp}>
+                  <Icon className="size-3.5" /> {t(`types.${tp}`)}
+                </FilterChip>
+              );
+            })}
+          </div>
+          <form className="relative ml-auto" role="search">
+            {type && <input type="hidden" name="type" value={type} />}
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input name="q" defaultValue={q} placeholder={t("searchPlaceholder")} className="w-64 pl-8" aria-label={tc("search")} />
+          </form>
         </div>
-        <form className="relative ml-auto" role="search">
-          {type && <input type="hidden" name="type" value={type} />}
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input name="q" defaultValue={q} placeholder={t("searchPlaceholder")} className="w-64 pl-8" aria-label={tc("search")} />
-        </form>
-      </div>
+      )}
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
