@@ -3,7 +3,6 @@
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Languages } from "lucide-react";
 import { setLocale } from "@/server/actions/locale";
 import { locales, type Locale } from "@/i18n/config";
 import { cn } from "@/lib/utils";
@@ -17,7 +16,6 @@ export function LocaleSwitcher({ label, className }: { label: string; className?
 
   return (
     <div className={cn("inline-flex items-center gap-1 text-sm", className)} role="group" aria-label={label}>
-      <Languages className="size-4 text-muted-foreground" aria-hidden />
       {locales.map((l) => (
         <button
           key={l}
