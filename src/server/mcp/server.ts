@@ -207,17 +207,17 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
 
   // ---- catalog -------------------------------------------------------------
-  server.registerTool("list_triggers", { title: "List triggers", description: "All trigger types with config fields, payload variables and a sample payload.", inputSchema: {} }, async () => {
+  server.registerTool("list_triggers", { title: "Workflows - List triggers", description: "All trigger types with config fields, payload variables and a sample payload.", inputSchema: {} }, async () => {
     const c = await getEditorCatalog();
     return text(c.triggers.map((t) => ({ type: t.type, name: t.labels.name.en, description: t.labels.description.en, doc: t.doc, fields: t.fields.map(fieldDoc), payload: t.payloadDoc, samplePayload: t.samplePayload })));
   });
-  server.registerTool("list_actions", { title: "List actions", description: "All action types with config fields and output variables.", inputSchema: {} }, async () => {
+  server.registerTool("list_actions", { title: "Workflows - List actions", description: "All action types with config fields and output variables.", inputSchema: {} }, async () => {
     const c = await getEditorCatalog();
     return text(c.actions.map((a) => ({ type: a.type, name: a.labels.name.en, description: a.labels.description.en, doc: a.doc, fields: a.fields.map(fieldDoc), output: a.outputDoc })));
   });
   server.registerTool(
     "describe_action",
-    { title: "Describe action", description: "Detailed config documentation for one action type. For `llm`, pass providerId/model to get the options that model supports.", inputSchema: { type: z.string().describe("action type, e.g. llm"), providerId: z.string().optional(), model: z.string().optional() } },
+    { title: "Workflows - Describe action", description: "Detailed config documentation for one action type. For `llm`, pass providerId/model to get the options that model supports.", inputSchema: { type: z.string().describe("action type, e.g. llm"), providerId: z.string().optional(), model: z.string().optional() } },
     async ({ type, providerId, model }) => {
       const a = getAction(type);
       if (!a) return fail(`unknown action "${type}"`);
@@ -233,19 +233,19 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       return text(base);
     },
   );
-  server.registerTool("describe_trigger", { title: "Describe trigger", description: "Detailed documentation for one trigger type.", inputSchema: { type: z.string() } }, async ({ type }) => {
+  server.registerTool("describe_trigger", { title: "Workflows - Describe trigger", description: "Detailed documentation for one trigger type.", inputSchema: { type: z.string() } }, async ({ type }) => {
     const t = getTrigger(type);
     if (!t) return fail(`unknown trigger "${type}"`);
     return text({ type: t.type, doc: t.doc, fields: t.fields.map(fieldDoc), payload: t.payloadDoc, samplePayload: t.samplePayload });
   });
 
   // ---- LLM ------------------------------------------------------------------
-  server.registerTool("list_llm_providers", { title: "List LLM providers", description: "Configured OpenAI-compatible providers with enabled models (no secrets).", inputSchema: {} }, async () => {
+  server.registerTool("list_llm_providers", { title: "LLM - List providers", description: "Configured OpenAI-compatible providers with enabled models (no secrets).", inputSchema: {} }, async () => {
     require(auth, "llm:read");
     const providers = await listProviders();
     return text(providers.map((p) => ({ id: p.id, name: p.name, kind: p.kind, baseUrl: p.baseUrl, isDefault: p.isDefault, defaultModel: p.defaultModel, enabledModels: p.enabledModels, hasApiKey: p.hasApiKey })));
   });
-  server.registerTool("list_llm_models", { title: "List LLM models", description: "Models of a provider (enabled ones first) with capabilities.", inputSchema: { providerId: z.string().optional().describe("omit for the default provider"), onlyEnabled: z.boolean().optional() } }, async ({ providerId, onlyEnabled }) => {
+  server.registerTool("list_llm_models", { title: "LLM - List models", description: "Models of a provider (enabled ones first) with capabilities.", inputSchema: { providerId: z.string().optional().describe("omit for the default provider"), onlyEnabled: z.boolean().optional() } }, async ({ providerId, onlyEnabled }) => {
     require(auth, "llm:read");
     const providers = await listProviders();
     const p = providerId && providerId !== "default" ? providers.find((x) => x.id === providerId) : (providers.find((x) => x.isDefault) ?? providers[0]);
@@ -255,20 +255,20 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   });
 
   // ---- workflows ------------------------------------------------------------
-  server.registerTool("list_workflows", { title: "List workflows", description: "All workflows with status, trigger, step count and run stats.", inputSchema: { status: z.enum(["draft", "active", "paused"]).optional() } }, async ({ status }) => {
+  server.registerTool("list_workflows", { title: "Workflows - List workflows", description: "All workflows with status, trigger, step count and run stats.", inputSchema: { status: z.enum(["draft", "active", "paused"]).optional() } }, async ({ status }) => {
     require(auth, "workflows:read");
     const items = await listWorkflows();
     return text(items.filter((w) => !status || w.status === status).map((w) => ({ id: w.id, name: w.name, description: w.description, status: w.status, version: w.version, trigger: w.trigger, steps: w.steps.map((s) => ({ id: s.id, action: s.action })), runCount: w.runCount, successCount: w.successCount, lastRunAt: w.lastRunAt, lastRunStatus: w.lastRunStatus, updatedAt: w.updatedAt })));
   });
-  server.registerTool("get_workflow", { title: "Get workflow", description: "Full definition of a workflow (trigger + steps with configs) plus version history.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
+  server.registerTool("get_workflow", { title: "Workflows - Get workflow", description: "Full definition of a workflow (trigger + steps with configs) plus version history.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
     require(auth, "workflows:read");
     const w = await getWorkflow(id);
     if (!w) return fail("workflow not found");
     const versions = await listWorkflowVersions(id);
     return text({ id: w.id, status: w.status, version: w.version, toastAudience: w.toastAudience, definition: toDefinition(w), versions: versions.map((v) => ({ version: v.version, source: v.source, changeNote: v.changeNote, createdAt: v.createdAt })), updatedAt: w.updatedAt, createdAt: w.createdAt });
   });
-  server.registerTool("validate_workflow", { title: "Validate workflow", description: "Dry-run validation of a definition (trigger/action configs, step references). Returns issues and warnings.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateDefinition(definition)));
-  server.registerTool("create_workflow", { title: "Create workflow", description: "Creates a workflow from a definition (see resource aiup://docs/workflow-schema). Starts as draft unless activate=true.", inputSchema: { definition: z.record(z.string(), z.unknown()), activate: z.boolean().optional(), changeNote: z.string().optional() } }, async ({ definition, activate, changeNote }) => {
+  server.registerTool("validate_workflow", { title: "Workflows - Validate workflow", description: "Dry-run validation of a definition (trigger/action configs, step references). Returns issues and warnings.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateDefinition(definition)));
+  server.registerTool("create_workflow", { title: "Workflows - Create workflow", description: "Creates a workflow from a definition (see resource aiup://docs/workflow-schema). Starts as draft unless activate=true.", inputSchema: { definition: z.record(z.string(), z.unknown()), activate: z.boolean().optional(), changeNote: z.string().optional() } }, async ({ definition, activate, changeNote }) => {
     require(auth, "workflows:write");
     const res = await createWorkflow(definition, auth.user.id, "mcp", { status: activate ? "active" : "draft", changeNote });
     if (!res.ok) return fail(JSON.stringify({ issues: res.issues }, null, 2));
@@ -277,7 +277,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   });
   server.registerTool(
     "update_workflow",
-    { title: "Update workflow", description: "Replaces the definition (new version). Pass the full definition or a partial patch ({name?, description?, trigger?, steps?}) – partial patches are merged onto the current definition. To edit one step, fetch the workflow, modify the step and send the whole steps array.", inputSchema: { id: z.string().uuid(), definition: z.record(z.string(), z.unknown()).optional(), patch: z.record(z.string(), z.unknown()).optional(), changeNote: z.string().optional() } },
+    { title: "Workflows - Update workflow", description: "Replaces the definition (new version). Pass the full definition or a partial patch ({name?, description?, trigger?, steps?}) – partial patches are merged onto the current definition. To edit one step, fetch the workflow, modify the step and send the whole steps array.", inputSchema: { id: z.string().uuid(), definition: z.record(z.string(), z.unknown()).optional(), patch: z.record(z.string(), z.unknown()).optional(), changeNote: z.string().optional() } },
     async ({ id, definition, patch, changeNote }) => {
       require(auth, "workflows:write");
       const existing = await getWorkflow(id);
@@ -289,13 +289,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       return text({ id, version: res.workflow.version, status: res.workflow.status, warnings: res.warnings });
     },
   );
-  server.registerTool("set_workflow_status", { title: "Set workflow status", description: "Activate or pause a workflow.", inputSchema: { id: z.string().uuid(), status: z.enum(["active", "paused", "draft"]) } }, async ({ id, status }) => {
+  server.registerTool("set_workflow_status", { title: "Workflows - Set status", description: "Activate or pause a workflow.", inputSchema: { id: z.string().uuid(), status: z.enum(["active", "paused", "draft"]) } }, async ({ id, status }) => {
     require(auth, "workflows:write");
     const w = await setWorkflowStatus(id, status, auth.user.id);
     if (!w) return fail("workflow not found");
     return text({ id, status: w.status });
   });
-  server.registerTool("delete_workflow", { title: "Delete workflow", description: "Deletes a workflow and its run history. Irreversible.", inputSchema: { id: z.string().uuid(), confirm: z.literal(true).describe("must be true") } }, async ({ id }) => {
+  server.registerTool("delete_workflow", { title: "Workflows - Delete workflow", description: "Deletes a workflow and its run history. Irreversible.", inputSchema: { id: z.string().uuid(), confirm: z.literal(true).describe("must be true") } }, async ({ id }) => {
     require(auth, "workflows:write");
     const w = await getWorkflow(id);
     if (!w) return fail("workflow not found");
@@ -305,18 +305,18 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   });
 
   // ---- runs -----------------------------------------------------------------
-  server.registerTool("list_runs", { title: "List runs", description: "Recent runs, optionally filtered by workflow/status.", inputSchema: { workflowId: z.string().uuid().optional(), status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]).optional(), limit: z.number().int().min(1).max(200).optional(), sinceHours: z.number().min(0).optional() } }, async ({ workflowId, status, limit, sinceHours }) => {
+  server.registerTool("list_runs", { title: "Runs - List runs", description: "Recent runs, optionally filtered by workflow/status.", inputSchema: { workflowId: z.string().uuid().optional(), status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]).optional(), limit: z.number().int().min(1).max(200).optional(), sinceHours: z.number().min(0).optional() } }, async ({ workflowId, status, limit, sinceHours }) => {
     require(auth, "runs:read");
     const runs = await listRuns({ workflowId, status, limit: limit ?? 50, since: sinceHours ? new Date(Date.now() - sinceHours * 3_600_000) : undefined });
     return text(runs.map((r) => ({ id: r.id, workflowId: r.workflowId, workflowName: r.workflowName, status: r.status, triggerType: r.triggerType, error: r.error, durationMs: r.durationMs, createdAt: r.createdAt, finishedAt: r.finishedAt })));
   });
-  server.registerTool("get_run", { title: "Get run", description: "One run with trigger event and every step's input/output/usage.", inputSchema: { runId: z.string().uuid() } }, async ({ runId }) => {
+  server.registerTool("get_run", { title: "Runs - Get run", description: "One run with trigger event and every step's input/output/usage.", inputSchema: { runId: z.string().uuid() } }, async ({ runId }) => {
     require(auth, "runs:read");
     const run = await getRunWithSteps(runId);
     if (!run) return fail("run not found");
     return text(run);
   });
-  server.registerTool("trigger_workflow", { title: "Trigger workflow", description: "Starts a run now. `input` becomes the trigger payload (for manual triggers: {{ trigger.input }}); omit to use the trigger's sample payload.", inputSchema: { id: z.string().uuid(), input: z.record(z.string(), z.unknown()).optional() } }, async ({ id, input }) => {
+  server.registerTool("trigger_workflow", { title: "Runs - Trigger workflow", description: "Starts a run now. `input` becomes the trigger payload (for manual triggers: {{ trigger.input }}); omit to use the trigger's sample payload.", inputSchema: { id: z.string().uuid(), input: z.record(z.string(), z.unknown()).optional() } }, async ({ id, input }) => {
     require(auth, "runs:trigger");
     const w = await getWorkflow(id);
     if (!w) return fail("workflow not found");
@@ -325,21 +325,21 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     const runId = await startRun(w, payload, { triggeredBy: auth.user.id });
     return runId ? text({ runId }) : fail("run not created");
   });
-  server.registerTool("get_workflow_stats", { title: "Workflow statistics", description: "Runs, success rate, durations, tokens and errors for one workflow (or all when id omitted).", inputSchema: { id: z.string().uuid().optional(), days: z.number().int().min(1).max(90).optional() } }, async ({ id, days }) => {
+  server.registerTool("get_workflow_stats", { title: "Runs - Workflow statistics", description: "Runs, success rate, durations, tokens and errors for one workflow (or all when id omitted).", inputSchema: { id: z.string().uuid().optional(), days: z.number().int().min(1).max(90).optional() } }, async ({ id, days }) => {
     require(auth, "runs:read");
     return text(await workflowStats(id ?? null, days ?? 14));
   });
 
   // ---- landing page ---------------------------------------------------------
-  server.registerTool("get_landing_page", { title: "Get landing page", description: "Current landing page definition, enabled state and version. Read resource aiup://docs/landing-page for the format and design rules.", inputSchema: {} }, async () => {
+  server.registerTool("get_landing_page", { title: "Landing page - Get content", description: "Current landing page definition, enabled state and version. Read resource aiup://docs/landing-page for the format and design rules.", inputSchema: {} }, async () => {
     require(auth, "landing:read");
     const [settings, current] = await Promise.all([loadAppSettings(), getCurrentLandingVersion()]);
     return text({ enabled: settings.landingEnabled, version: current?.version ?? null, definition: current?.definition ?? null });
   });
-  server.registerTool("validate_landing_page", { title: "Validate landing page", description: "Dry-run validation of a landing page definition against the section schema. Returns issues without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateLandingDefinition(definition)));
+  server.registerTool("validate_landing_page", { title: "Landing page - Validate", description: "Dry-run validation of a landing page definition against the section schema. Returns issues without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateLandingDefinition(definition)));
   server.registerTool(
     "update_landing_page",
-    { title: "Update landing page", description: "Validates and saves the full definition as a new version (append-only history; restore is always possible). Does not change the enabled flag.", inputSchema: { definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
+    { title: "Landing page - Update", description: "Validates and saves the full definition as a new version (append-only history; restore is always possible). Does not change the enabled flag.", inputSchema: { definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
     async ({ definition, changeNote }) => {
       require(auth, "landing:write");
       const res = await saveLandingVersion(definition, auth.user.id, "mcp", changeNote);
@@ -348,26 +348,26 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       return text({ version: res.row.version, warnings: res.warnings });
     },
   );
-  server.registerTool("list_landing_page_versions", { title: "List landing page versions", description: "Version history of the landing page (source ui/mcp, change notes).", inputSchema: {} }, async () => {
+  server.registerTool("list_landing_page_versions", { title: "Landing page - List versions", description: "Version history of the landing page (source ui/mcp, change notes).", inputSchema: {} }, async () => {
     require(auth, "landing:read");
     const versions = await listLandingVersions();
     return text(versions.map((v) => ({ version: v.version, source: v.source, changeNote: v.changeNote, changedBy: v.changedByName, createdAt: v.createdAt })));
   });
-  server.registerTool("restore_landing_page_version", { title: "Restore landing page version", description: "Copies an older version forward as the new current version (history stays intact).", inputSchema: { version: z.number().int().min(1) } }, async ({ version }) => {
+  server.registerTool("restore_landing_page_version", { title: "Landing page - Restore version", description: "Copies an older version forward as the new current version (history stays intact).", inputSchema: { version: z.number().int().min(1) } }, async ({ version }) => {
     require(auth, "landing:write");
     const row = await restoreLandingVersion(version, auth.user.id, "mcp");
     if (!row) return fail("version not found");
     await audit(auth, "landing.restored", row.id, { restored: version, newVersion: row.version }, "landing");
     return text({ version: row.version });
   });
-  server.registerTool("set_landing_enabled", { title: "Enable/disable landing page", description: "Turns the public landing page at \"/\" on or off. When off, \"/\" redirects to login resp. the app home.", inputSchema: { enabled: z.boolean() } }, async ({ enabled }) => {
+  server.registerTool("set_landing_enabled", { title: "Landing page - Enable or disable", description: "Turns the public landing page at \"/\" on or off. When off, \"/\" redirects to login resp. the app home.", inputSchema: { enabled: z.boolean() } }, async ({ enabled }) => {
     require(auth, "landing:write");
     if (enabled && !(await getCurrentLandingVersion())) return fail("no landing page content yet – create a version with update_landing_page first");
     await updateAppSettings({ landingEnabled: enabled });
     await audit(auth, "settings.landing.toggled", "default", { enabled }, "settings");
     return text({ enabled });
   });
-  server.registerTool("list_landing_media", { title: "List landing media", description: "Publicly served images usable on the landing page (reference them as mediaId). Upload new ones under Admin → Landing page.", inputSchema: {} }, async () => {
+  server.registerTool("list_landing_media", { title: "Landing page - List media", description: "Publicly served images usable on the landing page (reference them as mediaId). Upload new ones under Admin → Landing page.", inputSchema: {} }, async () => {
     require(auth, "landing:read");
     const media = await listLandingMedia();
     return text(media.map((m) => ({ id: m.id, name: m.originalName, mime: m.mime, width: m.width, height: m.height, size: m.size, url: `/api/files/${m.id}` })));
@@ -379,14 +379,14 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   const collectionInput = z.string().describe("collection id (uuid) or slug");
   const httpUrl = z.string().trim().max(2000).regex(/^https?:\/\//i, "must be an http(s) URL");
 
-  server.registerTool("list_collections", { title: "List collections", description: "All collections with purpose, entry count and structure version. Read resource aiup://docs/collections for the structure format.", inputSchema: {} }, async () => {
+  server.registerTool("list_collections", { title: "Collections - List collections", description: "All collections with purpose, entry count and structure version. Read resource aiup://docs/collections for the structure format.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
     const [areas, structures] = await Promise.all([listAreas(), listStructures()]);
     const byArea = new Map(structures.map((s) => [s.areaId, s]));
     return text(areas.map((a) => ({ id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, entryCount: a.contentCount, structure: byArea.get(a.id) ? { version: byArea.get(a.id)!.version } : null })));
   });
 
-  server.registerTool("get_structure", { title: "Get structure", description: "The structure definition of a collection (null when the collection is free-form).", inputSchema: { collection: collectionInput } }, async ({ collection }) => {
+  server.registerTool("get_structure", { title: "Collections - Get structure", description: "The structure definition of a collection (null when the collection is free-form).", inputSchema: { collection: collectionInput } }, async ({ collection }) => {
     require(auth, "knowledge:read");
     const area = await resolveArea(collection);
     if (!area) return fail("collection not found");
@@ -394,14 +394,14 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text({ collectionId: area.id, structure: s ? { version: s.version, definition: s.definition, updatedAt: s.updatedAt } : null });
   });
 
-  server.registerTool("validate_structure", { title: "Validate structure", description: "Dry-run validation of a structure definition. Returns issues (blocking) and warnings without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
+  server.registerTool("validate_structure", { title: "Collections - Validate structure", description: "Dry-run validation of a structure definition. Returns issues (blocking) and warnings without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
     const res = validateStructure(definition);
     return text({ valid: !!res.def, issues: res.issues, warnings: res.warnings });
   });
 
   server.registerTool(
     "save_structure",
-    { title: "Save structure", description: "Creates or replaces the collection's structure (new version; existing entries keep their snapshot and stay intact). Once a structure exists, new entries must be created via create_entry with answers.", inputSchema: { collection: collectionInput, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(500).optional() } },
+    { title: "Collections - Save structure", description: "Creates or replaces the collection's structure (new version; existing entries keep their snapshot and stay intact). Once a structure exists, new entries must be created via create_entry with answers.", inputSchema: { collection: collectionInput, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(500).optional() } },
     async ({ collection, definition, changeNote }) => {
       require(auth, "knowledge:write");
       const area = await resolveArea(collection);
@@ -413,7 +413,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
   );
 
-  server.registerTool("delete_structure", { title: "Delete structure", description: "Removes the collection's structure; the collection becomes free-form again. Existing entries are kept.", inputSchema: { collection: collectionInput, confirm: z.literal(true).describe("must be true") } }, async ({ collection }) => {
+  server.registerTool("delete_structure", { title: "Collections - Delete structure", description: "Removes the collection's structure; the collection becomes free-form again. Existing entries are kept.", inputSchema: { collection: collectionInput, confirm: z.literal(true).describe("must be true") } }, async ({ collection }) => {
     require(auth, "knowledge:write");
     const area = await resolveArea(collection);
     if (!area) return fail("collection not found");
@@ -423,7 +423,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
   server.registerTool(
     "list_entries",
-    { title: "List entries", description: "Entries of a collection (newest first), optionally filtered by type or full-text query.", inputSchema: { collection: collectionInput, type: z.enum(["markdown", "image", "video", "link", "structured"]).optional(), query: z.string().optional(), limit: z.number().int().min(1).max(200).optional(), offset: z.number().int().min(0).optional() } },
+    { title: "Collections - List entries", description: "Entries of a collection (newest first), optionally filtered by type or full-text query.", inputSchema: { collection: collectionInput, type: z.enum(["markdown", "image", "video", "link", "structured"]).optional(), query: z.string().optional(), limit: z.number().int().min(1).max(200).optional(), offset: z.number().int().min(0).optional() } },
     async ({ collection, type, query, limit, offset }) => {
       require(auth, "knowledge:read");
       const area = await resolveArea(collection);
@@ -433,7 +433,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
   );
 
-  server.registerTool("get_entry", { title: "Get entry", description: "One entry with its markdown body; structured entries include the definition snapshot and the stored answers.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
+  server.registerTool("get_entry", { title: "Collections - Get entry", description: "One entry with its markdown body; structured entries include the definition snapshot and the stored answers.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
     require(auth, "knowledge:read");
     const c = await getContent(id);
     if (!c) return fail("entry not found");
@@ -458,7 +458,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   server.registerTool(
     "create_entry",
     {
-      title: "Create entry",
+      title: "Collections - Create entry",
       description:
         "Creates an entry. In a collection WITH a structure pass `answers` keyed by element key (call get_structure first; markdown is generated server-side). In a free-form collection pass type markdown (+body) or link (+url, optional body). The key owner becomes the author.",
       inputSchema: {
@@ -499,7 +499,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   server.registerTool(
     "update_entry",
     {
-      title: "Update entry",
+      title: "Collections - Update entry",
       description:
         "Updates an entry (append-only: creates a new version). Structured entries validate `answers` against the entry's own definition snapshot – omit `answers` to keep the stored ones (e.g. title-only edits). Markdown/link entries accept body/url. Image/video entries only accept title/body.",
       inputSchema: {
@@ -546,12 +546,12 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
 
   // ---- questions ------------------------------------------------------------
-  server.registerTool("list_questions", { title: "List questions", description: "Questions created by ask_user steps with response counts.", inputSchema: { questionKey: z.string().optional(), limit: z.number().int().min(1).max(200).optional() } }, async ({ questionKey, limit }) => {
+  server.registerTool("list_questions", { title: "Questions - List questions", description: "Questions created by ask_user steps with response counts.", inputSchema: { questionKey: z.string().optional(), limit: z.number().int().min(1).max(200).optional() } }, async ({ questionKey, limit }) => {
     require(auth, "questions:read");
     const items = await listQuestions({ questionKey, limit });
     return text(items.map((q) => ({ id: q.id, questionKey: q.questionKey, title: q.title, workflowName: q.workflowName, fields: q.fields, audience: q.audience, responseCount: q.responseCount, closedAt: q.closedAt, expiresAt: q.expiresAt, createdAt: q.createdAt })));
   });
-  server.registerTool("get_question_results", { title: "Question results", description: "Distribution and individual answers for a question.", inputSchema: { questionId: z.string().uuid() } }, async ({ questionId }) => {
+  server.registerTool("get_question_results", { title: "Questions - Get results", description: "Distribution and individual answers for a question.", inputSchema: { questionId: z.string().uuid() } }, async ({ questionId }) => {
     require(auth, "questions:read");
     const r = await getQuestionWithResponses(questionId);
     if (!r) return fail("question not found");
