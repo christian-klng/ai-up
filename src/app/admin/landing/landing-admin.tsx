@@ -14,23 +14,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { AppSettings } from "@/server/db/schema";
+import type { LandingDefinition } from "@/lib/landing-schema";
+import { LandingEditor } from "./landing-editor";
 
 type VersionRow = { id: string; version: number; source: string; changeNote: string | null; createdAt: string; changedByName: string | null };
 type MediaRow = { id: string; originalName: string; width: number | null; height: number | null };
 
 export function LandingAdmin({
   enabled,
-  hasDefinition,
+  definition,
+  settings,
   currentVersion,
   versions,
   media,
 }: {
   enabled: boolean;
-  hasDefinition: boolean;
+  definition: LandingDefinition | null;
+  settings: AppSettings;
   currentVersion: number | null;
   versions: VersionRow[];
   media: MediaRow[];
 }) {
+  const hasDefinition = definition !== null;
   const t = useTranslations("admin.landing");
   const tc = useTranslations("common");
   const format = useFormatter();
@@ -38,6 +44,7 @@ export function LandingAdmin({
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const toggle = (next: boolean) => {
     startTransition(async () => {
@@ -77,6 +84,7 @@ export function LandingAdmin({
 
   return (
     <div className="grid gap-6">
+      {editorOpen && definition && <LandingEditor onOpenChange={setEditorOpen} definition={definition} settings={settings} />}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("statusTitle")}</CardTitle>
@@ -88,10 +96,8 @@ export function LandingAdmin({
             <Label htmlFor="landing-enabled">{t("enableLabel")}</Label>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/landing-preview" target="_blank">
-                <Eye className="size-4" /> {t("preview")}
-              </Link>
+            <Button variant="outline" size="sm" disabled={!hasDefinition} onClick={() => setEditorOpen(true)}>
+              <Eye className="size-4" /> {t("preview")}
             </Button>
             {enabled && (
               <Button asChild variant="outline" size="sm">

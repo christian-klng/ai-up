@@ -184,7 +184,16 @@
       "editor": "Bearbeitet von",
       "note": "Änderungsnotiz",
       "restore": "Wiederherstellen",
-      "confirmRestore": "Version v{version} als neue aktuelle Version wiederherstellen?"
+      "confirmRestore": "Version v{version} als neue aktuelle Version wiederherstellen?",
+      "editorTitle": "Landing Page bearbeiten",
+      "editHint": "Text anklicken, um ihn direkt zu bearbeiten. Enter übernimmt, Escape verwirft. Links, Bilder und Icons änderst du per MCP.",
+      "saveAndClose": "Speichern und Schließen",
+      "discard": "Verwerfen",
+      "confirmDiscard": "Ungespeicherte Änderungen verwerfen?",
+      "emptyIgnored": "Leerer Text – Änderung verworfen.",
+      "editMarkdownTitle": "Markdown bearbeiten",
+      "mdApply": "Übernehmen",
+      "mdCancel": "Abbrechen"
     },
     "members": {
       "title": "Mitglieder",

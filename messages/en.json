@@ -184,7 +184,16 @@
       "editor": "Edited by",
       "note": "Change note",
       "restore": "Restore",
-      "confirmRestore": "Restore version v{version} as the new current version?"
+      "confirmRestore": "Restore version v{version} as the new current version?",
+      "editorTitle": "Edit landing page",
+      "editHint": "Click any text to edit it in place. Enter applies, Escape discards. Links, images and icons are edited via MCP.",
+      "saveAndClose": "Save and close",
+      "discard": "Discard",
+      "confirmDiscard": "Discard unsaved changes?",
+      "emptyIgnored": "Empty text – change discarded.",
+      "editMarkdownTitle": "Edit markdown",
+      "mdApply": "Apply",
+      "mdCancel": "Cancel"
     },
     "members": {
       "title": "Members",

@@ -19,7 +19,8 @@ export default async function AdminLandingPage() {
       <PageHeader title={t("title")} description={t("intro")} />
       <LandingAdmin
         enabled={settings.landingEnabled}
-        hasDefinition={Boolean(current)}
+        definition={current?.definition ?? null}
+        settings={settings}
         currentVersion={current?.version ?? null}
         versions={versions.map((v) => ({ ...v, createdAt: v.createdAt.toISOString() }))}
         media={media.map((m) => ({ id: m.id, originalName: m.originalName, width: m.width, height: m.height }))}
