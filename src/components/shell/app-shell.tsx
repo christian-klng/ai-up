@@ -36,6 +36,10 @@ export function AppShell({ brand, user, nav, labels, signOutAction, children }: 
       <div className="flex-1 overflow-y-auto">
         <SidebarNav {...nav} onNavigate={() => setOpen(false)} />
       </div>
+      {/* Locale switcher lives in the top bar on desktop; on mobile it is only reachable here (sheet) */}
+      <div className="border-t border-sidebar-border px-4 py-3 md:hidden">
+        <LocaleSwitcher label={labels.language} />
+      </div>
       <div className="border-t border-sidebar-border p-2">
         <Link href="/profile" className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-sidebar-accent/70" onClick={() => setOpen(false)}>
           <UserAvatar user={user} size={28} variant="thumb" />
@@ -65,6 +69,12 @@ export function AppShell({ brand, user, nav, labels, signOutAction, children }: 
               {sidebar}
             </SheetContent>
           </Sheet>
+
+          {/* Mobile: brand in the top bar (desktop shows it in the sidebar) */}
+          <Link href="/home" className="flex min-w-0 items-center gap-2 md:hidden">
+            {brand.logo}
+            <span className="truncate font-semibold tracking-tight">{brand.name}</span>
+          </Link>
 
           <div className="ml-auto flex items-center gap-1">
             <LocaleSwitcher label={labels.language} className="mr-2 hidden sm:inline-flex" />

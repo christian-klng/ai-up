@@ -13,13 +13,13 @@ export async function LandingView({
   settings: AppSettings;
   signedIn: boolean;
 }) {
-  const t = await getTranslations("landing");
+  const [t, tCommon] = await Promise.all([getTranslations("landing"), getTranslations("common")]);
   return (
     <LandingShell
       definition={definition}
       settings={settings}
       signedIn={signedIn}
-      labels={{ toApp: t("toApp"), signIn: t("signIn"), register: t("register") }}
+      labels={{ toApp: t("toApp"), signIn: t("signIn"), register: t("register"), menu: tCommon("menu") }}
     />
   );
 }

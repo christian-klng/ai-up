@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { AppSettings } from "@/server/db/schema";
 import type { LandingDefinition } from "@/lib/landing-schema";
+import { Menu } from "lucide-react";
 import { BrandLogo } from "@/components/shell/brand-logo";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { LandingSectionView } from "./sections";
 
-export type LandingLabels = { toApp: string; signIn: string; register: string };
+export type LandingLabels = { toApp: string; signIn: string; register: string; menu: string };
 
 /**
  * Presentational landing page (header + sections + footer). Used by the public page (server)
@@ -31,7 +33,8 @@ export function LandingShell({
             <BrandLogo settings={settings} size={28} />
             <span className="truncate font-semibold tracking-tight">{settings.name}</span>
           </Link>
-          <div className="flex items-center gap-2">
+          {/* Desktop: inline buttons */}
+          <div className="hidden items-center gap-2 sm:flex">
             {signedIn ? (
               <Button asChild size="sm">
                 <Link href="/home">{labels.toApp}</Link>
@@ -47,6 +50,36 @@ export function LandingShell({
               </>
             )}
           </div>
+          {/* Mobile: burger menu so a long community name keeps the full width */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="sm:hidden" aria-label={labels.menu}>
+                <Menu className="size-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-64 p-4">
+              <SheetTitle className="flex items-center gap-2.5 px-1 text-base">
+                <BrandLogo settings={settings} size={24} />
+                <span className="truncate">{settings.name}</span>
+              </SheetTitle>
+              <nav className="mt-6 grid gap-2">
+                {signedIn ? (
+                  <Button asChild>
+                    <Link href="/home">{labels.toApp}</Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button asChild>
+                      <Link href="/register">{labels.register}</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/login">{labels.signIn}</Link>
+                    </Button>
+                  </>
+                )}
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </header>
 
