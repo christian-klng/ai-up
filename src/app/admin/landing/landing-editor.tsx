@@ -210,7 +210,7 @@ export function LandingEditor({
               definition={draft}
               settings={settings}
               signedIn
-              labels={{ toApp: tl("toApp"), signIn: tl("signIn"), register: tl("register"), language: tc("language") }}
+              labels={{ toApp: tl("toApp"), signIn: tl("signIn"), register: tl("register") }}
             />
           </div>
         </div>

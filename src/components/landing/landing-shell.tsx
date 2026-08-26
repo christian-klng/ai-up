@@ -2,11 +2,10 @@ import Link from "next/link";
 import type { AppSettings } from "@/server/db/schema";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import { BrandLogo } from "@/components/shell/brand-logo";
-import { LocaleSwitcher } from "@/components/shell/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { LandingSectionView } from "./sections";
 
-export type LandingLabels = { toApp: string; signIn: string; register: string; language: string };
+export type LandingLabels = { toApp: string; signIn: string; register: string };
 
 /**
  * Presentational landing page (header + sections + footer). Used by the public page (server)
@@ -33,7 +32,6 @@ export function LandingShell({
             <span className="truncate font-semibold tracking-tight">{settings.name}</span>
           </Link>
           <div className="flex items-center gap-2">
-            <LocaleSwitcher label={labels.language} />
             {signedIn ? (
               <Button asChild size="sm">
                 <Link href="/home">{labels.toApp}</Link>
