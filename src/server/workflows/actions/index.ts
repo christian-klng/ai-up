@@ -1,15 +1,19 @@
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { registerAction } from "../registry";
 import type { ActionRunContext } from "../types";
 import { db } from "@/server/db/client";
-import { users } from "@/server/db/schema";
+import { mediaFiles, users } from "@/server/db/schema";
 import { createNotifications } from "@/server/domain/notifications";
 import { createContent, getAreaById } from "@/server/domain/knowledge";
+import { getSpaceById, setMeetingTranscript } from "@/server/domain/meetings";
+import { absolutePath } from "@/server/media/storage";
 import { readWebpage } from "@/server/webreader/read-webpage";
 import { modelCapabilities } from "@/server/llm/client";
 import { chatCompletion } from "@/server/llm/client";
-import { clientConfigFor, resolveModel } from "@/server/llm/providers";
+import { clientConfigFor, getDefaultProvider, getProvider, resolveModel } from "@/server/llm/providers";
+import { transcribeAudio, transcriptToMarkdown } from "@/server/llm/stt";
 
 // ---------------------------------------------------------------------------
 // llm
@@ -163,6 +167,111 @@ registerAction<z.infer<typeof readConfig>>({
   async run(config) {
     const r = await readWebpage(config.url, { maxChars: config.maxChars });
     return { output: { ...r } };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// transcribe
+// ---------------------------------------------------------------------------
+
+/** OpenAI's /audio/transcriptions rejects larger uploads; chunking is out of scope here. */
+const MAX_TRANSCRIBE_BYTES = 25 * 1024 * 1024;
+
+const transcribeConfig = z.object({
+  mediaId: z.string().uuid("mediaId must be a media file id"),
+  providerId: z.string().default("default"),
+  model: z
+    .string()
+    .default("whisper-1")
+    .transform((v) => v.trim() || "whisper-1"),
+  language: z.string().default(""),
+  prompt: z.string().default(""),
+});
+registerAction<z.infer<typeof transcribeConfig>>({
+  type: "transcribe",
+  labels: {
+    name: { de: "Audio transkribieren", en: "Transcribe audio" },
+    description: { de: "Wandelt eine Audiodatei (z. B. den Meeting-Mitschnitt) per Speech-to-Text in Text um.", en: "Converts an audio file (e.g. the meeting recording) to text via speech-to-text." },
+  },
+  doc: "Transcribes a media file via an OpenAI-compatible `/audio/transcriptions` endpoint (OpenAI whisper-1/gpt-4o-transcribe, Groq, self-hosted Whisper; OpenRouter has no such endpoint). `mediaId` is a Liquid template – with the meeting.recording.available trigger use {{ trigger.mediaId }}. `language` is an ISO 639-1 code (empty = auto-detect), `prompt` an optional context hint (names, jargon). Files over 25 MB are rejected. Output: text, markdown (with [m:ss] stamps), language, durationSeconds, segments.",
+  configSchema: transcribeConfig,
+  fields: [
+    { key: "mediaId", type: "template", label: { de: "Audiodatei (Media-ID)", en: "Audio file (media id)" }, required: true, placeholder: "{{ trigger.mediaId }}" },
+    { key: "providerId", type: "llm-provider", label: { de: "Provider", en: "Provider" }, required: true, help: { de: "Muss einen OpenAI-kompatiblen Endpunkt /audio/transcriptions anbieten (OpenAI, Groq, eigenes Whisper) – OpenRouter nicht.", en: "Must offer an OpenAI-compatible /audio/transcriptions endpoint (OpenAI, Groq, self-hosted Whisper) – not OpenRouter." } },
+    { key: "model", type: "text", label: { de: "Modell", en: "Model" }, placeholder: "whisper-1" },
+    { key: "language", type: "text", label: { de: "Sprache (ISO-Code, leer = automatisch)", en: "Language (ISO code, empty = auto)" }, placeholder: "de" },
+    { key: "prompt", type: "template", label: { de: "Kontext-Hinweis (optional)", en: "Context hint (optional)" }, placeholder: "AI-Up, LiveKit, Coolify" },
+  ],
+  templateKeys: ["mediaId", "prompt"],
+  outputDoc: {
+    text: "plain transcript",
+    markdown: "transcript as markdown with [m:ss] timestamps",
+    language: "detected/requested language code",
+    durationSeconds: "audio length in seconds",
+    segments: "array of {start, end, text}",
+    model: "model id used",
+  },
+  timeoutMs: 600_000,
+  async run(config, ctx) {
+    const media = await db.query.mediaFiles.findFirst({ where: eq(mediaFiles.id, config.mediaId) });
+    if (!media) throw new Error(`media file ${config.mediaId} not found`);
+    if (media.kind !== "audio" && media.kind !== "video") throw new Error(`media file is ${media.kind}, expected audio/video`);
+    if (media.size > MAX_TRANSCRIBE_BYTES) throw new Error(`file is ${Math.round(media.size / 1024 / 1024)} MB – the transcription endpoint accepts at most 25 MB`);
+    const provider = config.providerId && config.providerId !== "default" ? await getProvider(config.providerId) : await getDefaultProvider();
+    if (!provider) throw new Error("No LLM provider configured. Add one under Admin → LLM.");
+    const buffer = await readFile(absolutePath(media.storagePath));
+    ctx.log("transcribing", { mediaId: media.id, size: media.size, provider: provider.name, model: config.model });
+    const result = await transcribeAudio(await clientConfigFor(provider), {
+      model: config.model,
+      buffer,
+      filename: media.originalName,
+      mime: media.mime,
+      language: config.language,
+      prompt: config.prompt,
+      timeoutMs: 590_000,
+    });
+    return {
+      output: {
+        text: result.text,
+        markdown: transcriptToMarkdown(result),
+        language: result.language,
+        durationSeconds: result.durationSeconds ?? media.durationSeconds,
+        segments: result.segments,
+        model: config.model,
+        provider: provider.name,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// set_meeting_transcript
+// ---------------------------------------------------------------------------
+
+const setTranscriptConfig = z.object({
+  meetingId: z.string().uuid("meetingId must be a meeting id"),
+  markdown: z.string().min(1, "markdown is required"),
+});
+registerAction<z.infer<typeof setTranscriptConfig>>({
+  type: "set_meeting_transcript",
+  labels: {
+    name: { de: "Meeting-Transkript speichern", en: "Save meeting transcript" },
+    description: { de: "Hinterlegt das Transkript (Markdown) am Meeting – sichtbar auf der Meeting-Seite.", en: "Stores the transcript (markdown) on the meeting – shown on the meeting page." },
+  },
+  doc: "Sets the transcript of a meeting (overwrites the previous one, no history). `meetingId` and `markdown` are Liquid templates – with the meeting.recording.available trigger use {{ trigger.meeting.id }} and e.g. {{ steps.transcribe.output.markdown }}.",
+  configSchema: setTranscriptConfig,
+  fields: [
+    { key: "meetingId", type: "template", label: { de: "Meeting-ID", en: "Meeting id" }, required: true, placeholder: "{{ trigger.meeting.id }}" },
+    { key: "markdown", type: "template", label: { de: "Transkript (Markdown)", en: "Transcript (markdown)" }, required: true, placeholder: "{{ steps.transcribe.output.markdown }}" },
+  ],
+  templateKeys: ["meetingId", "markdown"],
+  outputDoc: { meetingId: "id of the meeting", href: "app-relative link to the meeting" },
+  timeoutMs: 15_000,
+  async run(config) {
+    const meeting = await setMeetingTranscript(config.meetingId, config.markdown);
+    if (!meeting) throw new Error(`meeting ${config.meetingId} not found`);
+    const space = await getSpaceById(meeting.spaceId);
+    return { output: { meetingId: meeting.id, href: `/meetings/${space?.slug ?? meeting.spaceId}/${meeting.id}` } };
   },
 });
 

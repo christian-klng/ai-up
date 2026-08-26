@@ -811,6 +811,7 @@
     "recordingOn": "audio recording on",
     "recordingOff": "no recording",
     "recording": "Recording",
+    "transcript": "Transcript",
     "call": {
       "title": "Call",
       "back": "Back to meeting",

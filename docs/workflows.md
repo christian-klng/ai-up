@@ -5,13 +5,14 @@ Technische Referenz zum „Maschinenraum“. Nutzersicht: Verwaltung → Workflo
 ## Workflow-Engine
 
 - Definitionen (Trigger + Schritte) liegen in `workflows` (JSON), jede Änderung als Version in `workflow_versions`; Läufe in `workflow_runs` / `workflow_run_steps`.
-- Registry: `src/server/workflows/triggers` (content.created, content.updated, schedule, manual, question.answered, bot.message.received, member.registered, member.approved, meeting.started, meeting.ended, meeting.recording.available) und `src/server/workflows/actions` (llm, read_webpage, notify_user, send_message, create_content, ask_user). Neue Trigger/Aktionen = eine Datei mit zod-Schema, Feldbeschreibung (de/en) und `run()`.
+- Registry: `src/server/workflows/triggers` (content.created, content.updated, schedule, manual, question.answered, bot.message.received, member.registered, member.approved, meeting.started, meeting.ended, meeting.recording.available) und `src/server/workflows/actions` (llm, transcribe, set_meeting_transcript, read_webpage, notify_user, send_message, create_content, ask_user). Neue Trigger/Aktionen = eine Datei mit zod-Schema, Feldbeschreibung (de/en) und `run()`.
 - Ausführung im **Worker** (`npm run worker`, BullMQ-Queue `workflow-runs`); Zeit-Trigger als BullMQ Job Scheduler, Abgleich bei jeder Workflow-Änderung und beim Worker-Start.
 - Templates: LiquidJS – `{{ trigger.* }}`, `{{ steps.<id>.output.* }}`, `{{ app.name }}`, `{{ app.purpose }}`.
 - LLM: OpenAI-kompatible Provider unter Admin → LLM (Schlüssel AES-256-GCM-verschlüsselt mit `APP_ENCRYPTION_KEY`); Structured Output über `response_format` mit Fallback-Parsing.
 - Realtime-Events `workflow.run.started/finished` → Toasts oben rechts (min. 2 s), Fehler-Notifications an Admins.
 - Aktion `send_message`: Chat-Nachricht vom **System-Bot** (Name unter Verwaltung → Allgemein) an Empfänger; die Bot-Unterhaltung erscheint ohne Kontaktanfrage im Messenger. Antworten an den Bot feuern den Trigger `bot.message.received` (z. B. für LLM-Antworten).
 - Aktion `ask_user`: erzeugt eine Frage (Umfrage/Bewertung/CTA), die Mitgliedern unten links als Mini-Formular erscheint; Antworten feuern den Trigger `question.answered` (Filter `questionKey`). Auswertung unter Verwaltung → Fragen.
+- Aktion `transcribe`: Speech-to-Text für eine `media_files`-Datei über den OpenAI-kompatiblen Endpunkt `/audio/transcriptions` des gewählten LLM-Providers (OpenAI `whisper-1`/`gpt-4o-transcribe`, Groq, eigenes Whisper – **nicht** OpenRouter). Max. 25 MB pro Datei, Ausgabe `text`/`markdown` (mit Zeitmarken)/`segments`. Typische Kette: Trigger `meeting.recording.available` → `transcribe` (`{{ trigger.mediaId }}`) → `llm` (Zusammenfassung) → `set_meeting_transcript` (schreibt `meetings.transcript_markdown`, erscheint einklappbar auf der Meeting-Seite) → `notify_user`/`create_content`.
 
 ## MCP-Server
 

@@ -584,6 +584,8 @@ export const meetings = pgTable(
     recordingEgressId: text("recording_egress_id"),
     recordingMediaId: uuid("recording_media_id").references(() => mediaFiles.id, { onDelete: "set null" }),
     recordingError: text("recording_error"),
+    /** transcript of the recording (markdown), written by the set_meeting_transcript workflow action */
+    transcriptMarkdown: text("transcript_markdown"),
     /** live participant count (maintained by webhooks) */
     participantCount: integer("participant_count").notNull().default(0),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),

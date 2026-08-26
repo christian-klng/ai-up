@@ -28,6 +28,7 @@ function defaultConfigFor(fields: { key: string; type: string }[]): Record<strin
       out.providerId = "default";
       out.model = "default";
     }
+    if (f.type === "llm-provider") out[f.key] = "default";
   }
   return out;
 }

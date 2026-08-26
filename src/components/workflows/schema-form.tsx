@@ -204,6 +204,31 @@ export function SchemaForm({ fields, values, onChange, catalog, idPrefix }: { fi
               </div>
             );
           }
+          case "llm-provider": {
+            return (
+              <div key={f.key} className="grid gap-1.5">
+                {label}
+                {catalog.providers.length === 0 ? (
+                  <p className="text-sm text-destructive">{t("noProviders")}</p>
+                ) : (
+                  <Select value={(v as string) ?? "default"} onValueChange={(val) => set(f.key, val)}>
+                    <SelectTrigger className="w-56">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">{t("defaultProvider")}</SelectItem>
+                      {catalog.providers.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {help}
+              </div>
+            );
+          }
           case "audience": {
             const a = (v as { type?: string; userIds?: string[] }) ?? { type: "triggerUser", userIds: [] };
             const opts = [

@@ -189,6 +189,16 @@ export async function liveSpaceIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.spaceId));
 }
 
+/** Sets the meeting transcript (one current version, no history; written by the set_meeting_transcript workflow action). */
+export async function setMeetingTranscript(meetingId: string, markdown: string): Promise<Meeting | undefined> {
+  const [row] = await db
+    .update(meetings)
+    .set({ transcriptMarkdown: markdown.trim() || null })
+    .where(and(eq(meetings.id, meetingId), isNull(meetings.deletedAt)))
+    .returning();
+  return row;
+}
+
 // ---------------------------------------------------------------------------
 // Protocol (markdown, versioned)
 // ---------------------------------------------------------------------------

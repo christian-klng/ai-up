@@ -811,6 +811,7 @@
     "recordingOn": "Audio-Mitschnitt an",
     "recordingOff": "ohne Mitschnitt",
     "recording": "Aufzeichnung",
+    "transcript": "Transkript",
     "call": {
       "title": "Call",
       "back": "Zurück zum Meeting",

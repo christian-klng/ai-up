@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft, ChevronRight, History } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditMeeting, getMeeting, getSpaceBySlug, listParticipants } from "@/server/domain/meetings";
 import { getLiveKitConfig } from "@/server/domain/integrations";
@@ -12,6 +12,7 @@ import { MeetingActions } from "@/components/meetings/meeting-actions";
 import { MeetingKindIcon, MeetingStatusBadge } from "@/components/meetings/meeting-badges";
 import { ProtocolEditor } from "@/components/meetings/protocol-editor";
 import { CallPanel } from "@/components/meetings/call-panel";
+import { Markdown } from "@/components/content/markdown";
 
 export default async function MeetingDetailPage({ params }: PageProps<"/meetings/[slug]/[id]">) {
   const user = await requireUser();
@@ -86,6 +87,18 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
               <h3 className="mb-2 text-sm font-medium">{t("recording")}</h3>
               <audio controls preload="metadata" src={`/api/files/${meeting.recording.id}`} className="w-full" />
             </section>
+          )}
+          {meeting.transcriptMarkdown && (
+            <details className="group rounded-lg border bg-card p-5">
+              <summary className="cursor-pointer list-none text-sm font-medium">
+                <span className="inline-flex items-center gap-1.5">
+                  <ChevronRight className="size-4 text-muted-foreground transition-transform group-open:rotate-90" /> {t("transcript")}
+                </span>
+              </summary>
+              <div className="mt-3">
+                <Markdown className="prose-sm">{meeting.transcriptMarkdown}</Markdown>
+              </div>
+            </details>
           )}
         </div>
       )}
