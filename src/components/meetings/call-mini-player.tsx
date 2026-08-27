@@ -57,7 +57,8 @@ function MiniPlayerCard({ call, onLeave }: { call: ActiveCall; onLeave: () => Pr
       {call.kind === "video" && (
         <div className="aspect-video bg-black">
           {tile ? (
-            <VideoTrack trackRef={tile} className="h-full w-full object-cover" />
+            // Mirror the own camera like the prefabs do (remote tracks stay unmirrored).
+            <VideoTrack trackRef={tile} className={tile.participant.isLocal ? "h-full w-full -scale-x-100 object-cover" : "h-full w-full object-cover"} />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-white/50">{t("mini.noVideo")}</div>
           )}
