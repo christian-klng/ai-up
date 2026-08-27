@@ -251,6 +251,7 @@ registerAction<z.infer<typeof transcribeConfig>>({
 const setTranscriptConfig = z.object({
   meetingId: z.string().uuid("meetingId must be a meeting id"),
   markdown: z.string().min(1, "markdown is required"),
+  mode: z.enum(["append", "replace"]).default("append"),
 });
 registerAction<z.infer<typeof setTranscriptConfig>>({
   type: "set_meeting_transcript",
@@ -258,17 +259,21 @@ registerAction<z.infer<typeof setTranscriptConfig>>({
     name: { de: "Meeting-Transkript speichern", en: "Save meeting transcript" },
     description: { de: "Hinterlegt das Transkript (Markdown) am Meeting – sichtbar auf der Meeting-Seite.", en: "Stores the transcript (markdown) on the meeting – shown on the meeting page." },
   },
-  doc: "Sets the transcript of a meeting (overwrites the previous one, no history). `meetingId` and `markdown` are Liquid templates – with the meeting.recording.available trigger use {{ trigger.meeting.id }} and e.g. {{ steps.transcribe.output.markdown }}.",
+  doc: "Sets the transcript of a meeting. `mode: \"append\"` (default) adds the markdown as a new dated section below an existing transcript (so re-recorded sessions of a reopened meeting are kept); `mode: \"replace\"` overwrites it. `meetingId` and `markdown` are Liquid templates – with the meeting.recording.available trigger use {{ trigger.meeting.id }} and e.g. {{ steps.transcribe.output.markdown }}.",
   configSchema: setTranscriptConfig,
   fields: [
     { key: "meetingId", type: "template", label: { de: "Meeting-ID", en: "Meeting id" }, required: true, placeholder: "{{ trigger.meeting.id }}" },
     { key: "markdown", type: "template", label: { de: "Transkript (Markdown)", en: "Transcript (markdown)" }, required: true, placeholder: "{{ steps.transcribe.output.markdown }}" },
+    { key: "mode", type: "select", label: { de: "Modus", en: "Mode" }, options: [
+      { value: "append", label: { de: "Anhängen (neuer Abschnitt)", en: "Append (new section)" } },
+      { value: "replace", label: { de: "Überschreiben", en: "Replace" } },
+    ] },
   ],
   templateKeys: ["meetingId", "markdown"],
   outputDoc: { meetingId: "id of the meeting", href: "app-relative link to the meeting" },
   timeoutMs: 15_000,
   async run(config) {
-    const meeting = await setMeetingTranscript(config.meetingId, config.markdown);
+    const meeting = await setMeetingTranscript(config.meetingId, config.markdown, { mode: config.mode });
     if (!meeting) throw new Error(`meeting ${config.meetingId} not found`);
     const space = await getSpaceById(meeting.spaceId);
     return { output: { meetingId: meeting.id, href: `/meetings/${space?.slug ?? meeting.spaceId}/${meeting.id}` } };

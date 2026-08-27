@@ -5,6 +5,7 @@ import {
   mediaFiles,
   meetingParticipants,
   meetingProtocolVersions,
+  meetingRecordings,
   meetingSpaces,
   meetings,
   users,
@@ -189,11 +190,35 @@ export async function liveSpaceIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.spaceId));
 }
 
-/** Sets the meeting transcript (one current version, no history; written by the set_meeting_transcript workflow action). */
-export async function setMeetingTranscript(meetingId: string, markdown: string): Promise<Meeting | undefined> {
+/** All finished recordings of a meeting, oldest first (append-only; the media rows are never overwritten). */
+export async function listRecordings(meetingId: string): Promise<{ id: string; mediaId: string; createdAt: Date; durationSeconds: number | null }[]> {
+  return db
+    .select({ id: meetingRecordings.id, mediaId: meetingRecordings.mediaId, createdAt: meetingRecordings.createdAt, durationSeconds: mediaFiles.durationSeconds })
+    .from(meetingRecordings)
+    .innerJoin(mediaFiles, eq(mediaFiles.id, meetingRecordings.mediaId))
+    .where(eq(meetingRecordings.meetingId, meetingId))
+    .orderBy(asc(meetingRecordings.createdAt));
+}
+
+/**
+ * Sets the meeting transcript (one current field, no history; written by the set_meeting_transcript
+ * workflow action). "append" adds the markdown as a new dated section so an earlier session's
+ * transcript is not lost when a reopened meeting is transcribed again.
+ */
+export async function setMeetingTranscript(meetingId: string, markdown: string, opts: { mode?: "append" | "replace" } = {}): Promise<Meeting | undefined> {
+  const next = markdown.trim();
+  const existing = await db.query.meetings.findFirst({ where: and(eq(meetings.id, meetingId), isNull(meetings.deletedAt)), columns: { transcriptMarkdown: true } });
+  if (!existing) return undefined;
+  const current = existing.transcriptMarkdown?.trim() ?? "";
+  const combined =
+    opts.mode === "replace" || !current
+      ? next
+      : next
+        ? `${current}\n\n---\n\n## ${new Date().toISOString().slice(0, 10)}\n\n${next}`
+        : current; // appending nothing keeps the existing transcript
   const [row] = await db
     .update(meetings)
-    .set({ transcriptMarkdown: markdown.trim() || null })
+    .set({ transcriptMarkdown: combined || null })
     .where(and(eq(meetings.id, meetingId), isNull(meetings.deletedAt)))
     .returning();
   return row;

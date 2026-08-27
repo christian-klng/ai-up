@@ -71,6 +71,13 @@
       "when": 1787763013761,
       "tag": "0009_known_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787835211741,
+      "tag": "0010_steep_tigra",
+      "breakpoints": true
     }
   ]
 }

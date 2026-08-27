@@ -811,6 +811,7 @@
     "recordingOn": "Audio-Mitschnitt an",
     "recordingOff": "ohne Mitschnitt",
     "recording": "Aufzeichnung",
+    "recordingFrom": "Aufzeichnung vom {date}",
     "transcript": "Transkript",
     "call": {
       "title": "Call",

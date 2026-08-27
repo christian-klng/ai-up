@@ -628,6 +628,22 @@ export const meetingParticipants = pgTable(
   (t) => [index("meeting_participants_meeting_idx").on(t.meetingId, t.joinedAt), index("meeting_participants_user_idx").on(t.userId)],
 );
 
+/** Append-only log of finished recordings; meetings.recordingMediaId points at the newest one. */
+export const meetingRecordings = pgTable(
+  "meeting_recordings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    mediaId: uuid("media_id")
+      .notNull()
+      .references(() => mediaFiles.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("meeting_recordings_meeting_idx").on(t.meetingId, t.createdAt)],
+);
+
 // ---------------------------------------------------------------------------
 // Integrations (LiveKit, later Nextcloud …): public config as JSON + encrypted secrets
 // ---------------------------------------------------------------------------
@@ -873,6 +889,11 @@ export const meetingsRelations = relations(meetings, ({ one, many }) => ({
   recording: one(mediaFiles, { fields: [meetings.recordingMediaId], references: [mediaFiles.id] }),
   protocolVersions: many(meetingProtocolVersions),
   participants: many(meetingParticipants),
+  recordings: many(meetingRecordings),
+}));
+export const meetingRecordingsRelations = relations(meetingRecordings, ({ one }) => ({
+  meeting: one(meetings, { fields: [meetingRecordings.meetingId], references: [meetings.id] }),
+  media: one(mediaFiles, { fields: [meetingRecordings.mediaId], references: [mediaFiles.id] }),
 }));
 export const meetingProtocolVersionsRelations = relations(meetingProtocolVersions, ({ one }) => ({
   meeting: one(meetings, { fields: [meetingProtocolVersions.meetingId], references: [meetings.id] }),

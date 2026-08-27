@@ -811,6 +811,7 @@
     "recordingOn": "audio recording on",
     "recordingOff": "no recording",
     "recording": "Recording",
+    "recordingFrom": "Recording from {date}",
     "transcript": "Transcript",
     "call": {
       "title": "Call",

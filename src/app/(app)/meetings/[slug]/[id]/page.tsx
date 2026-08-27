@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { ArrowLeft, ChevronRight, History } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
-import { canEditMeeting, getMeeting, getSpaceBySlug, listParticipants } from "@/server/domain/meetings";
+import { canEditMeeting, getMeeting, getSpaceBySlug, listParticipants, listRecordings } from "@/server/domain/meetings";
 import { getLiveKitConfig } from "@/server/domain/integrations";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
   const { slug, id } = await params;
   const [space, meeting] = await Promise.all([getSpaceBySlug(slug), getMeeting(id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
-  const [t, format, participants, lk] = await Promise.all([getTranslations("meetings"), getFormatter(), listParticipants(meeting.id), getLiveKitConfig()]);
+  const [t, format, participants, recordings, lk] = await Promise.all([getTranslations("meetings"), getFormatter(), listParticipants(meeting.id), listRecordings(meeting.id), getLiveKitConfig()]);
   const editable = canEditMeeting(user, meeting);
   const callsAvailable = !!lk?.enabled;
 
@@ -82,10 +82,19 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
             recording={{ enabled: meeting.recordingEnabled, status: meeting.recordingStatus, error: meeting.recordingError }}
             participants={(meeting.status === "live" ? participants.filter((p) => !p.leftAt) : dedupe(participants)).map((p) => ({ id: p.id, identity: p.identity, displayName: p.displayName, user: p.user }))}
           />
-          {meeting.recording && (
+          {recordings.length > 0 && (
             <section className="rounded-lg border bg-card p-5">
               <h3 className="mb-2 text-sm font-medium">{t("recording")}</h3>
-              <audio controls preload="metadata" src={`/api/files/${meeting.recording.id}`} className="w-full" />
+              <div className="grid gap-3">
+                {recordings.map((r) => (
+                  <div key={r.id}>
+                    {recordings.length > 1 && (
+                      <div className="mb-1 text-xs text-muted-foreground">{t("recordingFrom", { date: format.dateTime(r.createdAt, { dateStyle: "medium", timeStyle: "short" }) })}</div>
+                    )}
+                    <audio controls preload="metadata" src={`/api/files/${r.mediaId}`} className="w-full" />
+                  </div>
+                ))}
+              </div>
             </section>
           )}
           {meeting.transcriptMarkdown && (

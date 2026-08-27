@@ -4,7 +4,7 @@ import { access, unlink } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { EgressClient, EncodedFileOutput, EncodedFileType, S3Upload, type WebhookEvent } from "livekit-server-sdk";
 import { db } from "@/server/db/client";
-import { meetings, type Meeting } from "@/server/db/schema";
+import { meetingRecordings, meetings, type Meeting } from "@/server/db/schema";
 import { getLiveKitConfig, livekitHttpUrl, livekitS3, type LiveKitS3 } from "@/server/domain/integrations";
 import { getSpaceById } from "@/server/domain/meetings";
 import { emitDomainEvent } from "@/server/events/bus";
@@ -177,12 +177,23 @@ export async function handleEgressEvent(meeting: Meeting, ev: WebhookEvent): Pro
     }
     // The file is in the media store now, so the egress source can go (PLAN.md phase 7).
     await removeSource(s3, key, localSource);
-    const [m] = await db.update(meetings).set({ recordingStatus: "available", recordingMediaId: media.id, recordingError: null }).where(eq(meetings.id, meeting.id)).returning();
+    await db.insert(meetingRecordings).values({ meetingId: meeting.id, mediaId: media.id });
+    // If the meeting was reopened while this egress was still finishing, its recording slot is already
+    // reset to "none" – keep it that way so the new session's auto-start is not blocked. The row above
+    // and the latest-pointer still record the finished file either way.
+    const fresh = await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id), columns: { recordingStatus: true } });
+    const slotActive = fresh?.recordingStatus === "processing" || fresh?.recordingStatus === "recording";
+    const [m] = await db
+      .update(meetings)
+      .set({ recordingMediaId: media.id, ...(slotActive ? { recordingStatus: "available" as const, recordingError: null } : {}) })
+      .where(eq(meetings.id, meeting.id))
+      .returning();
     await broadcast(m);
     const space = await getSpaceById(m.spaceId);
     emitDomainEvent("meeting.recording.available", {
       meeting: { id: m.id, title: m.title, kind: m.kind, status: m.status, spaceId: m.spaceId, spaceSlug: space?.slug ?? "", spaceName: space?.name ?? "", hostId: m.hostId, href: `/meetings/${space?.slug ?? m.spaceId}/${m.id}` },
       mediaId: media.id,
+      recordingUrl: `/api/files/${media.id}`,
       durationSeconds,
       actorId: null,
       origin: { kind: "system" },

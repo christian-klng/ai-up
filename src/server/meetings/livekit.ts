@@ -190,7 +190,12 @@ export async function markMeetingEnded(meetingId: string): Promise<Meeting | und
 }
 
 export async function reopenMeeting(meetingId: string): Promise<Meeting | undefined> {
-  const [m] = await db.update(meetings).set({ status: "scheduled", endedAt: null, participantCount: 0 }).where(eq(meetings.id, meetingId)).returning();
+  // Reset the recording slot so the next session auto-records again; finished recordings live in meeting_recordings.
+  const [m] = await db
+    .update(meetings)
+    .set({ status: "scheduled", endedAt: null, participantCount: 0, recordingStatus: "none", recordingEgressId: null, recordingError: null })
+    .where(eq(meetings.id, meetingId))
+    .returning();
   if (m) await broadcastMeeting(m);
   return m;
 }
