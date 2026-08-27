@@ -832,6 +832,20 @@
       "inCall": "In the call",
       "wasInCall": "Attended",
       "deviceError": "Camera/microphone unavailable or not allowed – you are connected but others cannot hear you.",
+      "mini": {
+        "openCall": "Open call",
+        "leave": "Leave call",
+        "mute": "Mute microphone",
+        "unmute": "Unmute microphone",
+        "cameraOn": "Turn camera on",
+        "cameraOff": "Turn camera off",
+        "reconnecting": "Reconnecting …",
+        "endedRemotely": "The meeting has ended.",
+        "switchConfirm": "You are already in another call. Leave it and join this one?",
+        "joinFailed": "Could not join the call.",
+        "enableAudio": "Enable audio",
+        "noVideo": "No video"
+      },
       "rec": {
         "recording": "Recording",
         "processing": "Processing recording …",

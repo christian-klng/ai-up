@@ -7,6 +7,8 @@ import { unreadMessagesCount } from "@/server/domain/messenger";
 import { signOut } from "@/server/actions/auth";
 import { AppShell } from "./app-shell";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
+import { CallProvider } from "@/components/meetings/call-provider";
+import { CallMiniPlayer } from "@/components/meetings/call-mini-player";
 import { WorkflowToasts } from "@/components/workflows/workflow-toasts";
 import { QuestionDock } from "@/components/questions/question-dock";
 import { listOpenQuestionsForUser } from "@/server/domain/questions";
@@ -29,6 +31,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
 
   return (
     <RealtimeProvider userId={user.id} initialCounts={{ unreadMessages, unreadNotifications }}>
+    <CallProvider>
     <AppShell
       brand={{ name: settings.name, logo: <BrandLogo settings={settings} size={28} /> }}
       user={{ id: user.id, name: user.name, email: user.email, avatarMediaId: user.avatarMediaId, role: user.role }}
@@ -62,6 +65,8 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
     </AppShell>
     <WorkflowToasts isAdmin={user.role === "admin"} />
     <QuestionDock initial={openQuestions} />
+    <CallMiniPlayer />
+    </CallProvider>
     </RealtimeProvider>
   );
 }
