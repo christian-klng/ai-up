@@ -142,7 +142,7 @@ export type ContentListItem = Content & {
 
 function buildSearchText(type: ContentType, v: ContentVersionInput): string {
   // Structured entries index the flattened answers instead of the generated markdown (no mermaid noise).
-  const body = type === "structured" && v.meta?.structure ? flattenAnswersText(v.meta.structure.definition, v.meta.structure.answers) : (v.bodyMarkdown ?? "");
+  const body = type === "structured" && v.meta?.structure ? flattenAnswersText(v.meta.structure.definition, v.meta.structure.answers, v.meta.structure.enrichment) : (v.bodyMarkdown ?? "");
   const parts = [v.title, body, v.url ?? "", v.meta?.preview?.title ?? "", v.meta?.preview?.description ?? "", v.meta?.alt ?? "", type];
   return parts.filter(Boolean).join("\n").slice(0, 20000);
 }

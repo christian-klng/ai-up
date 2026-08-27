@@ -16,11 +16,11 @@ import { loadAppSettings, updateAppSettings } from "@/server/domain/settings";
 import { getCurrentLandingVersion, listLandingMedia, listLandingVersions, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
 import { LANDING_ICONS, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
-import { deleteStructure, getStructureByAreaId, listStructures, saveStructure } from "@/server/domain/structures";
-import { validateStructure, validateStructureAnswers } from "@/lib/structures/validate";
-import { renderStructureMarkdown } from "@/lib/structures/markdown";
-import type { StructureAnswers, StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
-import type { ContentType, KnowledgeArea } from "@/server/db/schema";
+import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
+import { deleteTemplate, getTemplateById, getTemplateBySystemKey, isTemplateAvailableForArea, listAllAssignments, listAvailableTemplates, listTemplates, saveTemplate, setAreaTemplates } from "@/server/domain/templates";
+import { isSystemTemplateKey } from "@/lib/structures/defaults";
+import { validateStructure } from "@/lib/structures/validate";
+import type { ContentTemplate, KnowledgeArea } from "@/server/db/schema";
 
 /**
  * MCP server for the workflow engine room. One instance per request (stateless transport).
@@ -100,14 +100,15 @@ Rules
 - The page only goes public when the admin (or set_landing_enabled) turns it on.
 `;
 
-const COLLECTIONS_DOC = `# AI-Up collections, structures and entries
+const COLLECTIONS_DOC = `# AI-Up collections, templates and entries
 
-Collections ("Sammlungen") are admin-created content categories. Each collection can carry an optional
-**structure**: a JSON form template members (and MCP clients) fill in to create entries. A collection
-WITH a structure only accepts structured entries; collections without one accept free entries
-(markdown or link via MCP).
+Collections ("Sammlungen") are admin-created content categories. Entries are created from
+**templates** ("Vorlagen"): standalone, versioned form definitions administered separately and
+assigned per collection. A collection with NO assigned templates offers the four seeded system
+templates (systemKey "text", "image", "link", "video" – not editable or deletable). Every entry
+stores a full snapshot of its template definition, so template changes never break entries.
 
-## Structure definition
+## Template definition
 
 {
   "formatVersion": 1,
@@ -122,6 +123,8 @@ Element types and their extra config:
 - "info":     { "body": "markdown, shown as explanation – collects no answer" }
 - "text":     { "placeholder"?, "maxLength"? }               → answer: string
 - "textarea": { "placeholder"?, "maxLength"? }               → answer: string
+- "markdown": { "placeholder"?, "maxLength"? }               → answer: string (long markdown body,
+              rendered verbatim without a heading)
 - "select":   { "options": ["…"], "placeholder"? }           → answer: one of options
 - "chips":    { "options": ["…"], "minSelected"?, "maxSelected"? } → answer: string[] (subset of options)
 - "checkbox": {}                                             → answer: boolean
@@ -132,6 +135,11 @@ Element types and their extra config:
                 "edges": [{ "id", "from", "to", "condition"? }] }
               → answer: a full graph (members start from a copy of the seed). Exactly one start node;
               x/y are layout coordinates (~90px vertical spacing works well).
+- "image":    {} → answer: { "mediaId"?: uuid, "url"?: "https://…", "alt"?: "…" } – exactly one of
+              mediaId (uploaded file) or url. The server verifies uploads and public URLs.
+- "link":     {} → answer: { "url": "https://…" } – the server fetches an Open Graph preview.
+- "video":    {} → answer: { "mediaId"?: uuid, "url"?: "https://…" } – exactly one; URLs support
+              YouTube, Vimeo and direct video files.
 
 showIf makes an element conditional on an EARLIER answerable element – exactly one operator:
 - { "key": "other_key", "equals": "value" }   (text/textarea/select; boolean for checkbox)
@@ -140,26 +148,38 @@ showIf makes an element conditional on an EARLIER answerable element – exactly
 
 ## Entries
 
-- create_entry on a structured collection: pass "answers" as { "<element key>": <answer> }.
-  Hidden elements (showIf false) are ignored; omitted "process" answers default to the seed graph.
-- The server validates answers, renders deterministic markdown (process graphs as a mermaid
-  flowchart plus a text outline) and stores answers + a full snapshot of the definition with the
-  entry. Edits always validate against the entry's own snapshot, so structure changes never break
-  existing entries.
+- create_entry: pass "template" (template id or systemKey) plus "answers" keyed by element key
+  (call get_template first). The template must be available in the target collection – assigned
+  there, or a system template in a collection without assignments. Shortcut for simple content:
+  type "markdown" (+body) or "link" (+url, optional body as note) maps to the system templates
+  and skips the availability check (meant for automation).
+- The server validates answers, enriches media/link answers (previews, embed ids), renders
+  deterministic markdown (process graphs as a mermaid flowchart plus a text outline) and stores
+  answers + a full snapshot of the definition with the entry. Edits validate against the entry's
+  own snapshot; pass upgrade=true on update_entry to re-snapshot to the template's current
+  version (answers are then validated against the NEW definition).
 - Entries are versioned append-only; every update creates a new version with an optional changeNote.
 - Write labels, options and content in the community's language (see context below).
-- Structure changes via save_structure create a new structure version; existing entries keep working.
+- save_template creates a new template version; entries keep their snapshot until upgraded.
+- set_collection_templates assigns templates to a collection (empty list = system templates).
 `;
 
-/** Current collections appended to the doc so the calling LLM knows ids, slugs and structures. */
+/** Current templates and collections appended to the doc so the calling LLM knows ids, slugs and versions. */
 async function collectionsContext(): Promise<string> {
-  const [settings, areas, structures] = await Promise.all([loadAppSettings(), listAreas(), listStructures()]);
-  const byArea = new Map(structures.map((s) => [s.areaId, s]));
-  const lines = areas.map((a) => {
-    const s = byArea.get(a.id);
-    return `- ${a.name} (id ${a.id}, slug "${a.slug}", ${a.contentCount} entries${s ? `, structure v${s.version}` : ", no structure"}): ${a.purpose.slice(0, 200)}`;
+  const [settings, areas, templates, assignments] = await Promise.all([loadAppSettings(), listAreas(), listTemplates(), listAllAssignments()]);
+  const templateLines = templates.map((t) => `- ${t.name} (id ${t.id}${t.systemKey ? `, systemKey "${t.systemKey}"` : ""}, v${t.version}${t.isSystem ? ", system" : ""})`);
+  const areaLines = areas.map((a) => {
+    const assigned = assignments.get(a.id);
+    const tpl = assigned?.length ? `templates: ${assigned.map((x) => x.name).join(", ")}` : "templates: system defaults";
+    return `- ${a.name} (id ${a.id}, slug "${a.slug}", ${a.contentCount} entries, ${tpl}): ${a.purpose.slice(0, 200)}`;
   });
-  return ["## Current collections", `App language: ${settings.defaultLocale}. Community purpose: ${settings.purpose?.slice(0, 300) ?? "(none)"}`, ...(lines.length ? lines : ["(no collections yet)"])].join("\n");
+  return [
+    "## Current templates",
+    ...(templateLines.length ? templateLines : ["(none)"]),
+    "## Current collections",
+    `App language: ${settings.defaultLocale}. Community purpose: ${settings.purpose?.slice(0, 300) ?? "(none)"}`,
+    ...(areaLines.length ? areaLines : ["(no collections yet)"]),
+  ].join("\n");
 }
 
 /** Current app context appended to the landing doc so the calling LLM knows name, purpose and theme. */
@@ -184,7 +204,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public landing page: read resource aiup://docs/landing-page first, then get_landing_page / validate_landing_page / update_landing_page. Content collections (structures + entries): read resource aiup://docs/collections first, then list_collections / get_structure / save_structure / create_entry / update_entry.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public landing page: read resource aiup://docs/landing-page first, then get_landing_page / validate_landing_page / update_landing_page. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_collection_templates / create_entry / update_entry.",
     },
   );
 
@@ -202,7 +222,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   server.registerResource(
     "collections",
     "aiup://docs/collections",
-    { title: "Collections, structures & entries", description: "Structure definition format, answer shapes and rules for content collections, plus the current collections.", mimeType: "text/markdown" },
+    { title: "Collections, templates & entries", description: "Template definition format, answer shapes and rules for content collections, plus the current templates and collections.", mimeType: "text/markdown" },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${COLLECTIONS_DOC}\n${await collectionsContext()}` }] }),
   );
 
@@ -373,53 +393,83 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text(media.map((m) => ({ id: m.id, name: m.originalName, mime: m.mime, width: m.width, height: m.height, size: m.size, url: `/api/files/${m.id}` })));
   });
 
-  // ---- collections (knowledge areas, structures, entries) -------------------
-  const resolveArea = async (idOrSlug: string): Promise<KnowledgeArea | undefined> =>
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug) ? getAreaById(idOrSlug) : getAreaBySlug(idOrSlug);
+  // ---- collections (knowledge areas, templates, entries) --------------------
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const resolveArea = async (idOrSlug: string): Promise<KnowledgeArea | undefined> => (UUID_RE.test(idOrSlug) ? getAreaById(idOrSlug) : getAreaBySlug(idOrSlug));
+  const resolveTemplate = async (idOrKey: string): Promise<ContentTemplate | undefined> =>
+    UUID_RE.test(idOrKey) ? getTemplateById(idOrKey) : isSystemTemplateKey(idOrKey) ? getTemplateBySystemKey(idOrKey) : undefined;
   const collectionInput = z.string().describe("collection id (uuid) or slug");
+  const templateInput = z.string().describe("template id (uuid) or systemKey (text | image | link | video)");
   const httpUrl = z.string().trim().max(2000).regex(/^https?:\/\//i, "must be an http(s) URL");
 
-  server.registerTool("list_collections", { title: "Collections - List collections", description: "All collections with purpose, entry count and structure version. Read resource aiup://docs/collections for the structure format.", inputSchema: {} }, async () => {
+  server.registerTool("list_collections", { title: "Collections - List collections", description: "All collections with purpose, entry count and available templates. Read resource aiup://docs/collections for the template format.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
-    const [areas, structures] = await Promise.all([listAreas(), listStructures()]);
-    const byArea = new Map(structures.map((s) => [s.areaId, s]));
-    return text(areas.map((a) => ({ id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, entryCount: a.contentCount, structure: byArea.get(a.id) ? { version: byArea.get(a.id)!.version } : null })));
+    const [areas, assignments] = await Promise.all([listAreas(), listAllAssignments()]);
+    return text(
+      areas.map((a) => {
+        const assigned = assignments.get(a.id);
+        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, entryCount: a.contentCount, templates: assigned?.length ? assigned : "system-defaults" };
+      }),
+    );
   });
 
-  server.registerTool("get_structure", { title: "Collections - Get structure", description: "The structure definition of a collection (null when the collection is free-form).", inputSchema: { collection: collectionInput } }, async ({ collection }) => {
+  server.registerTool("list_templates", { title: "Templates - List templates", description: "All content templates with version and how many collections they are assigned to.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
-    const area = await resolveArea(collection);
-    if (!area) return fail("collection not found");
-    const s = await getStructureByAreaId(area.id);
-    return text({ collectionId: area.id, structure: s ? { version: s.version, definition: s.definition, updatedAt: s.updatedAt } : null });
+    const templates = await listTemplates();
+    return text(templates.map((t) => ({ id: t.id, name: t.name, description: t.description, systemKey: t.systemKey, isSystem: t.isSystem, version: t.version, assignmentCount: t.assignmentCount, updatedAt: t.updatedAt })));
   });
 
-  server.registerTool("validate_structure", { title: "Collections - Validate structure", description: "Dry-run validation of a structure definition. Returns issues (blocking) and warnings without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
+  server.registerTool("get_template", { title: "Templates - Get template", description: "One template with its full definition (element keys for create_entry answers).", inputSchema: { template: templateInput } }, async ({ template }) => {
+    require(auth, "knowledge:read");
+    const t = await resolveTemplate(template);
+    if (!t) return fail("template not found");
+    return text({ id: t.id, name: t.name, description: t.description, systemKey: t.systemKey, isSystem: t.isSystem, version: t.version, definition: t.definition, updatedAt: t.updatedAt });
+  });
+
+  server.registerTool("validate_structure", { title: "Templates - Validate definition", description: "Dry-run validation of a template definition. Returns issues (blocking) and warnings without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
     const res = validateStructure(definition);
     return text({ valid: !!res.def, issues: res.issues, warnings: res.warnings });
   });
 
   server.registerTool(
-    "save_structure",
-    { title: "Collections - Save structure", description: "Creates or replaces the collection's structure (new version; existing entries keep their snapshot and stay intact). Once a structure exists, new entries must be created via create_entry with answers.", inputSchema: { collection: collectionInput, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(500).optional() } },
-    async ({ collection, definition, changeNote }) => {
+    "save_template",
+    {
+      title: "Templates - Save template",
+      description: "Creates a template (omit id) or updates one (new version; entries keep their snapshot until they opt into the upgrade). System templates are managed by the application and cannot be changed.",
+      inputSchema: { id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), description: z.string().max(1000).optional(), icon: z.string().max(50).optional(), definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(500).optional() },
+    },
+    async ({ id, name, description, icon, definition, changeNote }) => {
       require(auth, "knowledge:write");
-      const area = await resolveArea(collection);
-      if (!area) return fail("collection not found");
       const res = validateStructure(definition);
       if (!res.def) return fail(JSON.stringify({ issues: res.issues }, null, 2));
-      const saved = await saveStructure(area.id, res.def, auth.user.id, changeNote);
-      return text({ collectionId: area.id, version: saved.version, warnings: res.warnings });
+      const saved = await saveTemplate({ id, name, description: description || null, icon, definition: res.def }, auth.user.id, changeNote);
+      if ("error" in saved) return fail(saved.error === "system" ? "system templates cannot be changed" : "template not found");
+      return text({ id: saved.id, version: saved.version, warnings: res.warnings });
     },
   );
 
-  server.registerTool("delete_structure", { title: "Collections - Delete structure", description: "Removes the collection's structure; the collection becomes free-form again. Existing entries are kept.", inputSchema: { collection: collectionInput, confirm: z.literal(true).describe("must be true") } }, async ({ collection }) => {
+  server.registerTool("delete_template", { title: "Templates - Delete template", description: "Deletes a custom template and removes its collection assignments. Entries keep their snapshots. System templates cannot be deleted.", inputSchema: { id: z.string().uuid(), confirm: z.literal(true).describe("must be true") } }, async ({ id }) => {
     require(auth, "knowledge:write");
-    const area = await resolveArea(collection);
-    if (!area) return fail("collection not found");
-    const ok = await deleteStructure(area.id, auth.user.id);
-    return ok ? text({ deleted: true, collectionId: area.id }) : fail("collection has no structure");
+    const res = await deleteTemplate(id, auth.user.id);
+    if (!res.ok) return fail(res.reason === "system" ? "system templates cannot be deleted" : "template not found");
+    return text({ deleted: true, id });
   });
+
+  server.registerTool(
+    "set_collection_templates",
+    { title: "Collections - Assign templates", description: "Replaces the templates offered in a collection (array order = display order). An empty array reverts to the system templates.", inputSchema: { collection: collectionInput, templateIds: z.array(z.string().uuid()).max(100) } },
+    async ({ collection, templateIds }) => {
+      require(auth, "knowledge:write");
+      const area = await resolveArea(collection);
+      if (!area) return fail("collection not found");
+      const unique = [...new Set(templateIds)];
+      for (const tplId of unique) {
+        if (!(await getTemplateById(tplId))) return fail(`template ${tplId} not found`);
+      }
+      await setAreaTemplates(area.id, unique, auth.user.id);
+      return text({ collectionId: area.id, templateIds: unique.length ? unique : "system-defaults" });
+    },
+  );
 
   server.registerTool(
     "list_entries",
@@ -460,39 +510,56 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     {
       title: "Collections - Create entry",
       description:
-        "Creates an entry. In a collection WITH a structure pass `answers` keyed by element key (call get_structure first; markdown is generated server-side). In a free-form collection pass type markdown (+body) or link (+url, optional body). The key owner becomes the author.",
+        "Creates an entry from a template. Pass `template` (id or systemKey) plus `answers` keyed by element key (call get_template first; markdown is generated server-side). Shortcut for automation: type markdown (+body) or link (+url, optional body) maps to the system templates and skips the availability check. With exactly one available template it is used implicitly. The key owner becomes the author.",
       inputSchema: {
         collection: collectionInput,
         title: z.string().trim().min(1).max(200),
-        answers: z.record(z.string(), z.unknown()).optional().describe("structured collections: { <element key>: <answer> }"),
-        type: z.enum(["markdown", "link"]).optional().describe("free-form collections only; default markdown"),
-        body: z.string().max(200_000).optional().describe("markdown body (type markdown) or note (type link)"),
-        url: httpUrl.optional().describe("type link"),
+        template: templateInput.optional(),
+        answers: z.record(z.string(), z.unknown()).optional().describe("{ <element key>: <answer> }"),
+        type: z.enum(["markdown", "link"]).optional().describe("shortcut via system templates; default markdown when body/url are used without template/answers"),
+        body: z.string().max(200_000).optional().describe("shortcut: markdown body (type markdown) or note (type link)"),
+        url: httpUrl.optional().describe("shortcut: type link"),
       },
     },
-    async ({ collection, title, answers, type, body, url }) => {
+    async ({ collection, title, template, answers, type, body, url }) => {
       require(auth, "knowledge:write");
       const area = await resolveArea(collection);
       if (!area) return fail("collection not found");
-      const structure = await getStructureByAreaId(area.id);
 
-      if (structure) {
-        if (!answers) return fail("this collection has a structure – pass `answers` (call get_structure for the element keys)");
-        const res = validateStructureAnswers(structure.definition, fillProcessSeeds(structure.definition, answers as StructureAnswers));
-        if (!res.ok) return fail(JSON.stringify({ issues: res.issues, hint: "answer keys/shapes must match the structure definition" }, null, 2));
-        const meta: StructureEntryMeta = { structureId: structure.id, structureVersion: structure.version, definition: structure.definition, answers: res.answers };
-        const content = await createContent(area.id, "structured", { title, bodyMarkdown: renderStructureMarkdown(meta.definition, meta.answers), meta: { structure: meta } }, auth.user.id);
-        await audit(auth, "content.created", content.id, { collection: area.slug, type: "structured" }, "content");
-        return text({ id: content.id, type: "structured", href: `/knowledge/${area.slug}/${content.id}` });
+      let tpl: ContentTemplate | undefined;
+      let effectiveAnswers: unknown = answers;
+      if (template) {
+        tpl = await resolveTemplate(template);
+        if (!tpl) return fail("template not found");
+        if (!(await isTemplateAvailableForArea(area.id, tpl.id))) return fail("template is not available in this collection (assign it via set_collection_templates)");
+        if (!answers) return fail("pass `answers` keyed by element key (call get_template for the definition)");
+      } else if (type || body !== undefined || url !== undefined) {
+        // legacy shortcut: markdown/link content via the system templates (availability check skipped for automation)
+        const entryType = type ?? "markdown";
+        if (entryType === "markdown") {
+          if (!body?.trim()) return fail("type markdown needs a non-empty `body`");
+          tpl = await getTemplateBySystemKey("text");
+          effectiveAnswers = { body };
+        } else {
+          if (!url) return fail("type link needs a `url`");
+          tpl = await getTemplateBySystemKey("link");
+          effectiveAnswers = { url: { url }, ...(body?.trim() ? { note: body } : {}) };
+        }
+        if (!tpl) return fail("system templates missing – run db:migrate");
+      } else {
+        const available = await listAvailableTemplates(area.id);
+        if (available.length === 1 && answers) {
+          tpl = available[0];
+        } else {
+          return fail("pass `template` (id or systemKey) plus `answers`, or the type/body/url shortcut");
+        }
       }
 
-      const entryType: ContentType = type ?? "markdown";
-      if (entryType === "markdown" && !body?.trim()) return fail("type markdown needs a non-empty `body`");
-      if (entryType === "link" && !url) return fail("type link needs a `url`");
-      const input: ContentVersionInput = { title, bodyMarkdown: body?.trim() || null, url: entryType === "link" ? url : null, meta: {} };
-      const content = await createContent(area.id, entryType, input, auth.user.id);
-      await audit(auth, "content.created", content.id, { collection: area.slug, type: entryType }, "content");
-      return text({ id: content.id, type: entryType, href: `/knowledge/${area.slug}/${content.id}` });
+      const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, title, effectiveAnswers, {});
+      if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: "answer keys/shapes must match the template definition" }, null, 2));
+      const content = await createContent(area.id, "structured", built.input, auth.user.id);
+      await audit(auth, "content.created", content.id, { collection: area.slug, type: "structured", templateId: tpl.id }, "content");
+      return text({ id: content.id, type: "structured", href: `/knowledge/${area.slug}/${content.id}` });
     },
   );
 
@@ -501,17 +568,18 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     {
       title: "Collections - Update entry",
       description:
-        "Updates an entry (append-only: creates a new version). Structured entries validate `answers` against the entry's own definition snapshot – omit `answers` to keep the stored ones (e.g. title-only edits). Markdown/link entries accept body/url. Image/video entries only accept title/body.",
+        "Updates an entry (append-only: creates a new version). Structured entries validate `answers` against the entry's own definition snapshot – omit `answers` to keep the stored ones (e.g. title-only edits); pass upgrade=true (with full `answers`) to re-snapshot to the template's current version. Markdown/link entries accept body/url. Image/video entries only accept title/body.",
       inputSchema: {
         id: z.string().uuid(),
         title: z.string().trim().min(1).max(200).optional(),
         answers: z.record(z.string(), z.unknown()).optional(),
+        upgrade: z.boolean().optional().describe("structured entries: validate answers against the template's CURRENT definition and store the new snapshot"),
         body: z.string().max(200_000).optional(),
         url: httpUrl.optional(),
         changeNote: z.string().max(500).optional(),
       },
     },
-    async ({ id, title, answers, body, url, changeNote }) => {
+    async ({ id, title, answers, upgrade, body, url, changeNote }) => {
       require(auth, "knowledge:write");
       const c = await getContent(id);
       if (!c || !c.version) return fail("entry not found");
@@ -522,12 +590,18 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       if (c.type === "structured") {
         const prev = v.meta.structure;
         if (!prev) return fail("entry has no structure snapshot");
-        const nextAnswers = answers ? fillProcessSeeds(prev.definition, answers as StructureAnswers) : prev.answers;
-        const res = validateStructureAnswers(prev.definition, nextAnswers);
-        if (!res.ok) return fail(JSON.stringify({ issues: res.issues, hint: "answers are validated against this entry's own definition snapshot – call get_entry to see it" }, null, 2));
-        const meta: StructureEntryMeta = { ...prev, answers: res.answers };
-        input.bodyMarkdown = renderStructureMarkdown(meta.definition, meta.answers);
-        input.meta = { ...v.meta, structure: meta };
+        let snapshot: Pick<typeof prev, "structureId" | "structureVersion" | "definition"> = prev;
+        if (upgrade) {
+          const tpl = await getTemplateById(prev.structureId);
+          if (!tpl) return fail("the entry's template no longer exists – it keeps its snapshot");
+          if (tpl.version <= prev.structureVersion) return fail("entry already uses the template's current version");
+          if (!answers) return fail("upgrade needs full `answers` for the template's current definition (call get_template)");
+          snapshot = { structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition };
+        }
+        const built = await buildStructuredVersionInput(snapshot, title ?? c.title, answers ?? prev.answers, { changeNote: changeNote ?? null, prevEnrichment: prev.enrichment });
+        if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: upgrade ? "answers are validated against the template's CURRENT definition" : "answers are validated against this entry's own definition snapshot – call get_entry to see it" }, null, 2));
+        input.bodyMarkdown = built.input.bodyMarkdown;
+        input.meta = { ...v.meta, ...built.input.meta };
       } else {
         if (answers) return fail(`entry type is "${c.type}" – answers are only valid for structured entries`);
         if (body !== undefined) input.bodyMarkdown = body.trim() || null;
@@ -559,15 +633,6 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   });
 
   return server;
-}
-
-/** Untouched process elements default to their seed graph (same behavior as the member fill form). */
-function fillProcessSeeds(def: StructureDefinition, answers: StructureAnswers): StructureAnswers {
-  const filled = { ...answers };
-  for (const el of def.elements) {
-    if (el.type === "process" && filled[el.key] === undefined) filled[el.key] = structuredClone(el.seed);
-  }
-  return filled;
 }
 
 function fieldDoc(f: { key: string; type: string; required?: boolean; label: { en: string }; help?: { en: string }; options?: { value: string; label: { en: string } }[] }) {

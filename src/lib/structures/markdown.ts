@@ -1,4 +1,5 @@
-import type { ProcessGraph, QaPair, StructureAnswers, StructureDefinition } from "./types";
+import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureEnrichment, VideoAnswer } from "./types";
+import { isMediaLikeAnswer } from "./types";
 import { visibleElements } from "./visibility";
 import { isQaPairArray } from "./visibility";
 
@@ -46,7 +47,7 @@ export function processGraphToOutline(graph: ProcessGraph): string {
   return out.join("\n");
 }
 
-export function renderStructureMarkdown(def: StructureDefinition, answers: StructureAnswers): string {
+export function renderStructureMarkdown(def: StructureDefinition, answers: StructureAnswers, enrichment?: StructureEnrichment): string {
   const parts: string[] = [];
   if (def.intro?.trim()) parts.push(def.intro.trim());
 
@@ -88,6 +89,38 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
         parts.push(`## ${el.label}\n\n\`\`\`mermaid\n${processGraphToMermaid(graph)}\n\`\`\`\n\n${processGraphToOutline(graph)}`);
         break;
       }
+      case "markdown": {
+        // long-form body: rendered verbatim, no heading (a "simple text" entry is just prose)
+        if (typeof value !== "string" || !value.trim()) break;
+        parts.push(value.trim());
+        break;
+      }
+      case "image": {
+        if (!isMediaLikeAnswer(value)) break;
+        const v = value as ImageAnswer;
+        const src = v.mediaId ? `/api/files/${v.mediaId}` : v.url;
+        if (!src) break;
+        parts.push(`## ${el.label}\n\n![${v.alt ?? el.label}](${src})`);
+        break;
+      }
+      case "link": {
+        if (!isMediaLikeAnswer(value)) break;
+        const v = value as LinkAnswer;
+        if (!v.url) break;
+        const e = enrichment?.[el.key];
+        const title = e?.url === v.url && e.preview?.title ? e.preview.title : v.url;
+        const desc = e?.url === v.url && e.preview?.description ? `\n\n${e.preview.description}` : "";
+        parts.push(`## ${el.label}\n\n[${title}](${v.url})${desc}`);
+        break;
+      }
+      case "video": {
+        if (!isMediaLikeAnswer(value)) break;
+        const v = value as VideoAnswer;
+        const href = v.mediaId ? `/api/files/${v.mediaId}` : v.url;
+        if (!href) break;
+        parts.push(`## ${el.label}\n\n[${v.url ?? "Video"}](${href})`);
+        break;
+      }
     }
   }
 
@@ -95,7 +128,7 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
 }
 
 /** Flat answer text for the denormalized search index (no mermaid noise). */
-export function flattenAnswersText(def: StructureDefinition, answers: StructureAnswers): string {
+export function flattenAnswersText(def: StructureDefinition, answers: StructureAnswers, enrichment?: StructureEnrichment): string {
   const parts: string[] = [];
   for (const el of visibleElements(def, answers)) {
     if (el.type === "info") continue;
@@ -105,7 +138,13 @@ export function flattenAnswersText(def: StructureDefinition, answers: StructureA
     if (typeof value === "string") parts.push(value);
     else if (Array.isArray(value) && value.every((v) => typeof v === "string")) parts.push((value as string[]).join(" "));
     else if (isQaPairArray(value)) parts.push((value as QaPair[]).map((p) => `${p.question} ${p.answer}`).join(" "));
-    else if (typeof value === "object" && value !== null && "nodes" in value) {
+    else if (isMediaLikeAnswer(value)) {
+      const v = value as ImageAnswer & LinkAnswer;
+      if (v.url) parts.push(v.url);
+      if (v.alt) parts.push(v.alt);
+      const e = enrichment?.[el.key];
+      if (e && (!v.url || e.url === v.url)) parts.push([e.preview?.title, e.preview?.description, e.preview?.siteName].filter((s): s is string => Boolean(s)).join(" "));
+    } else if (typeof value === "object" && value !== null && "nodes" in value) {
       const graph = value as ProcessGraph;
       parts.push(graph.nodes.map((n) => `${n.label} ${n.description ?? ""}`).join(" "));
       parts.push(graph.edges.map((e) => e.condition ?? "").filter(Boolean).join(" "));

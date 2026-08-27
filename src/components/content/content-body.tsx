@@ -1,5 +1,5 @@
 import { ExternalLink, FileVideo } from "lucide-react";
-import type { ContentType, ContentVersionMeta, MediaFile } from "@/server/db/schema";
+import type { ContentType, ContentVersionMeta, LinkPreview, MediaFile } from "@/server/db/schema";
 import { detectVideoSource, isDirectMediaUrl } from "@/lib/video";
 import { Markdown } from "./markdown";
 
@@ -30,16 +30,26 @@ export function ContentBody({ type, title, bodyMarkdown, url, media, meta, label
         </figure>
       )}
 
-      {type === "video" && <VideoPlayer url={url} media={media} meta={meta} labels={labels} />}
+      {type === "video" && <VideoPlayer url={url} media={media} provider={meta.provider} embedId={meta.embedId} preview={meta.preview} labels={labels} />}
 
-      {type === "link" && url && <LinkCard url={url} meta={meta} openLabel={labels.openLink} />}
+      {type === "link" && url && <LinkCard url={url} preview={meta.preview} openLabel={labels.openLink} />}
 
       {bodyMarkdown && <Markdown>{bodyMarkdown}</Markdown>}
     </div>
   );
 }
 
-function VideoPlayer({ url, media, meta, labels }: Pick<ContentBodyProps, "url" | "media" | "meta" | "labels">) {
+export type VideoPlayerProps = {
+  url: string | null;
+  media: Pick<MediaFile, "id" | "mime" | "originalName" | "size"> | null;
+  provider?: ContentVersionMeta["provider"];
+  embedId?: string;
+  preview?: LinkPreview;
+  labels: ContentBodyProps["labels"];
+};
+
+/** Uploaded file, YouTube/Vimeo embed or direct URL — also used for structured video elements. */
+export function VideoPlayer({ url, media, provider, embedId, preview, labels }: VideoPlayerProps) {
   if (media) {
     return (
       <div className="grid gap-2">
@@ -54,7 +64,7 @@ function VideoPlayer({ url, media, meta, labels }: Pick<ContentBodyProps, "url" 
     );
   }
   if (!url) return null;
-  const src = meta.provider === "youtube" || meta.provider === "vimeo" ? { provider: meta.provider, embedId: meta.embedId } : detectVideoSource(url);
+  const src = provider === "youtube" || provider === "vimeo" ? { provider, embedId } : detectVideoSource(url);
   if (src && (src.provider === "youtube" || src.provider === "vimeo") && src.embedId) {
     const embedUrl = src.provider === "youtube" ? `https://www.youtube-nocookie.com/embed/${src.embedId}` : `https://player.vimeo.com/video/${src.embedId}`;
     return (
@@ -70,11 +80,11 @@ function VideoPlayer({ url, media, meta, labels }: Pick<ContentBodyProps, "url" 
       </video>
     );
   }
-  return <LinkCard url={url} meta={meta} openLabel={labels.openLink} />;
+  return <LinkCard url={url} preview={preview} openLabel={labels.openLink} />;
 }
 
-export function LinkCard({ url, meta, openLabel, compact }: { url: string; meta: ContentVersionMeta; openLabel: string; compact?: boolean }) {
-  const p = meta.preview ?? {};
+export function LinkCard({ url, preview, openLabel, compact }: { url: string; preview?: LinkPreview; openLabel: string; compact?: boolean }) {
+  const p = preview ?? {};
   let host = url;
   try {
     host = new URL(url).hostname.replace(/^www\./, "");

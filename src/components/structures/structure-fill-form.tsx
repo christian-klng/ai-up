@@ -5,17 +5,21 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Plus, X } from "lucide-react";
+import { Plus, RefreshCw, X } from "lucide-react";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import { validateStructureAnswers } from "@/lib/structures/validate";
-import type { ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureElement } from "@/lib/structures/types";
+import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureElement, VideoAnswer } from "@/lib/structures/types";
+import { fillProcessSeeds, isAnswerable } from "@/lib/structures/types";
+import { migrateStructureAnswers } from "@/lib/structures/migrate";
 import { visibleElements } from "@/lib/structures/visibility";
 import { saveStructuredEntryAction } from "@/server/actions/structured-content";
 import { Markdown } from "@/components/content/markdown";
+import { MediaInput } from "@/components/content/media-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
@@ -26,11 +30,16 @@ export type StructureFillFormProps = {
   areaId?: string;
   areaSlug?: string;
   contentId?: string;
+  /** create mode: the template the entry is created from */
+  templateId?: string;
+  /** edit mode: newer version of the entry's template, offered as an opt-in upgrade */
+  upgradeTo?: { version: number; definition: StructureDefinition };
+  maxUploadMb?: number;
   initialTitle?: string;
   initialAnswers?: StructureAnswers;
 };
 
-export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, initialAnswers }: StructureFillFormProps) {
+export function StructureFillForm({ def, mode, areaId, contentId, templateId, upgradeTo, maxUploadMb, initialTitle, initialAnswers }: StructureFillFormProps) {
   const t = useTranslations("knowledge.structured");
   const te = useTranslations("knowledge.editor");
   const router = useRouter();
@@ -40,12 +49,41 @@ export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, 
   const [issues, setIssues] = useState<AnswerIssue[]>([]);
   const [titleMissing, setTitleMissing] = useState(false);
   const [pending, start] = useTransition();
+  const [activeDef, setActiveDef] = useState(def);
+  const [upgrading, setUpgrading] = useState(false);
+  const [droppedLabels, setDroppedLabels] = useState<string[]>([]);
 
-  const visible = useMemo(() => visibleElements(def, answers), [def, answers]);
+  const startUpgrade = () => {
+    if (!upgradeTo) return;
+    const res = migrateStructureAnswers(activeDef, upgradeTo.definition, answers);
+    const labelByKey = new Map(activeDef.elements.filter(isAnswerable).map((el) => [el.key, el.label]));
+    setDroppedLabels(res.droppedKeys.map((k) => labelByKey.get(k) ?? k));
+    setActiveDef(upgradeTo.definition);
+    setAnswers(res.answers);
+    setIssues([]);
+    setUpgrading(true);
+  };
+
+  const cancelUpgrade = () => {
+    setActiveDef(def);
+    setAnswers(initialAnswers ?? {});
+    setDroppedLabels([]);
+    setIssues([]);
+    setUpgrading(false);
+  };
+
+  const visible = useMemo(() => visibleElements(activeDef, answers), [activeDef, answers]);
   const issueFor = (key: string) => issues.find((i) => i.key === key);
 
-  const setValue = (key: string, value: StructureAnswers[string]) => {
-    setAnswers((a) => ({ ...a, [key]: value }));
+  const setValue = (key: string, value: StructureAnswers[string] | undefined) => {
+    setAnswers((a) => {
+      if (value === undefined) {
+        const next = { ...a };
+        delete next[key];
+        return next;
+      }
+      return { ...a, [key]: value };
+    });
     setIssues((prev) => prev.filter((i) => i.key !== key));
   };
 
@@ -53,11 +91,8 @@ export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, 
     const missingTitle = !title.trim();
     setTitleMissing(missingTitle);
     // Untouched process elements submit their seed graph as the answer.
-    const effective: StructureAnswers = { ...answers };
-    for (const el of visibleElements(def, effective)) {
-      if (el.type === "process" && effective[el.key] === undefined) effective[el.key] = structuredClone(el.seed);
-    }
-    const res = validateStructureAnswers(def, effective);
+    const effective = fillProcessSeeds(activeDef, answers);
+    const res = validateStructureAnswers(activeDef, effective);
     if (!res.ok) {
       setIssues(res.issues);
       toast.error(t("missingRequired"));
@@ -71,10 +106,12 @@ export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, 
     start(async () => {
       const result = await saveStructuredEntryAction({
         areaId: areaId!,
+        templateId,
         contentId,
         title: title.trim(),
         answers: res.answers,
         changeNote: changeNote.trim() || undefined,
+        upgrade: upgrading || undefined,
       });
       if (result.ok) {
         toast.success(t("saved"));
@@ -95,9 +132,30 @@ export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, 
         if (mode !== "preview") submit();
       }}
     >
-      {def.intro && (
+      {mode === "edit" && upgradeTo && !upgrading && (
+        <div className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+          <p>{t("templateChanged")}</p>
+          <div>
+            <Button type="button" variant="outline" size="sm" onClick={startUpgrade} disabled={pending}>
+              <RefreshCw className="size-3.5" /> {t("updateToNew", { version: upgradeTo.version })}
+            </Button>
+          </div>
+        </div>
+      )}
+      {upgrading && (
+        <div className="grid gap-2 rounded-md border bg-muted/40 p-3 text-sm">
+          <p>{t("upgradeActive", { version: upgradeTo?.version ?? 0 })}</p>
+          {droppedLabels.length > 0 && <p className="text-muted-foreground">{t("droppedAnswers", { labels: droppedLabels.join(", ") })}</p>}
+          <div>
+            <Button type="button" variant="ghost" size="sm" onClick={cancelUpgrade} disabled={pending}>
+              {t("cancelUpgrade")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {activeDef.intro && (
         <div className="text-sm text-muted-foreground">
-          <Markdown>{def.intro}</Markdown>
+          <Markdown>{activeDef.intro}</Markdown>
         </div>
       )}
       {mode !== "preview" && (
@@ -110,7 +168,7 @@ export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, 
         </div>
       )}
       {visible.map((el) => (
-        <ElementInput key={el.key} element={el} value={answers[el.key]} onChange={(v) => setValue(el.key, v)} issue={issueFor(el.key)} disabled={pending} />
+        <ElementInput key={el.key} element={el} value={answers[el.key]} onChange={(v) => setValue(el.key, v)} issue={issueFor(el.key)} disabled={pending} maxUploadMb={maxUploadMb ?? 25} />
       ))}
       {mode === "edit" && (
         <div className="grid grid-cols-1 gap-1.5">
@@ -131,8 +189,9 @@ export function StructureFillForm({ def, mode, areaId, contentId, initialTitle, 
   );
 }
 
-function ElementInput({ element, value, onChange, issue, disabled }: { element: StructureElement; value: StructureAnswers[string] | undefined; onChange: (v: StructureAnswers[string]) => void; issue?: AnswerIssue; disabled: boolean }) {
+function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb }: { element: StructureElement; value: StructureAnswers[string] | undefined; onChange: (v: StructureAnswers[string] | undefined) => void; issue?: AnswerIssue; disabled: boolean; maxUploadMb: number }) {
   const t = useTranslations("knowledge.structured");
+  const te = useTranslations("knowledge.editor");
 
   if (element.type === "info") {
     return (
@@ -261,6 +320,62 @@ function ElementInput({ element, value, onChange, issue, disabled }: { element: 
           {header}
           {help}
           <ProcessGraphEditor value={graph} onChange={(g) => onChange(g)} />
+          {error}
+        </div>
+      );
+    }
+    case "markdown": {
+      const text = (value as string) ?? "";
+      return (
+        <div className="grid grid-cols-1 gap-1.5">
+          {header}
+          {help}
+          <Tabs defaultValue="write">
+            <TabsList>
+              <TabsTrigger value="write">{te("write")}</TabsTrigger>
+              <TabsTrigger value="preview">{te("preview")}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="write" className="pt-2">
+              <Textarea value={text} onChange={(e) => onChange(e.target.value)} placeholder={element.placeholder} maxLength={element.maxLength ?? 200000} rows={12} disabled={disabled} className={cn("font-mono text-sm leading-relaxed", issue && "border-destructive")} />
+            </TabsContent>
+            <TabsContent value="preview" className="pt-2">
+              <div className="min-h-32 rounded-md border p-4">{text.trim() ? <Markdown>{text}</Markdown> : <p className="text-sm text-muted-foreground">{te("nothingToPreview")}</p>}</div>
+            </TabsContent>
+          </Tabs>
+          {error}
+        </div>
+      );
+    }
+    case "image": {
+      const v = (value as ImageAnswer | undefined) ?? undefined;
+      return (
+        <div className="grid grid-cols-1 gap-1.5">
+          {header}
+          {help}
+          <MediaInput kind="image" value={v} onChange={(next) => onChange((next ? { ...next, ...(v?.alt ? { alt: v.alt } : {}) } : undefined) as StructureAnswers[string])} maxUploadMb={maxUploadMb} disabled={disabled} invalid={!!issue} />
+          <Input value={v?.alt ?? ""} onChange={(e) => onChange({ ...(v ?? {}), alt: e.target.value } as StructureAnswers[string])} placeholder={te("altLabel")} maxLength={500} disabled={disabled} />
+          {error}
+        </div>
+      );
+    }
+    case "video": {
+      const v = (value as VideoAnswer | undefined) ?? undefined;
+      return (
+        <div className="grid grid-cols-1 gap-1.5">
+          {header}
+          {help}
+          <MediaInput kind="video" value={v} onChange={(next) => onChange(next as StructureAnswers[string])} maxUploadMb={maxUploadMb} disabled={disabled} invalid={!!issue} />
+          {error}
+        </div>
+      );
+    }
+    case "link": {
+      const v = (value as LinkAnswer | undefined) ?? undefined;
+      return (
+        <div className="grid grid-cols-1 gap-1.5">
+          {header}
+          {help}
+          <Input type="url" value={v?.url ?? ""} onChange={(e) => onChange((e.target.value.trim() ? { url: e.target.value } : undefined) as StructureAnswers[string])} placeholder={te("urlPlaceholder")} maxLength={2000} disabled={disabled} className={cn(issue && "border-destructive")} />
           {error}
         </div>
       );

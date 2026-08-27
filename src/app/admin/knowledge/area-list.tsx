@@ -5,15 +5,16 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, ListChecks, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { deleteAreaAction, moveAreaAction } from "@/server/actions/admin-knowledge";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { Button } from "@/components/ui/button";
 import { AreaDialog, type AreaFormValues } from "./area-dialog";
+import { AreaTemplatesDialog, type TemplateOption } from "./area-templates-dialog";
 
-type Area = AreaFormValues & { slug: string; contentCount: number; hasStructure: boolean };
+type Area = AreaFormValues & { slug: string; contentCount: number; assignedTemplateIds: string[] };
 
-export function AreaList({ areas }: { areas: Area[] }) {
+export function AreaList({ areas, templates }: { areas: Area[]; templates: TemplateOption[] }) {
   const t = useTranslations("admin.knowledge");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -35,16 +36,16 @@ export function AreaList({ areas }: { areas: Area[] }) {
               </Link>
               <span className="text-xs text-muted-foreground">/{a.slug}</span>
               <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">{t("contentCount", { count: a.contentCount })}</span>
-              {a.hasStructure && <span className="rounded-full bg-primary/10 px-1.5 text-xs text-primary">{t("structure.activeBadge")}</span>}
+              {a.assignedTemplateIds.length > 0 ? (
+                <span className="rounded-full bg-primary/10 px-1.5 text-xs text-primary">{t("templateCount", { count: a.assignedTemplateIds.length })}</span>
+              ) : (
+                <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">{t("defaultTemplatesBadge")}</span>
+              )}
             </div>
             <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{a.purpose}</p>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" aria-label={t("structure.linkLabel")} title={t("structure.linkLabel")} asChild>
-              <Link href={`/admin/knowledge/${a.id}/structure`}>
-                <ListChecks className="size-4" />
-              </Link>
-            </Button>
+            <AreaTemplatesDialog areaId={a.id} areaName={a.name} templates={templates} assignedIds={a.assignedTemplateIds} />
             <Button variant="ghost" size="icon" aria-label="up" disabled={pending || i === 0} onClick={() => start(async () => { await moveAreaAction(a.id, "up"); router.refresh(); })}>
               <ArrowUp className="size-4" />
             </Button>

@@ -5,12 +5,13 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, GitBranch, Info, MessageSquare, Plus, Tags, Trash2, Type } from "lucide-react";
-import { saveStructureAction, deleteStructureAction } from "@/server/actions/admin-structures";
+import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, FileText, GitBranch, Image as ImageIcon, Info, Link2, MessageSquare, Plus, Tags, Trash2, Type, Video } from "lucide-react";
+import { saveTemplateAction, deleteTemplateAction } from "@/server/actions/admin-templates";
 import type { ValidationIssue } from "@/lib/structures/validate";
 import type { ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType } from "@/lib/structures/types";
 import { emptyProcessGraph, isAnswerable } from "@/lib/structures/types";
 import { StructureFillForm } from "@/components/structures/structure-fill-form";
+import { TEMPLATE_ICON_KEYS, TemplateIcon } from "@/components/structures/template-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,9 +30,13 @@ const ELEMENT_ICONS: Record<StructureElementType, React.ComponentType<{ classNam
   checkbox: Check,
   qa: MessageSquare,
   process: GitBranch,
+  markdown: FileText,
+  image: ImageIcon,
+  link: Link2,
+  video: Video,
 };
 
-const ELEMENT_TYPES: StructureElementType[] = ["info", "text", "textarea", "select", "chips", "checkbox", "qa", "process"];
+const ELEMENT_TYPES: StructureElementType[] = ["info", "text", "textarea", "markdown", "select", "chips", "checkbox", "qa", "process", "image", "link", "video"];
 
 function newElement(type: StructureElementType, key: string, label: string): StructureElement {
   const base = { key, label };
@@ -40,6 +45,7 @@ function newElement(type: StructureElementType, key: string, label: string): Str
       return { ...base, type, body: "…" };
     case "text":
     case "textarea":
+    case "markdown":
       return { ...base, type };
     case "select":
       return { ...base, type, options: ["Option 1", "Option 2"] };
@@ -51,20 +57,35 @@ function newElement(type: StructureElementType, key: string, label: string): Str
       return { ...base, type };
     case "process":
       return { ...base, type, seed: emptyProcessGraph() };
+    case "image":
+    case "link":
+    case "video":
+      return { ...base, type };
   }
 }
 
-export function StructureEditor({ areaId, initial, initialVersion }: { areaId: string; initial: StructureDefinition | null; initialVersion: number | null }) {
-  const t = useTranslations("admin.knowledge.structure");
+export type TemplateEditorInitial = {
+  name: string;
+  description: string | null;
+  icon: string;
+  definition: StructureDefinition;
+};
+
+export function StructureEditor({ templateId, initial, initialVersion, isSystem }: { templateId: string | null; initial: TemplateEditorInitial | null; initialVersion: number | null; isSystem: boolean }) {
+  const t = useTranslations("admin.templates");
   const router = useRouter();
-  const [intro, setIntro] = useState(initial?.intro ?? "");
-  const [elements, setElements] = useState<StructureElement[]>(initial?.elements ?? []);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [icon, setIcon] = useState(initial?.icon ?? "file-text");
+  const [intro, setIntro] = useState(initial?.definition.intro ?? "");
+  const [elements, setElements] = useState<StructureElement[]>(initial?.definition.elements ?? []);
   const [changeNote, setChangeNote] = useState("");
   const [version, setVersion] = useState<number | null>(initialVersion);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [warnings, setWarnings] = useState<ValidationIssue[]>([]);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [pending, start] = useTransition();
+  const readOnly = isSystem;
 
   const def: StructureDefinition = useMemo(() => ({ formatVersion: 1, intro: intro.trim() || undefined, elements }), [intro, elements]);
 
@@ -109,13 +130,16 @@ export function StructureEditor({ areaId, initial, initialVersion }: { areaId: s
 
   const save = () =>
     start(async () => {
-      const res = await saveStructureAction({ areaId, definition: def, changeNote: changeNote.trim() || undefined });
+      const res = await saveTemplateAction({ templateId: templateId ?? undefined, name: name.trim(), description: description.trim() || undefined, icon, definition: def, changeNote: changeNote.trim() || undefined });
       if (res.ok) {
         setIssues([]);
         setWarnings(res.warnings);
         setVersion(res.version);
         setChangeNote("");
         toast.success(t("saved", { no: res.version }));
+        if (!templateId) {
+          router.replace(`/admin/templates/${res.templateId}`);
+        }
         router.refresh();
       } else {
         setIssues(res.issues);
@@ -125,12 +149,12 @@ export function StructureEditor({ areaId, initial, initialVersion }: { areaId: s
     });
 
   const remove = () => {
-    if (!confirm(t("removeConfirm"))) return;
+    if (!templateId || !confirm(t("removeConfirm"))) return;
     start(async () => {
-      const res = await deleteStructureAction(areaId);
+      const res = await deleteTemplateAction(templateId);
       if (res.ok) {
         toast.success(t("removed"));
-        router.push("/admin/knowledge");
+        router.push("/admin/templates");
         router.refresh();
       }
     });
@@ -139,32 +163,67 @@ export function StructureEditor({ areaId, initial, initialVersion }: { areaId: s
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div className="grid grid-cols-1 content-start gap-4">
+        {readOnly && <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">{t("systemHint")}</p>}
+
+        <div className="grid grid-cols-1 gap-1.5">
+          <label htmlFor="template-name" className="text-sm font-medium">
+            {t("nameLabel")} <span className="text-destructive">*</span>
+          </label>
+          <Input id="template-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} disabled={readOnly} />
+        </div>
+        <div className="grid grid-cols-1 gap-1.5">
+          <label htmlFor="template-description" className="text-sm font-medium">
+            {t("descriptionLabel")}
+          </label>
+          <Textarea id="template-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} disabled={readOnly} />
+        </div>
+        <div className="grid grid-cols-1 gap-1.5">
+          <div className="text-sm font-medium">{t("iconLabel")}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {TEMPLATE_ICON_KEYS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                aria-label={key}
+                aria-pressed={icon === key}
+                disabled={readOnly}
+                onClick={() => setIcon(key)}
+                className={cn("flex size-9 items-center justify-center rounded-md border transition-colors hover:bg-accent", icon === key && "border-primary bg-primary/10 text-primary")}
+              >
+                <TemplateIcon icon={key} className="size-4" />
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-1.5">
           <label htmlFor="structure-intro" className="text-sm font-medium">
             {t("introLabel")}
           </label>
-          <Textarea id="structure-intro" value={intro} onChange={(e) => setIntro(e.target.value)} rows={2} maxLength={5000} />
+          <Textarea id="structure-intro" value={intro} onChange={(e) => setIntro(e.target.value)} rows={2} maxLength={5000} disabled={readOnly} />
         </div>
 
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t("elements")}</h2>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" disabled={pending}>
-                <Plus className="size-3.5" /> {t("addElement")}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {ELEMENT_TYPES.map((type) => {
-                const Icon = ELEMENT_ICONS[type];
-                return (
-                  <DropdownMenuItem key={type} onClick={() => addElement(type)}>
-                    <Icon className="size-4" /> {t(`palette.${type}`)}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {!readOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="sm" disabled={pending}>
+                  <Plus className="size-3.5" /> {t("addElement")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {ELEMENT_TYPES.map((type) => {
+                  const Icon = ELEMENT_ICONS[type];
+                  return (
+                    <DropdownMenuItem key={type} onClick={() => addElement(type)}>
+                      <Icon className="size-4" /> {t(`palette.${type}`)}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {globalIssues.length > 0 && (
@@ -201,7 +260,7 @@ export function StructureEditor({ areaId, initial, initialVersion }: { areaId: s
               earlier={elements.slice(0, i).filter(isAnswerable)}
               collapsed={collapsed.has(i)}
               issues={issuesFor(i)}
-              disabled={pending}
+              disabled={pending || readOnly}
               onToggle={() => toggleCollapsed(i)}
               onChange={(patch) => updateElement(i, patch)}
               onMove={(d) => move(i, d)}
@@ -210,22 +269,26 @@ export function StructureEditor({ areaId, initial, initialVersion }: { areaId: s
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-1.5">
-          <label htmlFor="structure-change-note" className="text-sm font-medium">
-            {t("changeNoteLabel")}
-          </label>
-          <Input id="structure-change-note" value={changeNote} onChange={(e) => setChangeNote(e.target.value)} maxLength={500} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={save} disabled={pending || elements.length === 0}>
-            {t("save")}
-          </Button>
-          {version !== null && (
-            <Button type="button" variant="ghost" className="text-destructive" onClick={remove} disabled={pending}>
-              <Trash2 className="size-4" /> {t("remove")}
-            </Button>
-          )}
-        </div>
+        {!readOnly && (
+          <>
+            <div className="grid grid-cols-1 gap-1.5">
+              <label htmlFor="structure-change-note" className="text-sm font-medium">
+                {t("changeNoteLabel")}
+              </label>
+              <Input id="structure-change-note" value={changeNote} onChange={(e) => setChangeNote(e.target.value)} maxLength={500} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={save} disabled={pending || elements.length === 0 || !name.trim()}>
+                {t("save")}
+              </Button>
+              {version !== null && templateId && (
+                <Button type="button" variant="ghost" className="text-destructive" onClick={remove} disabled={pending}>
+                  <Trash2 className="size-4" /> {t("remove")}
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 content-start gap-2 lg:border-l lg:pl-6">
@@ -264,7 +327,7 @@ function ElementCard({
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
 }) {
-  const t = useTranslations("admin.knowledge.structure");
+  const t = useTranslations("admin.templates");
   const Icon = ELEMENT_ICONS[element.type];
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -295,7 +358,7 @@ function ElementCard({
         </div>
       )}
       {!collapsed && (
-        <div className="grid grid-cols-1 gap-3 border-t p-3">
+        <div className={cn("grid grid-cols-1 gap-3 border-t p-3", disabled && "pointer-events-none opacity-60")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="grid grid-cols-1 gap-1 text-xs font-medium">
               {t("labelLabel")}
@@ -335,7 +398,7 @@ function ElementCard({
 }
 
 function TypeConfig({ element, onChange }: { element: StructureElement; onChange: (patch: Partial<StructureElement>) => void }) {
-  const t = useTranslations("admin.knowledge.structure");
+  const t = useTranslations("admin.templates");
 
   const numberInput = (label: string, value: number | undefined, set: (n: number | undefined) => void) => (
     <label className="grid grid-cols-1 gap-1 text-xs font-medium">
@@ -424,7 +487,7 @@ function TypeConfig({ element, onChange }: { element: StructureElement; onChange
 }
 
 function ShowIfPicker({ element, earlier, onChange }: { element: StructureElement; earlier: StructureElement[]; onChange: (showIf: ShowIf | undefined) => void }) {
-  const t = useTranslations("admin.knowledge.structure");
+  const t = useTranslations("admin.templates");
   const cond = element.showIf;
   const target = cond ? earlier.find((e) => e.key === cond.key) : undefined;
 

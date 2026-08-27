@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ProcessGraph, StructureAnswers, StructureDefinition, StructureElement } from "./types";
-import { STRUCTURE_KEY_REGEX, isAnswerable } from "./types";
+import { STRUCTURE_KEY_REGEX, isAnswerable, isMediaLikeAnswer } from "./types";
 import { isQaPairArray, pruneHiddenAnswers, visibleElements } from "./visibility";
 
 // ---------------------------------------------------------------------------
@@ -65,6 +65,10 @@ export const structureElementSchema = z.discriminatedUnion("type", [
     maxPairs: z.number().int().min(1).max(100).optional(),
   }),
   z.object({ ...base, type: z.literal("process"), seed: processGraphSchema }),
+  z.object({ ...base, type: z.literal("markdown"), placeholder: z.string().trim().max(200).optional(), maxLength: z.number().int().min(1).max(200000).optional() }),
+  z.object({ ...base, type: z.literal("image") }),
+  z.object({ ...base, type: z.literal("link") }),
+  z.object({ ...base, type: z.literal("video") }),
 ]);
 
 export const structureDefinitionSchema = z.object({
@@ -169,8 +173,17 @@ export function validateStructure(input: unknown): StructureValidationResult {
 // ---------------------------------------------------------------------------
 
 /** code is translated client-side (knowledge.structured.errors.*) */
-export type AnswerIssue = { key: string; code: "required" | "invalid" | "minSelected" | "maxSelected" | "minPairs" | "maxPairs" | "incompletePair"; count?: number };
+export type AnswerIssue = { key: string; code: "required" | "invalid" | "minSelected" | "maxSelected" | "minPairs" | "maxPairs" | "incompletePair" | "urlInvalid" | "mediaInvalid"; count?: number };
 export type AnswerValidationResult = { ok: true; answers: StructureAnswers } | { ok: false; issues: AnswerIssue[] };
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Validates raw answers against a definition. Hidden elements are pruned and
@@ -276,6 +289,45 @@ export function validateStructureAnswers(def: StructureDefinition, raw: unknown)
           break;
         }
         cleaned[el.key] = parsed.data;
+        break;
+      }
+      case "markdown": {
+        if (typeof value !== "string" || !value.trim()) {
+          missing();
+          break;
+        }
+        const max = el.maxLength ?? 200000;
+        cleaned[el.key] = value.replace(/\r\n?/g, "\n").trim().slice(0, max);
+        break;
+      }
+      case "image":
+      case "video": {
+        if (!isMediaLikeAnswer(value) || (!value.mediaId?.trim() && !value.url?.trim())) {
+          missing();
+          break;
+        }
+        if (value.mediaId && value.url) {
+          issues.push({ key: el.key, code: "invalid" });
+          break;
+        }
+        if (value.url !== undefined && !isHttpUrl(value.url)) {
+          issues.push({ key: el.key, code: "urlInvalid" });
+          break;
+        }
+        const alt = el.type === "image" && typeof (value as { alt?: unknown }).alt === "string" ? (value as { alt: string }).alt.trim().slice(0, 500) : undefined;
+        cleaned[el.key] = value.mediaId ? { mediaId: value.mediaId.trim(), ...(alt ? { alt } : {}) } : { url: value.url!.trim().slice(0, 2000), ...(alt ? { alt } : {}) };
+        break;
+      }
+      case "link": {
+        if (!isMediaLikeAnswer(value) || !value.url?.trim()) {
+          missing();
+          break;
+        }
+        if (!isHttpUrl(value.url)) {
+          issues.push({ key: el.key, code: "urlInvalid" });
+          break;
+        }
+        cleaned[el.key] = { url: value.url.trim().slice(0, 2000) };
         break;
       }
     }

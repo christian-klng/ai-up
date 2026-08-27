@@ -6,7 +6,6 @@ import { assertUser } from "@/server/auth/session";
 import {
   addContentVersion,
   canEditContent,
-  createContent,
   getAreaById,
   getContent,
   restoreContentVersion,
@@ -14,7 +13,6 @@ import {
   softDeleteContent,
   type ContentVersionInput,
 } from "@/server/domain/knowledge";
-import { getStructureByAreaId } from "@/server/domain/structures";
 import { getMedia } from "@/server/media/storage";
 import { fetchLinkPreview } from "@/server/webreader/link-preview";
 import { assertPublicUrl } from "@/server/webreader/safe-fetch";
@@ -30,7 +28,7 @@ export type ContentFormState =
 const httpUrl = z.string().trim().url().refine((u) => /^https?:\/\//i.test(u));
 
 const schema = z.object({
-  contentId: z.string().uuid().optional(),
+  contentId: z.string().uuid(),
   areaId: z.string().uuid(),
   type: z.enum(["markdown", "image", "video", "link"]),
   title: z.string().trim().min(1).max(200),
@@ -41,7 +39,11 @@ const schema = z.object({
   changeNote: z.string().trim().max(500).optional(),
 });
 
-/** Create or update (= new version) a content item. */
+/**
+ * Adds a new version to a legacy free-type entry (markdown/image/video/link).
+ * Creation goes exclusively through templates (saveStructuredEntryAction) —
+ * this action only keeps pre-template entries editable.
+ */
 export async function saveContentAction(_prev: ContentFormState, formData: FormData): Promise<ContentFormState> {
   const user = await assertUser();
   const parsed = schema.safeParse({
@@ -63,9 +65,6 @@ export async function saveContentAction(_prev: ContentFormState, formData: FormD
   const d = parsed.data;
   const area = await getAreaById(d.areaId);
   if (!area) return { status: "error", code: "unexpected" };
-
-  // Collections with a structure only accept new entries through the structure form.
-  if (!d.contentId && (await getStructureByAreaId(area.id))) return { status: "error", code: "forbidden" };
 
   // Build version input by type
   const input: ContentVersionInput = { title: d.title, changeNote: d.changeNote ?? null, meta: {} };
@@ -133,18 +132,12 @@ export async function saveContentAction(_prev: ContentFormState, formData: FormD
   input.meta = meta;
 
   try {
-    if (d.contentId) {
-      const existing = await getContent(d.contentId);
-      if (!existing) return { status: "error", code: "unexpected" };
-      if (!canEditContent(user, existing)) return { status: "error", code: "forbidden" };
-      await addContentVersion(d.contentId, input, user.id);
-      revalidatePath(`/knowledge/${area.slug}`, "layout");
-      return { status: "saved", contentId: d.contentId, areaSlug: area.slug };
-    }
-    const created = await createContent(d.areaId, d.type, input, user.id);
+    const existing = await getContent(d.contentId);
+    if (!existing || existing.type !== d.type) return { status: "error", code: "unexpected" };
+    if (!canEditContent(user, existing)) return { status: "error", code: "forbidden" };
+    await addContentVersion(d.contentId, input, user.id);
     revalidatePath(`/knowledge/${area.slug}`, "layout");
-    revalidatePath("/", "layout");
-    return { status: "saved", contentId: created.id, areaSlug: area.slug };
+    return { status: "saved", contentId: d.contentId, areaSlug: area.slug };
   } catch (err) {
     logger.error({ err }, "content save failed");
     return { status: "error", code: "unexpected" };

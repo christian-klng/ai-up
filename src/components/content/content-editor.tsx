@@ -4,7 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { FileText, Image as ImageIcon, Link2, Upload, Video, X } from "lucide-react";
+import { Upload, Video, X } from "lucide-react";
 import { useActionFeedback } from "@/hooks/use-action-feedback";
 import { saveContentAction, type ContentFormState } from "@/server/actions/content";
 import { uploadFile, type UploadedMedia, type UploadError } from "@/lib/upload-client";
@@ -15,11 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { Markdown } from "./markdown";
 
 export type ContentEditorInitial = {
-  contentId?: string;
+  contentId: string;
   type: ContentType;
   title: string;
   body: string;
@@ -31,26 +30,23 @@ export type ContentEditorInitial = {
 type Props = {
   areaId: string;
   areaSlug: string;
-  initial?: ContentEditorInitial;
+  initial: ContentEditorInitial;
   maxUploadMb: number;
 };
 
-// The free-form editor never handles structured entries (they use the structure form).
-type FreeContentType = Exclude<ContentType, "structured">;
-const TYPE_ICONS = { markdown: FileText, image: ImageIcon, video: Video, link: Link2 } as const;
-const TYPES: FreeContentType[] = ["markdown", "image", "video", "link"];
-
+/**
+ * Editor for legacy free-type entries (markdown/image/video/link). Creation
+ * goes exclusively through templates; this keeps pre-template entries editable.
+ */
 export function ContentEditor({ areaId, areaSlug, initial, maxUploadMb }: Props) {
-  const t = useTranslations("knowledge");
   const te = useTranslations("knowledge.editor");
   const tc = useTranslations("common");
   const router = useRouter();
-  const isEdit = !!initial?.contentId;
 
-  const [type, setType] = useState<ContentType>(initial?.type ?? "markdown");
-  const [body, setBody] = useState(initial?.body ?? "");
-  const [media, setMedia] = useState<UploadedMedia | null>(initial?.media ?? null);
-  const [source, setSource] = useState<"upload" | "url">(initial?.url && !initial.media ? "url" : "upload");
+  const type = initial.type;
+  const [body, setBody] = useState(initial.body);
+  const [media, setMedia] = useState<UploadedMedia | null>(initial.media);
+  const [source, setSource] = useState<"upload" | "url">(initial.url && !initial.media ? "url" : "upload");
   const [progress, setProgress] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -88,38 +84,12 @@ export function ContentEditor({ areaId, areaSlug, initial, maxUploadMb }: Props)
     <form action={action} className="grid gap-6">
       <input type="hidden" name="areaId" value={areaId} />
       <input type="hidden" name="type" value={type} />
-      {initial?.contentId && <input type="hidden" name="contentId" value={initial.contentId} />}
+      <input type="hidden" name="contentId" value={initial.contentId} />
       {needsMedia && source === "upload" && media && <input type="hidden" name="mediaId" value={media.id} />}
-
-      {!isEdit && (
-        <div className="grid gap-2">
-          <Label>{te("typeLabel")}</Label>
-          <div className="grid gap-2 sm:grid-cols-4">
-            {TYPES.map((tp) => {
-              const Icon = TYPE_ICONS[tp];
-              return (
-                <button
-                  key={tp}
-                  type="button"
-                  onClick={() => setType(tp)}
-                  aria-pressed={type === tp}
-                  className={cn("flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent/60", type === tp && "border-primary bg-primary/5")}
-                >
-                  <Icon className={cn("mt-0.5 size-5 shrink-0", type === tp ? "text-primary" : "text-muted-foreground")} />
-                  <span>
-                    <span className="block text-sm font-medium">{t(`types.${tp}`)}</span>
-                    <span className="block text-xs text-muted-foreground">{t(`typeHints.${tp}`)}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       <div className="grid gap-2">
         <Label htmlFor="title">{te("titleLabel")}</Label>
-        <Input id="title" name="title" defaultValue={initial?.title ?? ""} required maxLength={200} placeholder={te("titlePlaceholder")} autoFocus={!isEdit} />
+        <Input id="title" name="title" defaultValue={initial.title} required maxLength={200} placeholder={te("titlePlaceholder")} />
       </div>
 
       {needsMedia && (
@@ -181,13 +151,13 @@ export function ContentEditor({ areaId, areaSlug, initial, maxUploadMb }: Props)
               </TabsContent>
               <TabsContent value="url" className="grid gap-2 pt-3">
                 <Label htmlFor="url">{type === "image" ? te("imageUrlLabel") : te("videoUrlLabel")}</Label>
-                <Input id="url" name={source === "url" ? "url" : undefined} type="url" defaultValue={initial?.url ?? ""} placeholder={te("urlPlaceholder")} />
+                <Input id="url" name={source === "url" ? "url" : undefined} type="url" defaultValue={initial.url} placeholder={te("urlPlaceholder")} />
               </TabsContent>
             </Tabs>
             {type === "image" && (
               <div className="grid gap-2">
                 <Label htmlFor="alt">{te("altLabel")}</Label>
-                <Input id="alt" name="alt" defaultValue={initial?.alt ?? ""} maxLength={500} />
+                <Input id="alt" name="alt" defaultValue={initial.alt} maxLength={500} />
               </div>
             )}
           </CardContent>
@@ -197,7 +167,7 @@ export function ContentEditor({ areaId, areaSlug, initial, maxUploadMb }: Props)
       {type === "link" && (
         <div className="grid gap-2">
           <Label htmlFor="url">{te("urlLabel")}</Label>
-          <Input id="url" name="url" type="url" required defaultValue={initial?.url ?? ""} placeholder={te("urlPlaceholder")} />
+          <Input id="url" name="url" type="url" required defaultValue={initial.url} placeholder={te("urlPlaceholder")} />
         </div>
       )}
 
@@ -217,18 +187,16 @@ export function ContentEditor({ areaId, areaSlug, initial, maxUploadMb }: Props)
         </Tabs>
       </div>
 
-      {isEdit && (
-        <div className="grid gap-2">
-          <Label htmlFor="changeNote">{te("changeNoteLabel")}</Label>
-          <Input id="changeNote" name="changeNote" maxLength={500} placeholder={te("changeNotePlaceholder")} />
-        </div>
-      )}
+      <div className="grid gap-2">
+        <Label htmlFor="changeNote">{te("changeNoteLabel")}</Label>
+        <Input id="changeNote" name="changeNote" maxLength={500} placeholder={te("changeNotePlaceholder")} />
+      </div>
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={pending || progress !== null}>
-          {isEdit ? te("save") : te("create")}
+          {te("save")}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => router.push(isEdit ? `/knowledge/${areaSlug}/${initial?.contentId}` : `/knowledge/${areaSlug}`)}>
+        <Button type="button" variant="ghost" onClick={() => router.push(`/knowledge/${areaSlug}/${initial.contentId}`)}>
           {tc("cancel")}
         </Button>
       </div>

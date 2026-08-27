@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
-import { getStructureByAreaId } from "@/server/domain/structures";
+import { getTemplateById } from "@/server/domain/templates";
 import { env } from "@/server/env";
 import { PageHeader } from "@/components/common/page-header";
 import { ContentEditor } from "@/components/content/content-editor";
@@ -22,16 +22,27 @@ export default async function EditContentPage({ params }: PageProps<"/knowledge/
   if (content.type === "structured") {
     const structureMeta = v?.meta.structure;
     if (!structureMeta) notFound();
-    const [ts, structure] = await Promise.all([getTranslations("knowledge.structured"), getStructureByAreaId(area.id)]);
-    const changed = structure ? structure.version > structureMeta.structureVersion : true;
+    // The upgrade offer compares against the entry's OWN template — a deleted
+    // template simply means the entry keeps its snapshot forever.
+    const [ts, template] = await Promise.all([getTranslations("knowledge.structured"), getTemplateById(structureMeta.structureId)]);
+    const upgradeTo = template && template.version > structureMeta.structureVersion ? { version: template.version, definition: template.definition } : undefined;
     return (
       <div className="mx-auto max-w-3xl">
         <Link href={`/knowledge/${area.slug}/${content.id}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> {content.title}
         </Link>
         <PageHeader title={ts("editTitle")} />
-        {changed && <p className="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">{ts("structureChanged")}</p>}
-        <StructureFillForm def={structureMeta.definition} mode="edit" areaId={area.id} areaSlug={area.slug} contentId={content.id} initialTitle={content.title} initialAnswers={structureMeta.answers} />
+        <StructureFillForm
+          def={structureMeta.definition}
+          mode="edit"
+          areaId={area.id}
+          areaSlug={area.slug}
+          contentId={content.id}
+          upgradeTo={upgradeTo}
+          maxUploadMb={env.MAX_UPLOAD_MB}
+          initialTitle={content.title}
+          initialAnswers={structureMeta.answers}
+        />
       </div>
     );
   }

@@ -7,6 +7,8 @@ import { db } from "@/server/db/client";
 import { mediaFiles, users } from "@/server/db/schema";
 import { createNotifications } from "@/server/domain/notifications";
 import { createContent, getAreaById } from "@/server/domain/knowledge";
+import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
+import { getTemplateBySystemKey } from "@/server/domain/templates";
 import { getSpaceById, setMeetingTranscript } from "@/server/domain/meetings";
 import { absolutePath } from "@/server/media/storage";
 import { readWebpage } from "@/server/webreader/read-webpage";
@@ -356,7 +358,7 @@ const createContentConfig = z.object({
 registerAction<z.infer<typeof createContentConfig>>({
   type: "create_content",
   labels: { name: { de: "Inhalt anlegen", en: "Create content" }, description: { de: "Legt einen neuen Markdown- oder Link-Inhalt in einer Sammlung an (z. B. eine Zusammenfassung).", en: "Creates a new markdown or link content item in a collection (e.g. a summary)." } },
-  doc: "Creates content in a collection (knowledge area). type markdown needs body; type link needs url (+ optional body as note). Author = the run's triggering user, otherwise none. Emits content.created with origin.kind=workflow (triggers ignore it unless includeWorkflowOrigin).",
+  doc: "Creates content in a collection (knowledge area) via the system templates: type markdown needs body; type link needs url (+ optional body as note). Entries are stored as structured entries with a template snapshot. Author = the run's triggering user, otherwise none. Emits content.created with origin.kind=workflow (triggers ignore it unless includeWorkflowOrigin).",
   configSchema: createContentConfig,
   fields: [
     { key: "areaId", type: "area", label: { de: "Sammlung", en: "Collection" }, required: true },
@@ -376,14 +378,15 @@ registerAction<z.infer<typeof createContentConfig>>({
     if (!area) throw new Error("knowledge area not found");
     if (config.type === "markdown" && !config.body.trim()) throw new Error("body is empty");
     if (config.type === "link" && !/^https?:\/\//i.test(config.url)) throw new Error("url must be http(s)");
+    // Entries are created from the system templates (structured, with snapshot);
+    // the per-collection template assignment is deliberately not enforced for automation.
+    const template = await getTemplateBySystemKey(config.type === "link" ? "link" : "text");
+    if (!template) throw new Error("system templates missing – run db:migrate");
+    const answers = config.type === "link" ? { url: { url: config.url }, ...(config.body.trim() ? { note: config.body } : {}) } : { body: config.body };
+    const built = await buildStructuredVersionInput({ structureId: template.id, structureVersion: template.version, definition: template.definition }, config.title.slice(0, 200), answers, {});
+    if (!built.ok) throw new Error(`invalid content: ${JSON.stringify(built.issues)}`);
     const authorId = ctx.triggeredBy;
-    const content = await createContent(
-      area.id,
-      config.type,
-      { title: config.title.slice(0, 200), bodyMarkdown: config.body || null, url: config.type === "link" ? config.url : null, meta: {} },
-      authorId ?? null,
-      { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth + 1 },
-    );
+    const content = await createContent(area.id, "structured", built.input, authorId ?? null, { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth + 1 });
     return { output: { contentId: content.id, href: `/knowledge/${area.slug}/${content.id}` } };
   },
 });

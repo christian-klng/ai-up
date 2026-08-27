@@ -704,40 +704,64 @@ export const knowledgeAreas = pgTable(
 export const contentTypeEnum = pgEnum("content_type", ["markdown", "image", "video", "link", "structured"]);
 
 /**
- * Optional structure ("Struktur") per collection: an admin-authored template
- * of interactive elements. When present, new entries in the collection are
- * created only through the structure form. Definition JSON lives in
- * src/lib/structures/types.ts; validated via src/lib/structures/validate.ts.
+ * Content templates ("Vorlagen"): standalone, admin-managed structure
+ * definitions. Admins assign them per collection (knowledge_area_templates);
+ * a collection without assignments offers the seeded system templates
+ * (is_system, src/lib/structures/defaults.ts — not editable or deletable).
+ * Definition JSON lives in src/lib/structures/types.ts; validated via
+ * src/lib/structures/validate.ts. Entries keep a full definition snapshot,
+ * so templates can change or disappear without breaking existing entries.
  */
-export const knowledgeStructures = pgTable(
-  "knowledge_structures",
+export const contentTemplates = pgTable(
+  "content_templates",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    areaId: uuid("area_id")
-      .notNull()
-      .references(() => knowledgeAreas.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    /** lucide icon key, same set as collection icons */
+    icon: text("icon").notNull().default("file-text"),
     definition: jsonb("definition").$type<StructureDefinition>().notNull(),
     version: integer("version").notNull().default(1),
+    isSystem: boolean("is_system").notNull().default(false),
+    /** stable key for system templates: text | image | link | video */
+    systemKey: text("system_key"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("knowledge_structures_area_idx").on(t.areaId)],
+  (t) => [uniqueIndex("content_templates_system_key_idx").on(t.systemKey)],
 );
 
-export const knowledgeStructureVersions = pgTable(
-  "knowledge_structure_versions",
+export const contentTemplateVersions = pgTable(
+  "content_template_versions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    structureId: uuid("structure_id")
+    templateId: uuid("template_id")
       .notNull()
-      .references(() => knowledgeStructures.id, { onDelete: "cascade" }),
+      .references(() => contentTemplates.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
     definition: jsonb("definition").$type<StructureDefinition>().notNull(),
     changeNote: text("change_note"),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("knowledge_structure_versions_no_idx").on(t.structureId, t.version)],
+  (t) => [uniqueIndex("content_template_versions_no_idx").on(t.templateId, t.version)],
+);
+
+/** Which templates an admin offers in a collection. No rows = system templates. */
+export const knowledgeAreaTemplates = pgTable(
+  "knowledge_area_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => knowledgeAreas.id, { onDelete: "cascade" }),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => contentTemplates.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [uniqueIndex("knowledge_area_templates_pair_idx").on(t.areaId, t.templateId), index("knowledge_area_templates_area_idx").on(t.areaId)],
 );
 
 /** Type-specific metadata stored on each version. */
@@ -817,16 +841,21 @@ export const contentVersions = pgTable(
 
 export const knowledgeAreasRelations = relations(knowledgeAreas, ({ many }) => ({
   contents: many(contents),
-  structures: many(knowledgeStructures),
+  templates: many(knowledgeAreaTemplates),
 }));
 
-export const knowledgeStructuresRelations = relations(knowledgeStructures, ({ one, many }) => ({
-  area: one(knowledgeAreas, { fields: [knowledgeStructures.areaId], references: [knowledgeAreas.id] }),
-  versions: many(knowledgeStructureVersions),
+export const contentTemplatesRelations = relations(contentTemplates, ({ many }) => ({
+  versions: many(contentTemplateVersions),
+  assignments: many(knowledgeAreaTemplates),
 }));
 
-export const knowledgeStructureVersionsRelations = relations(knowledgeStructureVersions, ({ one }) => ({
-  structure: one(knowledgeStructures, { fields: [knowledgeStructureVersions.structureId], references: [knowledgeStructures.id] }),
+export const contentTemplateVersionsRelations = relations(contentTemplateVersions, ({ one }) => ({
+  template: one(contentTemplates, { fields: [contentTemplateVersions.templateId], references: [contentTemplates.id] }),
+}));
+
+export const knowledgeAreaTemplatesRelations = relations(knowledgeAreaTemplates, ({ one }) => ({
+  area: one(knowledgeAreas, { fields: [knowledgeAreaTemplates.areaId], references: [knowledgeAreas.id] }),
+  template: one(contentTemplates, { fields: [knowledgeAreaTemplates.templateId], references: [contentTemplates.id] }),
 }));
 
 export const contentsRelations = relations(contents, ({ one, many }) => ({
@@ -938,8 +967,9 @@ export type MeetingParticipant = typeof meetingParticipants.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 
 export type KnowledgeArea = typeof knowledgeAreas.$inferSelect;
-export type KnowledgeStructure = typeof knowledgeStructures.$inferSelect;
-export type KnowledgeStructureVersion = typeof knowledgeStructureVersions.$inferSelect;
+export type ContentTemplate = typeof contentTemplates.$inferSelect;
+export type ContentTemplateVersion = typeof contentTemplateVersions.$inferSelect;
+export type KnowledgeAreaTemplate = typeof knowledgeAreaTemplates.$inferSelect;
 export type Content = typeof contents.$inferSelect;
 export type ContentType = Content["type"];
 export type ContentVersion = typeof contentVersions.$inferSelect;
