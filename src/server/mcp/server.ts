@@ -123,8 +123,10 @@ Element types and their extra config:
 - "info":     { "body": "markdown, shown as explanation – collects no answer" }
 - "text":     { "placeholder"?, "maxLength"? }               → answer: string
 - "textarea": { "placeholder"?, "maxLength"? }               → answer: string
-- "markdown": { "placeholder"?, "maxLength"? }               → answer: string (long markdown body,
-              rendered verbatim without a heading)
+- "markdown": { "placeholder"?, "maxLength"?, "multiple"? }  → answer: string (long markdown body,
+              rendered verbatim without a heading). With "multiple": true the element is an
+              accordion list of sections → answer: [{ "title": "…", "body": "…" }] (both required
+              per section; members can add, remove and reorder sections; rendered as "## title" blocks)
 - "select":   { "options": ["…"], "placeholder"? }           → answer: one of options
 - "chips":    { "options": ["…"], "minSelected"?, "maxSelected"? } → answer: string[] (subset of options)
 - "checkbox": {}                                             → answer: boolean

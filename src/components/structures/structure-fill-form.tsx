@@ -5,11 +5,11 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, RefreshCw, X } from "lucide-react";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import { validateStructureAnswers } from "@/lib/structures/validate";
-import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureElement, VideoAnswer } from "@/lib/structures/types";
-import { fillProcessSeeds, isAnswerable } from "@/lib/structures/types";
+import type { ImageAnswer, LinkAnswer, MarkdownSection, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureElement, VideoAnswer } from "@/lib/structures/types";
+import { fillProcessSeeds, isAnswerable, isMarkdownSectionArray } from "@/lib/structures/types";
 import { migrateStructureAnswers } from "@/lib/structures/migrate";
 import { visibleElements } from "@/lib/structures/visibility";
 import { saveStructuredEntryAction } from "@/server/actions/structured-content";
@@ -49,23 +49,23 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
   const [issues, setIssues] = useState<AnswerIssue[]>([]);
   const [titleMissing, setTitleMissing] = useState(false);
   const [pending, start] = useTransition();
-  const [activeDef, setActiveDef] = useState(def);
   const [upgrading, setUpgrading] = useState(false);
   const [droppedLabels, setDroppedLabels] = useState<string[]>([]);
 
+  // Derived, not state: the def prop changes live in the template editor's preview.
+  const activeDef = upgrading && upgradeTo ? upgradeTo.definition : def;
+
   const startUpgrade = () => {
     if (!upgradeTo) return;
-    const res = migrateStructureAnswers(activeDef, upgradeTo.definition, answers);
-    const labelByKey = new Map(activeDef.elements.filter(isAnswerable).map((el) => [el.key, el.label]));
+    const res = migrateStructureAnswers(def, upgradeTo.definition, answers);
+    const labelByKey = new Map(def.elements.filter(isAnswerable).map((el) => [el.key, el.label]));
     setDroppedLabels(res.droppedKeys.map((k) => labelByKey.get(k) ?? k));
-    setActiveDef(upgradeTo.definition);
     setAnswers(res.answers);
     setIssues([]);
     setUpgrading(true);
   };
 
   const cancelUpgrade = () => {
-    setActiveDef(def);
     setAnswers(initialAnswers ?? {});
     setDroppedLabels([]);
     setIssues([]);
@@ -325,7 +325,49 @@ function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb }
       );
     }
     case "markdown": {
-      const text = (value as string) ?? "";
+      if (element.multiple) {
+        const sections: MarkdownSection[] = isMarkdownSectionArray(value) ? value : [];
+        const update = (idx: number, patch: Partial<MarkdownSection>) => onChange(sections.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+        const move = (idx: number, delta: -1 | 1) => {
+          const swap = idx + delta;
+          if (swap < 0 || swap >= sections.length) return;
+          const next = [...sections];
+          [next[idx], next[swap]] = [next[swap], next[idx]];
+          onChange(next);
+        };
+        return (
+          <div className="grid grid-cols-1 gap-1.5">
+            {header}
+            {help}
+            <div className="grid grid-cols-1 gap-2">
+              {sections.map((s, i) => (
+                <div key={i} className="grid grid-cols-1 gap-1.5 rounded-md border p-2">
+                  <div className="flex items-start gap-2">
+                    <Input value={s.title} onChange={(e) => update(i, { title: e.target.value })} placeholder={t("sectionTitle")} maxLength={200} disabled={disabled} className="text-sm" />
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("sectionUp")} disabled={disabled || i === 0} onClick={() => move(i, -1)}>
+                      <ArrowUp className="size-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("sectionDown")} disabled={disabled || i === sections.length - 1} onClick={() => move(i, 1)}>
+                      <ArrowDown className="size-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("removeSection")} disabled={disabled} onClick={() => onChange(sections.filter((_, x) => x !== i))}>
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                  <Textarea value={s.body} onChange={(e) => update(i, { body: e.target.value })} placeholder={element.placeholder} maxLength={element.maxLength ?? 200000} rows={6} disabled={disabled} className="font-mono text-sm leading-relaxed" />
+                </div>
+              ))}
+            </div>
+            <div>
+              <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange([...sections, { title: "", body: "" }])}>
+                <Plus className="size-3.5" /> {t("addSection")}
+              </Button>
+            </div>
+            {error}
+          </div>
+        );
+      }
+      const text = typeof value === "string" ? value : "";
       return (
         <div className="grid grid-cols-1 gap-1.5">
           {header}

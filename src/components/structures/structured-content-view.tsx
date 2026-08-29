@@ -3,11 +3,12 @@
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureEntryMeta, VideoAnswer } from "@/lib/structures/types";
-import { isMediaLikeAnswer } from "@/lib/structures/types";
+import { isMarkdownSectionArray, isMediaLikeAnswer } from "@/lib/structures/types";
 import { visibleElements } from "@/lib/structures/visibility";
 import { isQaPairArray } from "@/lib/structures/visibility";
 import { Markdown } from "@/components/content/markdown";
 import { LinkCard, VideoPlayer } from "@/components/content/content-body";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
@@ -90,12 +91,31 @@ export function StructuredContentView({ meta }: { meta: StructureEntryMeta }) {
               </section>
             ) : null;
           }
-          case "markdown":
+          case "markdown": {
+            if (el.multiple) {
+              if (!isMarkdownSectionArray(value) || value.length === 0) return null;
+              return (
+                <section key={el.key}>
+                  <h2 className="mb-1.5 text-base font-semibold">{el.label}</h2>
+                  <Accordion type="multiple" className="rounded-md border px-3">
+                    {value.map((s, i) => (
+                      <AccordionItem key={i} value={`section-${i}`}>
+                        <AccordionTrigger>{s.title}</AccordionTrigger>
+                        <AccordionContent>
+                          <Markdown>{s.body}</Markdown>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </section>
+              );
+            }
             return typeof value === "string" && value.trim() ? (
               <div key={el.key} className="text-sm">
                 <Markdown>{value}</Markdown>
               </div>
             ) : null;
+          }
           case "image": {
             if (!isMediaLikeAnswer(value)) return null;
             const v = value as ImageAnswer;

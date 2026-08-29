@@ -1,5 +1,5 @@
 import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureEnrichment, VideoAnswer } from "./types";
-import { isMediaLikeAnswer } from "./types";
+import { isMarkdownSectionArray, isMediaLikeAnswer } from "./types";
 import { visibleElements } from "./visibility";
 import { isQaPairArray } from "./visibility";
 
@@ -90,6 +90,12 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
         break;
       }
       case "markdown": {
+        if (el.multiple) {
+          // accordion list: each section becomes a "## title" block
+          if (!isMarkdownSectionArray(value) || value.length === 0) break;
+          parts.push(value.map((s) => `## ${s.title.trim()}\n\n${s.body.trim()}`).join("\n\n"));
+          break;
+        }
         // long-form body: rendered verbatim, no heading (a "simple text" entry is just prose)
         if (typeof value !== "string" || !value.trim()) break;
         parts.push(value.trim());
@@ -137,6 +143,7 @@ export function flattenAnswersText(def: StructureDefinition, answers: StructureA
     parts.push(el.label);
     if (typeof value === "string") parts.push(value);
     else if (Array.isArray(value) && value.every((v) => typeof v === "string")) parts.push((value as string[]).join(" "));
+    else if (isMarkdownSectionArray(value)) parts.push(value.map((s) => `${s.title} ${s.body}`).join(" "));
     else if (isQaPairArray(value)) parts.push((value as QaPair[]).map((p) => `${p.question} ${p.answer}`).join(" "));
     else if (isMediaLikeAnswer(value)) {
       const v = value as ImageAnswer & LinkAnswer;

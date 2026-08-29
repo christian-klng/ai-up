@@ -1,5 +1,5 @@
 import type { StructureAnswers, StructureDefinition, StructureElement } from "./types";
-import { isAnswerable } from "./types";
+import { isAnswerable, isMarkdownSectionArray } from "./types";
 import { hasAnswerValue } from "./visibility";
 
 export type AnswerMigrationResult = {
@@ -45,9 +45,31 @@ export function migrateStructureAnswers(oldDef: StructureDefinition, newDef: Str
     if (!sameType && !stringCarry) continue;
 
     switch (newEl.type) {
-      case "text":
-      case "textarea":
       case "markdown": {
+        const sections = isMarkdownSectionArray(value) ? value : null;
+        if (newEl.multiple) {
+          // string (old single text / text / textarea) becomes one section titled after the old element
+          if (typeof value === "string") {
+            migrated[newEl.key] = [{ title: oldEl.label, body: value.slice(0, maxLengthOf(newEl)) }];
+            carriedKeys.push(newEl.key);
+          } else if (sections) {
+            migrated[newEl.key] = sections.map((s) => ({ title: s.title, body: s.body.slice(0, maxLengthOf(newEl)) }));
+            carriedKeys.push(newEl.key);
+          }
+          break;
+        }
+        if (typeof value === "string") {
+          migrated[newEl.key] = value.slice(0, maxLengthOf(newEl));
+          carriedKeys.push(newEl.key);
+        } else if (sections) {
+          // accordion list collapses back into one document ("## title" blocks) – nothing is lost
+          migrated[newEl.key] = sections.map((s) => `## ${s.title}\n\n${s.body}`).join("\n\n").slice(0, maxLengthOf(newEl));
+          carriedKeys.push(newEl.key);
+        }
+        break;
+      }
+      case "text":
+      case "textarea": {
         if (typeof value !== "string") break;
         migrated[newEl.key] = value.slice(0, maxLengthOf(newEl));
         carriedKeys.push(newEl.key);

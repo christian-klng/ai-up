@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ProcessGraph, StructureAnswers, StructureDefinition, StructureElement } from "./types";
-import { STRUCTURE_KEY_REGEX, isAnswerable, isMediaLikeAnswer } from "./types";
+import { STRUCTURE_KEY_REGEX, isAnswerable, isMarkdownSectionArray, isMediaLikeAnswer } from "./types";
 import { isQaPairArray, pruneHiddenAnswers, visibleElements } from "./visibility";
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ export const structureElementSchema = z.discriminatedUnion("type", [
     maxPairs: z.number().int().min(1).max(100).optional(),
   }),
   z.object({ ...base, type: z.literal("process"), seed: processGraphSchema }),
-  z.object({ ...base, type: z.literal("markdown"), placeholder: z.string().trim().max(200).optional(), maxLength: z.number().int().min(1).max(200000).optional() }),
+  z.object({ ...base, type: z.literal("markdown"), placeholder: z.string().trim().max(200).optional(), maxLength: z.number().int().min(1).max(200000).optional(), multiple: z.boolean().optional() }),
   z.object({ ...base, type: z.literal("image") }),
   z.object({ ...base, type: z.literal("link") }),
   z.object({ ...base, type: z.literal("video") }),
@@ -173,7 +173,7 @@ export function validateStructure(input: unknown): StructureValidationResult {
 // ---------------------------------------------------------------------------
 
 /** code is translated client-side (knowledge.structured.errors.*) */
-export type AnswerIssue = { key: string; code: "required" | "invalid" | "minSelected" | "maxSelected" | "minPairs" | "maxPairs" | "incompletePair" | "urlInvalid" | "mediaInvalid"; count?: number };
+export type AnswerIssue = { key: string; code: "required" | "invalid" | "minSelected" | "maxSelected" | "minPairs" | "maxPairs" | "incompletePair" | "incompleteSection" | "urlInvalid" | "mediaInvalid"; count?: number };
 export type AnswerValidationResult = { ok: true; answers: StructureAnswers } | { ok: false; issues: AnswerIssue[] };
 
 function isHttpUrl(value: string): boolean {
@@ -292,11 +292,27 @@ export function validateStructureAnswers(def: StructureDefinition, raw: unknown)
         break;
       }
       case "markdown": {
+        const max = el.maxLength ?? 200000;
+        if (el.multiple) {
+          // accordion list: array of { title, body } sections
+          const sections = isMarkdownSectionArray(value)
+            ? value.map((s) => ({ title: s.title.trim().slice(0, 200), body: s.body.replace(/\r\n?/g, "\n").trim().slice(0, max) })).filter((s) => s.title || s.body)
+            : [];
+          if (sections.some((s) => !s.title || !s.body)) {
+            issues.push({ key: el.key, code: "incompleteSection" });
+            break;
+          }
+          if (sections.length === 0) {
+            missing();
+            break;
+          }
+          cleaned[el.key] = sections;
+          break;
+        }
         if (typeof value !== "string" || !value.trim()) {
           missing();
           break;
         }
-        const max = el.maxLength ?? 200000;
         cleaned[el.key] = value.replace(/\r\n?/g, "\n").trim().slice(0, max);
         break;
       }

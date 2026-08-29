@@ -432,6 +432,25 @@ function TypeConfig({ element, onChange }: { element: StructureElement; onChange
           {numberInput(t("maxLabel"), element.maxLength, (n) => onChange({ maxLength: n } as Partial<StructureElement>))}
         </div>
       );
+    case "markdown":
+      return (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-1">
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input type="checkbox" checked={element.multiple ?? false} onChange={(e) => onChange({ multiple: e.target.checked || undefined } as Partial<StructureElement>)} className="size-3.5 accent-primary" />
+              {t("multipleLabel")}
+            </label>
+            <p className="text-xs text-muted-foreground">{t("multipleHint")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid grid-cols-1 gap-1 text-xs font-medium">
+              {t("placeholderLabel")}
+              <Input value={element.placeholder ?? ""} onChange={(e) => onChange({ placeholder: e.target.value || undefined } as Partial<StructureElement>)} maxLength={200} className="h-8 text-sm" />
+            </label>
+            {numberInput(t("maxLabel"), element.maxLength, (n) => onChange({ maxLength: n } as Partial<StructureElement>))}
+          </div>
+        </div>
+      );
     case "select":
       return (
         <div className="grid grid-cols-1 gap-3">
