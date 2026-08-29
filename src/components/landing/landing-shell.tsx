@@ -19,11 +19,14 @@ export function LandingShell({
   settings,
   signedIn,
   labels,
+  editing,
 }: {
   definition: LandingDefinition;
   settings: AppSettings;
   signedIn: boolean;
   labels: LandingLabels;
+  /** Inline-editor mode: FAQ items render expanded so their answers are clickable */
+  editing?: boolean;
 }) {
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -85,7 +88,7 @@ export function LandingShell({
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6 lg:px-8">
         {definition.sections.map((section, i) => (
-          <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} />
+          <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} faqOpen={editing} />
         ))}
       </main>
 

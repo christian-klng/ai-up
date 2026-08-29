@@ -64,7 +64,18 @@ function CtaLink({ cta, path, variant }: { cta: { label: string; href: string };
   );
 }
 
-export function LandingSectionView({ section, path, settings }: { section: LandingSection; path: string; settings: AppSettings }) {
+export function LandingSectionView({
+  section,
+  path,
+  settings,
+  faqOpen,
+}: {
+  section: LandingSection;
+  path: string;
+  settings: AppSettings;
+  /** Render FAQ items expanded (inline editor: answers must be clickable) */
+  faqOpen?: boolean;
+}) {
   switch (section.type) {
     case "hero":
       return (
@@ -174,7 +185,7 @@ export function LandingSectionView({ section, path, settings }: { section: Landi
           )}
           <div className="grid gap-2">
             {section.items.map((item, i) => (
-              <details key={i} className="group rounded-lg border bg-card px-4 py-3">
+              <details key={i} open={faqOpen || undefined} className="group rounded-lg border bg-card px-4 py-3">
                 <summary className="cursor-pointer list-none font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                   <span data-ep={`${path}.items.${i}.question`}>{item.question}</span>
                 </summary>

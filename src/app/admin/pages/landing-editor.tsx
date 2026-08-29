@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -59,13 +59,6 @@ export function LandingEditor({
   const [mdText, setMdText] = useState("");
   const [saving, startSave] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Keep all FAQ items expanded so their answers are clickable (toggling is blocked below)
-  useEffect(() => {
-    containerRef.current?.querySelectorAll("details").forEach((d) => {
-      d.open = true;
-    });
-  });
 
   const commit = useCallback(
     (path: string, el: HTMLElement, original: string) => {
@@ -212,6 +205,7 @@ export function LandingEditor({
               definition={draft}
               settings={settings}
               signedIn
+              editing
               labels={{ toApp: tl("toApp"), signIn: tl("signIn"), register: tl("register"), menu: tc("menu") }}
             />
           </div>
