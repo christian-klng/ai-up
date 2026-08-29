@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import type { AppSettings } from "@/server/db/schema";
-import type { LandingDefinition } from "@/lib/landing-schema";
+import type { LandingDefinition, SitePage } from "@/lib/landing-schema";
 import { saveLandingInlineAction } from "@/server/actions/admin-landing";
 import { LandingShell } from "@/components/landing/landing-shell";
 import { Button } from "@/components/ui/button";
@@ -39,10 +39,12 @@ const EDIT_CSS = `
 
 /** Mounted per editing session (parent renders it only while open) – state starts fresh on mount. */
 export function LandingEditor({
+  page,
   onOpenChange,
   definition,
   settings,
 }: {
+  page: SitePage;
   onOpenChange: (open: boolean) => void;
   definition: LandingDefinition;
   settings: AppSettings;
@@ -166,7 +168,7 @@ export function LandingEditor({
 
   const save = () => {
     startSave(async () => {
-      const res = await saveLandingInlineAction(draft);
+      const res = await saveLandingInlineAction(page, draft);
       if (res.ok) {
         toast.success(tc("saved"));
         onOpenChange(false);

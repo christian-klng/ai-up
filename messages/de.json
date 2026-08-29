@@ -120,7 +120,7 @@
     "nav": {
       "general": "Allgemein",
       "purpose": "Zweck",
-      "landing": "Landing Page",
+      "pages": "Webseiten",
       "members": "Mitglieder",
       "knowledge": "Sammlungen",
       "meetings": "Meeting-Bereiche",
@@ -161,17 +161,16 @@
       "hint": "Auf Englisch oder Deutsch – LLM-Instruktionen selbst sind Englisch, der Zweck wird eingebettet."
     },
     "landing": {
-      "title": "Landing Page",
-      "intro": "Öffentliche Startseite auf „/“. Inhalte werden per MCP bearbeitet (z. B. mit Claude Code); hier steuerst du Aktivierung, Bilder und Versionen.",
+      "title": "Webseiten",
+      "intro": "Öffentliche Seiten der Community: Landing Page (/), Impressum (/imprint) und Datenschutz (/privacy). Inhalte werden per MCP bearbeitet (z. B. mit Claude Code) oder direkt in der Vorschau; hier steuerst du Aktivierung, Bilder und Versionen.",
       "statusTitle": "Status",
-      "statusHint": "Aktuelle Version: v{version}. Die Seite ist ohne Login sichtbar, sobald sie aktiviert ist.",
-      "noContentYet": "Noch kein Inhalt vorhanden – erstelle die erste Version per MCP (Resource aiup://docs/landing-page).",
-      "enableLabel": "Landing Page aktivieren",
+      "statusHint": "Aktuelle Version: v{version}. Öffentlich erreichbar unter {url}, sobald aktiviert.",
+      "noContentYet": "Noch kein Inhalt vorhanden – erstelle die erste Version per MCP (Resource aiup://docs/pages).",
       "preview": "Vorschau",
       "viewPublic": "Öffentliche Seite ansehen",
-      "mcpHint": "Bearbeitung per MCP: API-Schlüssel mit den Scopes landing:read und landing:write anlegen, dann liest das LLM die Resource aiup://docs/landing-page und nutzt update_landing_page.",
+      "mcpHint": "Bearbeitung per MCP: API-Schlüssel mit den Scopes landing:read und landing:write anlegen, dann liest das LLM die Resource aiup://docs/pages und nutzt update_page.",
       "imagesTitle": "Bilder",
-      "imagesHint": "Bilder für die Landing Page sind öffentlich abrufbar. Die ID im MCP-Inhalt als mediaId referenzieren.",
+      "imagesHint": "Bilder sind öffentlich abrufbar und stehen allen Webseiten zur Verfügung. Die ID im MCP-Inhalt als mediaId referenzieren.",
       "uploadImage": "Bild hochladen",
       "uploading": "Lädt hoch …",
       "imageUploaded": "Bild hochgeladen",
@@ -194,7 +193,11 @@
       "emptyIgnored": "Leerer Text – Änderung verworfen.",
       "editMarkdownTitle": "Markdown bearbeiten",
       "mdApply": "Übernehmen",
-      "mdCancel": "Abbrechen"
+      "mdCancel": "Abbrechen",
+      "tabLanding": "Landing Page",
+      "tabImprint": "Impressum",
+      "tabPrivacy": "Datenschutz",
+      "enablePage": "Seite aktivieren ({url})"
     },
     "members": {
       "title": "Mitglieder",

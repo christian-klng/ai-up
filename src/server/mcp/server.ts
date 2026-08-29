@@ -13,8 +13,8 @@ import { createWorkflow, deleteWorkflow, getRunWithSteps, getWorkflow, listRuns,
 import { db } from "@/server/db/client";
 import { auditLog } from "@/server/db/schema";
 import { loadAppSettings, updateAppSettings } from "@/server/domain/settings";
-import { getCurrentLandingVersion, listLandingMedia, listLandingVersions, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
-import { LANDING_ICONS, validateLandingDefinition } from "@/lib/landing-schema";
+import { getCurrentLandingVersion, isPageEnabled, listLandingMedia, listLandingVersions, pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
+import { LANDING_ICONS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { deleteTemplate, getTemplateById, getTemplateBySystemKey, isTemplateAvailableForArea, listAllAssignments, listAvailableTemplates, listTemplates, saveTemplate, setAreaTemplates } from "@/server/domain/templates";
@@ -67,10 +67,14 @@ Rules
 - question flow: an ask_user step with questionKey "X" + a second workflow with trigger question.answered { questionKey: "X" }.
 `;
 
-const LANDING_SCHEMA_DOC = `# AI-Up landing page definition
+const PAGES_SCHEMA_DOC = `# AI-Up public site pages (landing, imprint, privacy)
 
-The public landing page at "/" is a structured JSON document – sections carry copy and structure only.
-Colors, typography, radius, dark mode and the logo come from the app theme automatically: write copy, don't style.
+Three public pages share one structured JSON format, per-page versioning and one image pool:
+- page "landing" at "/" (when disabled, "/" redirects to login resp. the app home)
+- page "imprint" at "/imprint" (404 while disabled)
+- page "privacy" at "/privacy" (404 while disabled)
+Sections carry copy and structure only. Colors, typography, radius, dark mode and the logo
+come from the app theme automatically: write copy, don't style.
 
 {
   "meta": { "title": "optional SEO title (max 70)", "description": "optional SEO description (max 160)" },
@@ -89,15 +93,17 @@ Colors, typography, radius, dark mode and the logo come from the app theme autom
 }
 
 Rules
-- 1–15 sections; typically: hero first, then features/markdown, a cta, faq, footer.
-- hrefs: internal path ("/register", "/login") or https:// URL. No other protocols.
+- 1–15 sections; landing typically: hero first, then features/markdown, a cta, faq, footer.
+  Imprint/privacy pages are usually just markdown sections (plus a minimal footer).
+- hrefs: internal path ("/register", "/login", "/imprint", "/privacy") or https:// URL. No other protocols.
 - feature icons – allowed values: ${LANDING_ICONS.join(", ")}.
-- images: mediaId must reference a media file with purpose "landing" (admin uploads them under
-  Admin → Landing page, or use list_landing_media). Files with other purposes are not publicly served.
-- German sites typically need Impressum + Datenschutz links in footer.links.
-- The page is monolingual – write it in the community's language (see current app context below).
-- Every update creates a new version (traceable, restorable). Validate first with validate_landing_page.
-- The page only goes public when the admin (or set_landing_enabled) turns it on.
+- images: mediaId must reference a media file with purpose "landing" – one shared pool for all pages
+  (admin uploads them under Admin → Web pages, or use list_page_media). Other purposes are not public.
+- German sites typically need imprint + privacy pages; link them from the landing footer
+  (footer.links → "/imprint", "/privacy").
+- Pages are monolingual – write them in the community's language (see current app context below).
+- Every update creates a new version per page (traceable, restorable). Validate first with validate_page.
+- A page only goes public when the admin (or set_page_enabled) turns it on; each page has its own flag.
 `;
 
 const COLLECTIONS_DOC = `# AI-Up collections, templates and entries
@@ -184,9 +190,15 @@ async function collectionsContext(): Promise<string> {
   ].join("\n");
 }
 
-/** Current app context appended to the landing doc so the calling LLM knows name, purpose and theme. */
-async function landingContext(): Promise<string> {
-  const [settings, current] = await Promise.all([loadAppSettings(), getCurrentLandingVersion()]);
+/** Current app context appended to the pages doc so the calling LLM knows name, purpose and theme. */
+async function pagesContext(): Promise<string> {
+  const settings = await loadAppSettings();
+  const perPage = await Promise.all(
+    SITE_PAGES.map(async (page) => {
+      const current = await getCurrentLandingVersion(page);
+      return `- page "${page}": enabled ${isPageEnabled(settings, page)}, current version ${current?.version ?? "none (no content yet)"}`;
+    }),
+  );
   return [
     "## Current app context",
     `- name: ${settings.name}`,
@@ -195,8 +207,7 @@ async function landingContext(): Promise<string> {
     `- theme: primaryColor ${settings.theme.primaryColor}, mode ${settings.theme.mode}, radius ${settings.theme.radius}rem`,
     `- logo uploaded: ${settings.logoMediaId ? "yes" : "no"}`,
     `- default locale: ${settings.defaultLocale}`,
-    `- landing enabled: ${settings.landingEnabled}`,
-    `- current landing version: ${current?.version ?? "none (no content yet)"}`,
+    ...perPage,
   ].join("\n");
 }
 
@@ -206,7 +217,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public landing page: read resource aiup://docs/landing-page first, then get_landing_page / validate_landing_page / update_landing_page. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_collection_templates / create_entry / update_entry.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_collection_templates / create_entry / update_entry.",
     },
   );
 
@@ -215,10 +226,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   }));
 
   server.registerResource(
-    "landing-page",
-    "aiup://docs/landing-page",
-    { title: "Landing page format & design rules", description: "Section schema, design rules and the current app context (name, purpose, theme) for the public landing page.", mimeType: "text/markdown" },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${LANDING_SCHEMA_DOC}\n${await landingContext()}` }] }),
+    "pages",
+    "aiup://docs/pages",
+    { title: "Site pages format & design rules", description: "Section schema, design rules and the current app context (name, purpose, theme) for the public pages: landing, imprint, privacy.", mimeType: "text/markdown" },
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${PAGES_SCHEMA_DOC}\n${await pagesContext()}` }] }),
   );
 
   server.registerResource(
@@ -352,44 +363,45 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text(await workflowStats(id ?? null, days ?? 14));
   });
 
-  // ---- landing page ---------------------------------------------------------
-  server.registerTool("get_landing_page", { title: "Landing page - Get content", description: "Current landing page definition, enabled state and version. Read resource aiup://docs/landing-page for the format and design rules.", inputSchema: {} }, async () => {
+  // ---- site pages (landing, imprint, privacy) -------------------------------
+  const pageParam = z.enum(SITE_PAGES).describe("landing | imprint | privacy");
+  server.registerTool("get_page", { title: "Pages - Get content", description: "Current definition, enabled state and version of one public page (landing at \"/\", imprint at /imprint, privacy at /privacy). Read resource aiup://docs/pages for the format and design rules.", inputSchema: { page: pageParam } }, async ({ page }) => {
     require(auth, "landing:read");
-    const [settings, current] = await Promise.all([loadAppSettings(), getCurrentLandingVersion()]);
-    return text({ enabled: settings.landingEnabled, version: current?.version ?? null, definition: current?.definition ?? null });
+    const [settings, current] = await Promise.all([loadAppSettings(), getCurrentLandingVersion(page)]);
+    return text({ page, enabled: isPageEnabled(settings, page), version: current?.version ?? null, definition: current?.definition ?? null });
   });
-  server.registerTool("validate_landing_page", { title: "Landing page - Validate", description: "Dry-run validation of a landing page definition against the section schema. Returns issues without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateLandingDefinition(definition)));
+  server.registerTool("validate_page", { title: "Pages - Validate", description: "Dry-run validation of a page definition against the shared section schema. Returns issues without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateLandingDefinition(definition)));
   server.registerTool(
-    "update_landing_page",
-    { title: "Landing page - Update", description: "Validates and saves the full definition as a new version (append-only history; restore is always possible). Does not change the enabled flag.", inputSchema: { definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
-    async ({ definition, changeNote }) => {
+    "update_page",
+    { title: "Pages - Update", description: "Validates and saves the full definition of one page as a new version (append-only history per page; restore is always possible). Does not change the enabled flag.", inputSchema: { page: pageParam, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
+    async ({ page, definition, changeNote }) => {
       require(auth, "landing:write");
-      const res = await saveLandingVersion(definition, auth.user.id, "mcp", changeNote);
+      const res = await saveLandingVersion(page, definition, auth.user.id, "mcp", changeNote);
       if (!res.ok) return fail(JSON.stringify({ issues: res.issues }, null, 2));
-      await audit(auth, "landing.updated", res.row.id, { version: res.row.version }, "landing");
-      return text({ version: res.row.version, warnings: res.warnings });
+      await audit(auth, "landing.updated", res.row.id, { page, version: res.row.version }, "landing");
+      return text({ page, version: res.row.version, warnings: res.warnings });
     },
   );
-  server.registerTool("list_landing_page_versions", { title: "Landing page - List versions", description: "Version history of the landing page (source ui/mcp, change notes).", inputSchema: {} }, async () => {
+  server.registerTool("list_page_versions", { title: "Pages - List versions", description: "Version history of one page (source ui/mcp, change notes).", inputSchema: { page: pageParam } }, async ({ page }) => {
     require(auth, "landing:read");
-    const versions = await listLandingVersions();
+    const versions = await listLandingVersions(page);
     return text(versions.map((v) => ({ version: v.version, source: v.source, changeNote: v.changeNote, changedBy: v.changedByName, createdAt: v.createdAt })));
   });
-  server.registerTool("restore_landing_page_version", { title: "Landing page - Restore version", description: "Copies an older version forward as the new current version (history stays intact).", inputSchema: { version: z.number().int().min(1) } }, async ({ version }) => {
+  server.registerTool("restore_page_version", { title: "Pages - Restore version", description: "Copies an older version of one page forward as its new current version (history stays intact).", inputSchema: { page: pageParam, version: z.number().int().min(1) } }, async ({ page, version }) => {
     require(auth, "landing:write");
-    const row = await restoreLandingVersion(version, auth.user.id, "mcp");
+    const row = await restoreLandingVersion(page, version, auth.user.id, "mcp");
     if (!row) return fail("version not found");
-    await audit(auth, "landing.restored", row.id, { restored: version, newVersion: row.version }, "landing");
-    return text({ version: row.version });
+    await audit(auth, "landing.restored", row.id, { page, restored: version, newVersion: row.version }, "landing");
+    return text({ page, version: row.version });
   });
-  server.registerTool("set_landing_enabled", { title: "Landing page - Enable or disable", description: "Turns the public landing page at \"/\" on or off. When off, \"/\" redirects to login resp. the app home.", inputSchema: { enabled: z.boolean() } }, async ({ enabled }) => {
+  server.registerTool("set_page_enabled", { title: "Pages - Enable or disable", description: "Turns one public page on or off. Landing off: \"/\" redirects to login resp. the app home; imprint/privacy off: 404.", inputSchema: { page: pageParam, enabled: z.boolean() } }, async ({ page, enabled }) => {
     require(auth, "landing:write");
-    if (enabled && !(await getCurrentLandingVersion())) return fail("no landing page content yet – create a version with update_landing_page first");
-    await updateAppSettings({ landingEnabled: enabled });
-    await audit(auth, "settings.landing.toggled", "default", { enabled }, "settings");
-    return text({ enabled });
+    if (enabled && !(await getCurrentLandingVersion(page))) return fail(`no content for page "${page}" yet – create a version with update_page first`);
+    await updateAppSettings({ [pageEnabledColumn(page)]: enabled });
+    await audit(auth, "settings.page.toggled", "default", { page, enabled }, "settings");
+    return text({ page, enabled });
   });
-  server.registerTool("list_landing_media", { title: "Landing page - List media", description: "Publicly served images usable on the landing page (reference them as mediaId). Upload new ones under Admin → Landing page.", inputSchema: {} }, async () => {
+  server.registerTool("list_page_media", { title: "Pages - List media", description: "Publicly served images usable on all site pages (reference them as mediaId; one shared pool). Upload new ones under Admin → Web pages.", inputSchema: {} }, async () => {
     require(auth, "landing:read");
     const media = await listLandingMedia();
     return text(media.map((m) => ({ id: m.id, name: m.originalName, mime: m.mime, width: m.width, height: m.height, size: m.size, url: `/api/files/${m.id}` })));

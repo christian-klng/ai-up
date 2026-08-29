@@ -7,6 +7,10 @@ import { z } from "zod";
  * Framework-neutral (no React/Next imports); the DB schema type-imports LandingDefinition.
  */
 
+/** The public site pages sharing this definition schema, versioning and image pool. */
+export const SITE_PAGES = ["landing", "imprint", "privacy"] as const;
+export type SitePage = (typeof SITE_PAGES)[number];
+
 /** Allowed lucide icon names for feature items – fixed allowlist keeps the client bundle small. */
 export const LANDING_ICONS = [
   "sparkles",

@@ -120,7 +120,7 @@
     "nav": {
       "general": "General",
       "purpose": "Purpose",
-      "landing": "Landing page",
+      "pages": "Web pages",
       "members": "Members",
       "knowledge": "Collections",
       "meetings": "Meeting spaces",
@@ -161,17 +161,16 @@
       "hint": "German or English – LLM instructions themselves are English, the purpose is embedded as-is."
     },
     "landing": {
-      "title": "Landing page",
-      "intro": "Public start page at “/”. Content is edited via MCP (e.g. with Claude Code); manage activation, images and versions here.",
+      "title": "Web pages",
+      "intro": "Public pages of the community: landing page (/), imprint (/imprint) and privacy (/privacy). Content is edited via MCP (e.g. with Claude Code) or directly in the preview; manage activation, images and versions here.",
       "statusTitle": "Status",
-      "statusHint": "Current version: v{version}. Once enabled, the page is visible without login.",
-      "noContentYet": "No content yet – create the first version via MCP (resource aiup://docs/landing-page).",
-      "enableLabel": "Enable landing page",
+      "statusHint": "Current version: v{version}. Publicly reachable at {url} once enabled.",
+      "noContentYet": "No content yet – create the first version via MCP (resource aiup://docs/pages).",
       "preview": "Preview",
       "viewPublic": "View public page",
-      "mcpHint": "Editing via MCP: create an API key with the scopes landing:read and landing:write, then the LLM reads the resource aiup://docs/landing-page and uses update_landing_page.",
+      "mcpHint": "Editing via MCP: create an API key with the scopes landing:read and landing:write, then the LLM reads the resource aiup://docs/pages and uses update_page.",
       "imagesTitle": "Images",
-      "imagesHint": "Landing page images are publicly accessible. Reference the ID as mediaId in the MCP content.",
+      "imagesHint": "Images are publicly accessible and shared by all web pages. Reference the ID as mediaId in the MCP content.",
       "uploadImage": "Upload image",
       "uploading": "Uploading …",
       "imageUploaded": "Image uploaded",
@@ -194,7 +193,11 @@
       "emptyIgnored": "Empty text – change discarded.",
       "editMarkdownTitle": "Edit markdown",
       "mdApply": "Apply",
-      "mdCancel": "Cancel"
+      "mdCancel": "Cancel",
+      "tabLanding": "Landing page",
+      "tabImprint": "Imprint",
+      "tabPrivacy": "Privacy",
+      "enablePage": "Enable page ({url})"
     },
     "members": {
       "title": "Members",

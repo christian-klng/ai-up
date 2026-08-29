@@ -136,6 +136,10 @@ export const appSettings = pgTable("app_settings", {
   botName: text("bot_name").notNull().default("Assistent"),
   /** Serve the public landing page at "/"; when false, "/" redirects to /login resp. /home. */
   landingEnabled: boolean("landing_enabled").notNull().default(false),
+  /** Serve the public imprint page at /imprint (404 when disabled). */
+  imprintEnabled: boolean("imprint_enabled").notNull().default(false),
+  /** Serve the public privacy page at /privacy (404 when disabled). */
+  privacyEnabled: boolean("privacy_enabled").notNull().default(false),
   /** Encrypted JSON blobs for integrations are stored in dedicated tables later; keep generic extras here. */
   extra: jsonb("extra").$type<Record<string, unknown>>().notNull().default({}),
   ...timestamps,
@@ -149,6 +153,8 @@ export const landingPageVersions = pgTable(
   "landing_page_versions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** Which public page this version belongs to: landing | imprint | privacy */
+    page: text("page").notNull().default("landing"),
     version: integer("version").notNull(),
     definition: jsonb("definition").$type<LandingDefinition>().notNull(),
     /** ui | mcp */
@@ -157,7 +163,7 @@ export const landingPageVersions = pgTable(
     changedBy: text("changed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("landing_page_versions_version_idx").on(t.version)],
+  (t) => [uniqueIndex("landing_page_versions_page_version_idx").on(t.page, t.version)],
 );
 
 // ---------------------------------------------------------------------------

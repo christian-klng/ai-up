@@ -19,7 +19,10 @@ export async function loadAppSettings(): Promise<AppSettings> {
 export const getAppSettings = cache(loadAppSettings);
 
 export type UpdateSettingsInput = Partial<
-  Pick<AppSettings, "name" | "tagline" | "purpose" | "logoMediaId" | "faviconMediaId" | "defaultLocale" | "theme" | "botName" | "landingEnabled">
+  Pick<
+    AppSettings,
+    "name" | "tagline" | "purpose" | "logoMediaId" | "faviconMediaId" | "defaultLocale" | "theme" | "botName" | "landingEnabled" | "imprintEnabled" | "privacyEnabled"
+  >
 >;
 
 export async function updateAppSettings(input: UpdateSettingsInput): Promise<AppSettings> {

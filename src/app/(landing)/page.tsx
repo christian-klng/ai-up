@@ -14,7 +14,7 @@ import { LandingView } from "@/components/landing/landing-view";
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getAppSettings();
   if (!settings.landingEnabled) return {};
-  const landing = await getCurrentLandingVersion();
+  const landing = await getCurrentLandingVersion("landing");
   return {
     title: { absolute: landing?.definition.meta.title ?? settings.name },
     description: landing?.definition.meta.description ?? settings.tagline ?? undefined,
@@ -23,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function LandingPage() {
   const [settings, user] = await Promise.all([getAppSettings(), getCurrentUser()]);
-  const landing = settings.landingEnabled ? await getCurrentLandingVersion() : undefined;
+  const landing = settings.landingEnabled ? await getCurrentLandingVersion("landing") : undefined;
   if (!landing) {
     // Disabled or never written: never show an empty landing page.
     redirect(user ? (user.status === "active" ? "/home" : "/pending") : "/login");
