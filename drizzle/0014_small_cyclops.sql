@@ -1,0 +1,1 @@
+ALTER TABLE "knowledge_areas" ADD COLUMN "layout" text DEFAULT 'grid' NOT NULL;

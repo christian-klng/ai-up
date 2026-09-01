@@ -1,4 +1,5 @@
 import { relations } from "drizzle-orm";
+import type { CollectionLayout } from "@/lib/collection-layouts";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
 import {
@@ -700,6 +701,8 @@ export const knowledgeAreas = pgTable(
     description: text("description"),
     /** lucide icon key, see src/components/knowledge/area-icon.tsx */
     icon: text("icon").notNull().default("book"),
+    /** member view layout, see src/lib/collection-layouts.ts */
+    layout: text("layout").$type<CollectionLayout>().notNull().default("grid"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,

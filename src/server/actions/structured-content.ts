@@ -22,6 +22,7 @@ const inputSchema = z.object({
   answers: z.unknown(),
   changeNote: z.string().trim().max(500).optional(),
   upgrade: z.boolean().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
 });
 
 /**
@@ -38,6 +39,7 @@ export async function saveStructuredEntryAction(input: {
   answers: unknown;
   changeNote?: string;
   upgrade?: boolean;
+  imageMediaId?: string | null;
 }): Promise<SaveStructuredEntryResult> {
   const user = await assertUser();
   const parsed = inputSchema.safeParse(input);
@@ -70,7 +72,7 @@ export async function saveStructuredEntryAction(input: {
     snapshot = { structureId: template.id, structureVersion: template.version, definition: template.definition };
   }
 
-  const built = await buildStructuredVersionInput(snapshot, d.title, d.answers, { changeNote: d.changeNote ?? null, prevEnrichment });
+  const built = await buildStructuredVersionInput(snapshot, d.title, d.answers, { changeNote: d.changeNote ?? null, prevEnrichment, imageMediaId: d.imageMediaId ?? null });
   if (!built.ok) return { ok: false, issues: built.issues };
 
   try {

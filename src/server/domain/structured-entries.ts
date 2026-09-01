@@ -21,13 +21,19 @@ export type BuildStructuredVersionResult = { ok: true; input: ContentVersionInpu
  * Validates + enriches answers for one entry version. `snapshot` carries the
  * template id/version/definition the answers are filled against; `prevEnrichment`
  * (from the previous version) lets unchanged link previews be reused.
+ * `imageMediaId` is the optional entry image (stored on version.mediaId):
+ * a string sets it, null/undefined leaves the version without one.
  */
 export async function buildStructuredVersionInput(
   snapshot: Pick<StructureEntryMeta, "structureId" | "structureVersion" | "definition">,
   title: string,
   rawAnswers: unknown,
-  opts: { changeNote?: string | null; prevEnrichment?: StructureEnrichment } = {},
+  opts: { changeNote?: string | null; prevEnrichment?: StructureEnrichment; imageMediaId?: string | null } = {},
 ): Promise<BuildStructuredVersionResult> {
+  if (opts.imageMediaId) {
+    const media = await getMedia(opts.imageMediaId);
+    if (!media || media.kind !== "image") return { ok: false, issues: [{ key: "__image", code: "mediaInvalid" }] };
+  }
   const seeded = typeof rawAnswers === "object" && rawAnswers !== null ? fillProcessSeeds(snapshot.definition, rawAnswers as StructureAnswers) : rawAnswers;
   const res = validateStructureAnswers(snapshot.definition, seeded);
   if (!res.ok) return { ok: false, issues: res.issues };
@@ -47,6 +53,7 @@ export async function buildStructuredVersionInput(
     input: {
       title,
       bodyMarkdown: renderStructureMarkdown(meta.definition, meta.answers, meta.enrichment),
+      mediaId: opts.imageMediaId ?? null,
       meta: { structure: meta },
       changeNote: opts.changeNote ?? null,
     },

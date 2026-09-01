@@ -19,12 +19,14 @@ type Props = {
   maxUploadMb: number;
   disabled?: boolean;
   invalid?: boolean;
+  /** false hides the URL tab – the value is always an uploaded media_files row (e.g. entry images). */
+  allowUrl?: boolean;
 };
 
 /** Controlled upload-or-URL input for image/video answers (structure fill form). */
-export function MediaInput({ kind, value, onChange, maxUploadMb, disabled, invalid }: Props) {
+export function MediaInput({ kind, value, onChange, maxUploadMb, disabled, invalid, allowUrl = true }: Props) {
   const te = useTranslations("knowledge.editor");
-  const [source, setSource] = useState<"upload" | "url">(value?.url && !value.mediaId ? "url" : "upload");
+  const [source, setSource] = useState<"upload" | "url">(allowUrl && value?.url && !value.mediaId ? "url" : "upload");
   const [media, setMedia] = useState<UploadedMedia | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -63,10 +65,12 @@ export function MediaInput({ kind, value, onChange, maxUploadMb, disabled, inval
       }}
       className={cn(invalid && "rounded-md ring-1 ring-destructive")}
     >
-      <TabsList>
-        <TabsTrigger value="upload">{te("sourceUpload")}</TabsTrigger>
-        <TabsTrigger value="url">{te("sourceUrl")}</TabsTrigger>
-      </TabsList>
+      {allowUrl && (
+        <TabsList>
+          <TabsTrigger value="upload">{te("sourceUpload")}</TabsTrigger>
+          <TabsTrigger value="url">{te("sourceUrl")}</TabsTrigger>
+        </TabsList>
+      )}
       <TabsContent value="upload" className="grid gap-3 pt-3">
         <input
           ref={fileRef}

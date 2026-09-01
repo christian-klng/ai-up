@@ -15,6 +15,7 @@ import {
   type MediaFile,
 } from "@/server/db/schema";
 import { emitDomainEvent, type ContentEventPayload, type EventOrigin } from "@/server/events/bus";
+import type { CollectionLayout } from "@/lib/collection-layouts";
 import { flattenAnswersText } from "@/lib/structures/markdown";
 import { slugify } from "@/lib/slug";
 
@@ -57,7 +58,7 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   return `${slugify(base)}-${Date.now().toString(36)}`;
 }
 
-export type AreaInput = { name: string; purpose: string; description?: string | null; icon?: string };
+export type AreaInput = { name: string; purpose: string; description?: string | null; icon?: string; layout?: CollectionLayout };
 
 export async function createArea(input: AreaInput, actorId: string): Promise<KnowledgeArea> {
   const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${knowledgeAreas.sortOrder}), -1)::int` }).from(knowledgeAreas);
@@ -69,6 +70,7 @@ export async function createArea(input: AreaInput, actorId: string): Promise<Kno
       purpose: input.purpose.trim(),
       description: input.description?.trim() || null,
       icon: input.icon ?? "book",
+      layout: input.layout ?? "grid",
       sortOrder: max + 1,
       createdBy: actorId,
     })
@@ -88,6 +90,7 @@ export async function updateArea(id: string, input: AreaInput, actorId: string):
       purpose: input.purpose.trim(),
       description: input.description?.trim() || null,
       icon: input.icon ?? existing.icon,
+      layout: input.layout ?? existing.layout,
     })
     .where(eq(knowledgeAreas.id, id))
     .returning();

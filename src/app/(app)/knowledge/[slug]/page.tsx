@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { FileText, Image as ImageIcon, Link2, ListChecks, Pin, Plus, Search, Video } from "lucide-react";
+import { FileText, Image as ImageIcon, Link2, ListChecks, Plus, Search, Video } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { countContentsByType, getAreaBySlug, listContents } from "@/server/domain/knowledge";
 import type { ContentType } from "@/server/db/schema";
 import { PageHeader } from "@/components/common/page-header";
 import { AreaIcon } from "@/components/knowledge/area-icon";
-import { UserAvatar } from "@/components/shell/user-avatar";
+import { EntryBlogPost, EntryCard, EntryListItem, type EntryViewItem } from "@/components/knowledge/entry-views";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,37 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
   const hasAnyContent = availableTypes.length > 0;
 
   const filterHref = (tp?: ContentType) => `/knowledge/${area.slug}${tp ? `?type=${tp}` : ""}${q ? `${tp ? "&" : "?"}q=${encodeURIComponent(q)}` : ""}`;
+
+  const viewItems: { id: string; item: EntryViewItem }[] = items.map((c) => {
+    const v = c.version;
+    // Entry images and legacy image entries both live on version.mediaId.
+    const imageMedia = c.media?.kind === "image" ? c.media : null;
+    const thumbSrc = imageMedia
+      ? `/api/files/${imageMedia.id}?v=thumb`
+      : c.type === "image"
+        ? (v?.url ?? undefined)
+        : c.type === "link"
+          ? v?.meta.preview?.image
+          : c.type === "video" && v?.meta.embedId && v.meta.provider === "youtube"
+            ? `https://i.ytimg.com/vi/${v.meta.embedId}/hqdefault.jpg`
+            : undefined;
+    const excerpt = c.type === "link" ? (v?.meta.preview?.description ?? v?.url ?? undefined) : v?.bodyMarkdown?.replace(/[#*_`>\[\]()!-]/g, " ").replace(/\s+/g, " ").trim();
+    return {
+      id: c.id,
+      item: {
+        href: `/knowledge/${area.slug}/${c.id}`,
+        title: c.title,
+        thumbSrc: thumbSrc || undefined,
+        fullImageSrc: imageMedia ? `/api/files/${imageMedia.id}` : thumbSrc || undefined,
+        excerpt: excerpt || undefined,
+        bodyMarkdown: v?.bodyMarkdown ?? undefined,
+        author: c.author,
+        dateLabel: format.dateTime(c.updatedAt, { dateStyle: "medium" }),
+        pinned: c.pinned,
+      },
+    };
+  });
+  const hasAnyImage = viewItems.some(({ item }) => !!item.thumbSrc);
 
   return (
     <div>
@@ -72,48 +103,32 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
         </div>
       )}
 
-      {items.length === 0 ? (
+      {viewItems.length === 0 ? (
         <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
           <AreaIcon icon={area.icon} className="mx-auto mb-3 size-8 opacity-40" />
           {q || type ? t("emptySearch") : t("empty")}
         </div>
+      ) : area.layout === "list" ? (
+        <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+          {viewItems.map(({ id, item }) => (
+            <li key={id}>
+              <EntryListItem item={item} />
+            </li>
+          ))}
+        </ul>
+      ) : area.layout === "blog" ? (
+        <div className="mx-auto grid max-w-2xl gap-10">
+          {viewItems.map(({ id, item }) => (
+            <EntryBlogPost key={id} item={item} pinnedLabel={t("view.pinned")} readMoreLabel={t("view.readMore")} />
+          ))}
+        </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((c) => {
-            const Icon = TYPE_ICONS[c.type];
-            const v = c.version;
-            const thumb = c.type === "image" ? (c.media ? `/api/files/${c.media.id}?v=thumb` : v?.url) : c.type === "link" ? v?.meta.preview?.image : c.type === "video" && v?.meta.embedId && v.meta.provider === "youtube" ? `https://i.ytimg.com/vi/${v.meta.embedId}/hqdefault.jpg` : undefined;
-            const excerpt = c.type === "link" ? v?.meta.preview?.description ?? v?.url : v?.bodyMarkdown?.replace(/[#*_`>\[\]()!-]/g, " ").replace(/\s+/g, " ").trim();
-            return (
-              <li key={c.id}>
-                <Link href={`/knowledge/${area.slug}/${c.id}`} className="group flex h-full flex-col overflow-hidden rounded-lg border bg-card transition-colors hover:bg-accent/40">
-                  {thumb && (
-                    <span className="block aspect-[16/9] w-full overflow-hidden bg-muted">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={thumb} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
-                    </span>
-                  )}
-                  <span className="flex flex-1 flex-col gap-2 p-4">
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Icon className="size-3.5" /> {t(`types.${c.type}`)}
-                      {c.pinned && (
-                        <span className="ml-auto inline-flex items-center gap-1 text-primary">
-                          <Pin className="size-3" /> {t("view.pinned")}
-                        </span>
-                      )}
-                    </span>
-                    <span className="line-clamp-2 font-medium group-hover:underline">{c.title}</span>
-                    {excerpt && <span className="line-clamp-3 text-sm text-muted-foreground">{excerpt}</span>}
-                    <span className="mt-auto flex items-center gap-2 pt-2 text-xs text-muted-foreground">
-                      {c.author && <UserAvatar user={c.author} size={20} variant="thumb" />}
-                      <span className="truncate">{c.author?.name}</span>
-                      <span className="ml-auto shrink-0">{format.dateTime(c.updatedAt, { dateStyle: "medium" })}</span>
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+        <ul className={cn("grid gap-3", area.layout === "compact" ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "sm:grid-cols-2 xl:grid-cols-3")}>
+          {viewItems.map(({ id, item }) => (
+            <li key={id}>
+              <EntryCard item={item} variant={area.layout === "compact" ? "compact" : "grid"} showImageSlot={hasAnyImage} areaIcon={area.icon} pinnedLabel={t("view.pinned")} />
+            </li>
+          ))}
         </ul>
       )}
     </div>

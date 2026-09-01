@@ -227,13 +227,21 @@
       "intro": "Collections are categories for content. Every collection needs a purpose – members see it and it is embedded into LLM prompts.",
       "create": "Create collection",
       "edit": "Edit collection",
-      "dialogIntro": "Name, purpose and icon of the collection.",
+      "dialogIntro": "Name, purpose, icon and layout of the collection.",
       "name": "Name",
       "purpose": "Purpose",
       "purposePlaceholder": "e.g. “Collection of practical examples for AI in sales – focused on concrete outcomes.”",
       "purposeHint": "Required. Describes what belongs into this collection.",
       "description": "Description (optional)",
       "icon": "Icon",
+      "layout": "Layout",
+      "layoutHint": "How members see the entries of this collection.",
+      "layouts": {
+        "grid": "Grid (default)",
+        "compact": "Compact grid",
+        "list": "List",
+        "blog": "Blog feed"
+      },
       "empty": "No collections yet. Create the first one.",
       "contentCount": "{count, plural, =1 {# item} other {# items}}",
       "confirmDelete": "Really delete collection “{name}”?",
@@ -607,7 +615,9 @@
         "uploadFailed": "Upload failed.",
         "forbidden": "You are not allowed to edit this content."
       },
-      "uploadedExisting": "Uploaded file from the previous version"
+      "uploadedExisting": "Uploaded file from the previous version",
+      "entryImageLabel": "Entry image (optional)",
+      "entryImageHint": "Shown in the collection and at the top of the entry."
     },
     "view": {
       "version": "Version {no}",
@@ -624,7 +634,9 @@
       "unpin": "Unpin",
       "pinned": "Pinned",
       "downloadVideo": "Download video",
-      "videoUnsupported": "Your browser cannot play this video."
+      "videoUnsupported": "Your browser cannot play this video.",
+      "readMore": "Read more",
+      "enlargeImage": "Enlarge image"
     },
     "history": {
       "title": "History: {title}",

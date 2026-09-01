@@ -14,7 +14,7 @@ import { migrateStructureAnswers } from "@/lib/structures/migrate";
 import { visibleElements } from "@/lib/structures/visibility";
 import { saveStructuredEntryAction } from "@/server/actions/structured-content";
 import { Markdown } from "@/components/content/markdown";
-import { MediaInput } from "@/components/content/media-input";
+import { MediaInput, type MediaInputValue } from "@/components/content/media-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,13 +37,16 @@ export type StructureFillFormProps = {
   maxUploadMb?: number;
   initialTitle?: string;
   initialAnswers?: StructureAnswers;
+  /** edit mode: the entry image of the current version (version.mediaId) */
+  initialImageMediaId?: string;
 };
 
-export function StructureFillForm({ def, mode, areaId, contentId, templateId, upgradeTo, maxUploadMb, initialTitle, initialAnswers }: StructureFillFormProps) {
+export function StructureFillForm({ def, mode, areaId, contentId, templateId, upgradeTo, maxUploadMb, initialTitle, initialAnswers, initialImageMediaId }: StructureFillFormProps) {
   const t = useTranslations("knowledge.structured");
   const te = useTranslations("knowledge.editor");
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle ?? "");
+  const [image, setImage] = useState<MediaInputValue | undefined>(initialImageMediaId ? { mediaId: initialImageMediaId } : undefined);
   const [answers, setAnswers] = useState<StructureAnswers>(initialAnswers ?? {});
   const [changeNote, setChangeNote] = useState("");
   const [issues, setIssues] = useState<AnswerIssue[]>([]);
@@ -112,6 +115,8 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
         answers: res.answers,
         changeNote: changeNote.trim() || undefined,
         upgrade: upgrading || undefined,
+        // always sent: the current image state, so edits keep or remove it explicitly
+        imageMediaId: image?.mediaId ?? null,
       });
       if (result.ok) {
         toast.success(t("saved"));
@@ -165,6 +170,13 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
           </label>
           <Input id="entry-title" value={title} onChange={(e) => { setTitle(e.target.value); setTitleMissing(false); }} placeholder={te("titlePlaceholder")} maxLength={200} className={cn(titleMissing && "border-destructive")} />
           {titleMissing && <p className="text-xs text-destructive">{t("errors.required")}</p>}
+        </div>
+      )}
+      {mode !== "preview" && (
+        <div className="grid grid-cols-1 gap-1.5">
+          <span className="text-sm font-medium">{te("entryImageLabel")}</span>
+          <MediaInput kind="image" value={image} onChange={setImage} maxUploadMb={maxUploadMb ?? 25} disabled={pending} allowUrl={false} />
+          <p className="text-xs text-muted-foreground">{te("entryImageHint")}</p>
         </div>
       )}
       {visible.map((el) => (

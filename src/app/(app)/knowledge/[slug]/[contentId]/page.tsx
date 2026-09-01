@@ -5,6 +5,7 @@ import { ArrowLeft, History, Pencil } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
 import { ContentBody } from "@/components/content/content-body";
+import { ImageLightbox } from "@/components/content/image-lightbox";
 import { StructuredContentView } from "@/components/structures/structured-content-view";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,12 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
           )}
         </div>
       </header>
+
+      {content.type === "structured" && content.media?.kind === "image" && (
+        <div className="mb-6">
+          <ImageLightbox src={`/api/files/${content.media.id}`} alt={content.title} enlargeLabel={t("view.enlargeImage")} />
+        </div>
+      )}
 
       {v && content.type === "structured" && v.meta.structure ? (
         <StructuredContentView meta={v.meta.structure} />

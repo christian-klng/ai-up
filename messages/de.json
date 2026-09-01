@@ -227,13 +227,21 @@
       "intro": "Sammlungen sind Kategorien für Inhalte. Jede Sammlung braucht einen Zweck – er wird Mitgliedern angezeigt und in LLM-Prompts eingebettet.",
       "create": "Sammlung anlegen",
       "edit": "Sammlung bearbeiten",
-      "dialogIntro": "Name, Zweck und Icon der Sammlung.",
+      "dialogIntro": "Name, Zweck, Icon und Darstellung der Sammlung.",
       "name": "Name",
       "purpose": "Zweck",
       "purposePlaceholder": "z. B. „Sammlung von Praxisbeispielen für KI-Einsatz im Vertrieb – mit Fokus auf konkrete Ergebnisse.“",
       "purposeHint": "Pflichtfeld. Beschreibt, was in diese Sammlung gehört.",
       "description": "Beschreibung (optional)",
       "icon": "Icon",
+      "layout": "Darstellung",
+      "layoutHint": "Wie Mitglieder die Einträge dieser Sammlung sehen.",
+      "layouts": {
+        "grid": "Raster (Standard)",
+        "compact": "Kompaktes Raster",
+        "list": "Liste",
+        "blog": "Blog-Feed"
+      },
       "empty": "Noch keine Sammlungen. Lege die erste an.",
       "contentCount": "{count, plural, =1 {# Inhalt} other {# Inhalte}}",
       "confirmDelete": "Sammlung „{name}“ wirklich löschen?",
@@ -607,7 +615,9 @@
         "uploadFailed": "Upload fehlgeschlagen.",
         "forbidden": "Du darfst diesen Inhalt nicht bearbeiten."
       },
-      "uploadedExisting": "Hochgeladene Datei aus der vorherigen Version"
+      "uploadedExisting": "Hochgeladene Datei aus der vorherigen Version",
+      "entryImageLabel": "Eintrag-Bild (optional)",
+      "entryImageHint": "Wird in der Sammlung und oben im Eintrag angezeigt."
     },
     "view": {
       "version": "Version {no}",
@@ -624,7 +634,9 @@
       "unpin": "Lösen",
       "pinned": "Angeheftet",
       "downloadVideo": "Video herunterladen",
-      "videoUnsupported": "Dein Browser kann dieses Video nicht abspielen."
+      "videoUnsupported": "Dein Browser kann dieses Video nicht abspielen.",
+      "readMore": "Weiterlesen",
+      "enlargeImage": "Bild vergrößern"
     },
     "history": {
       "title": "Verlauf: {title}",

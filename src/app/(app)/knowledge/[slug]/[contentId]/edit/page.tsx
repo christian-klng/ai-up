@@ -42,6 +42,7 @@ export default async function EditContentPage({ params }: PageProps<"/knowledge/
           maxUploadMb={env.MAX_UPLOAD_MB}
           initialTitle={content.title}
           initialAnswers={structureMeta.answers}
+          initialImageMediaId={m?.kind === "image" ? m.id : undefined}
         />
       </div>
     );

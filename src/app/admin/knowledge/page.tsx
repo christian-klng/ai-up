@@ -20,6 +20,7 @@ export default async function AdminKnowledgePage() {
           purpose: a.purpose,
           description: a.description,
           icon: a.icon,
+          layout: a.layout,
           contentCount: a.contentCount,
           assignedTemplateIds: (assignments.get(a.id) ?? []).map((tpl) => tpl.id),
         }))}

@@ -17,6 +17,8 @@ import { getCurrentLandingVersion, isPageEnabled, listLandingMedia, listLandingV
 import { LANDING_ICONS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
+import { importImageFromUrl } from "@/server/media/import-image";
+import { env } from "@/server/env";
 import { deleteTemplate, getTemplateById, getTemplateBySystemKey, isTemplateAvailableForArea, listAllAssignments, listAvailableTemplates, listTemplates, saveTemplate, setAreaTemplates } from "@/server/domain/templates";
 import { isSystemTemplateKey } from "@/lib/structures/defaults";
 import { validateStructure } from "@/lib/structures/validate";
@@ -114,6 +116,12 @@ assigned per collection. A collection with NO assigned templates offers the four
 templates (systemKey "text", "image", "link", "video" – not editable or deletable). Every entry
 stores a full snapshot of its template definition, so template changes never break entries.
 
+## Layouts
+
+Each collection has a member-view layout: "grid" (default), "compact" (smaller grid), "list" or
+"blog" (single-column feed). list_collections reports it read-only – admins set it in the app
+under Admin → Collections; there is deliberately no MCP tool to create or modify collections.
+
 ## Template definition
 
 {
@@ -167,6 +175,11 @@ showIf makes an element conditional on an EARLIER answerable element – exactly
   own snapshot; pass upgrade=true on update_entry to re-snapshot to the template's current
   version (answers are then validated against the NEW definition).
 - Entries are versioned append-only; every update creates a new version with an optional changeNote.
+- Optional entry image ("Eintrag-Bild", distinct from image *elements* inside templates): pass
+  "image" on create_entry/update_entry with exactly one of mediaId (an already uploaded image)
+  or url (a public http(s) image URL, imported server-side). It is shown at the top of the entry
+  and as the preview in the collection views, and is versioned with the entry. update_entry keeps
+  the current image unless "image" is passed; { "remove": true } clears it.
 - Write labels, options and content in the community's language (see context below).
 - save_template creates a new template version; entries keep their snapshot until upgraded.
 - set_collection_templates assigns templates to a collection (empty list = system templates).
@@ -179,7 +192,7 @@ async function collectionsContext(): Promise<string> {
   const areaLines = areas.map((a) => {
     const assigned = assignments.get(a.id);
     const tpl = assigned?.length ? `templates: ${assigned.map((x) => x.name).join(", ")}` : "templates: system defaults";
-    return `- ${a.name} (id ${a.id}, slug "${a.slug}", ${a.contentCount} entries, ${tpl}): ${a.purpose.slice(0, 200)}`;
+    return `- ${a.name} (id ${a.id}, slug "${a.slug}", layout ${a.layout}, ${a.contentCount} entries, ${tpl}): ${a.purpose.slice(0, 200)}`;
   });
   return [
     "## Current templates",
@@ -415,6 +428,17 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   const collectionInput = z.string().describe("collection id (uuid) or slug");
   const templateInput = z.string().describe("template id (uuid) or systemKey (text | image | link | video)");
   const httpUrl = z.string().trim().max(2000).regex(/^https?:\/\//i, "must be an http(s) URL");
+  // Entry image (structured entries, stored on version.mediaId): existing media id or server-side URL import.
+  const resolveEntryImage = async (image: { mediaId?: string; url?: string }): Promise<{ mediaId: string } | { error: string }> => {
+    if ((image.mediaId ? 1 : 0) + (image.url ? 1 : 0) !== 1) return { error: "image: pass exactly one of mediaId or url" };
+    if (image.mediaId) return { mediaId: image.mediaId };
+    try {
+      const media = await importImageFromUrl(image.url!, auth.user.id);
+      return { mediaId: media.id };
+    } catch (err) {
+      return { error: `image url could not be imported: ${err instanceof Error ? err.message : "unknown error"} – must be a public http(s) URL returning jpeg/png/webp/gif under ${env.MAX_UPLOAD_MB} MB` };
+    }
+  };
 
   server.registerTool("list_collections", { title: "Collections - List collections", description: "All collections with purpose, entry count and available templates. Read resource aiup://docs/collections for the template format.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
@@ -422,7 +446,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text(
       areas.map((a) => {
         const assigned = assignments.get(a.id);
-        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, entryCount: a.contentCount, templates: assigned?.length ? assigned : "system-defaults" };
+        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, layout: a.layout, entryCount: a.contentCount, templates: assigned?.length ? assigned : "system-defaults" };
       }),
     );
   });
@@ -493,7 +517,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       const area = await resolveArea(collection);
       if (!area) return fail("collection not found");
       const items = await listContents({ areaId: area.id, type, query, limit: limit ?? 50, offset });
-      return text(items.map((c) => ({ id: c.id, type: c.type, title: c.title, pinned: c.pinned, versionCount: c.versionCount, author: c.author?.name ?? null, structureVersion: c.version?.meta.structure?.structureVersion ?? null, updatedAt: c.updatedAt })));
+      return text(items.map((c) => ({ id: c.id, type: c.type, title: c.title, pinned: c.pinned, versionCount: c.versionCount, author: c.author?.name ?? null, structureVersion: c.version?.meta.structure?.structureVersion ?? null, hasImage: c.media?.kind === "image", updatedAt: c.updatedAt })));
     },
   );
 
@@ -514,6 +538,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       author: c.author?.name ?? null,
       url: c.version?.url ?? null,
       bodyMarkdown: c.version?.bodyMarkdown ?? null,
+      image: c.media?.kind === "image" ? { mediaId: c.media.id, url: `/api/files/${c.media.id}` } : null,
       structure: s ? { structureVersion: s.structureVersion, definition: s.definition, answers: s.answers } : null,
       updatedAt: c.updatedAt,
     });
@@ -533,12 +558,22 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         type: z.enum(["markdown", "link"]).optional().describe("shortcut via system templates; default markdown when body/url are used without template/answers"),
         body: z.string().max(200_000).optional().describe("shortcut: markdown body (type markdown) or note (type link)"),
         url: httpUrl.optional().describe("shortcut: type link"),
+        image: z
+          .object({ mediaId: z.string().uuid().optional().describe("existing uploaded image (media id)"), url: httpUrl.optional().describe("external image URL, imported server-side") })
+          .optional()
+          .describe("optional entry image (shown in the collection and at the top of the entry): exactly one of mediaId or url"),
       },
     },
-    async ({ collection, title, template, answers, type, body, url }) => {
+    async ({ collection, title, template, answers, type, body, url, image }) => {
       require(auth, "knowledge:write");
       const area = await resolveArea(collection);
       if (!area) return fail("collection not found");
+      let imageMediaId: string | null = null;
+      if (image) {
+        const resolved = await resolveEntryImage(image);
+        if ("error" in resolved) return fail(resolved.error);
+        imageMediaId = resolved.mediaId;
+      }
 
       let tpl: ContentTemplate | undefined;
       let effectiveAnswers: unknown = answers;
@@ -569,7 +604,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         }
       }
 
-      const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, title, effectiveAnswers, {});
+      const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, title, effectiveAnswers, { imageMediaId });
       if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: "answer keys/shapes must match the template definition" }, null, 2));
       const content = await createContent(area.id, "structured", built.input, auth.user.id);
       await audit(auth, "content.created", content.id, { collection: area.slug, type: "structured", templateId: tpl.id }, "content");
@@ -582,7 +617,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     {
       title: "Collections - Update entry",
       description:
-        "Updates an entry (append-only: creates a new version). Structured entries validate `answers` against the entry's own definition snapshot – omit `answers` to keep the stored ones (e.g. title-only edits); pass upgrade=true (with full `answers`) to re-snapshot to the template's current version. Markdown/link entries accept body/url. Image/video entries only accept title/body.",
+        "Updates an entry (append-only: creates a new version). Structured entries validate `answers` against the entry's own definition snapshot – omit `answers` to keep the stored ones (e.g. title-only edits); pass upgrade=true (with full `answers`) to re-snapshot to the template's current version. Markdown/link entries accept body/url. Image/video entries only accept title/body. The entry image is kept unless `image` is passed.",
       inputSchema: {
         id: z.string().uuid(),
         title: z.string().trim().min(1).max(200).optional(),
@@ -591,9 +626,17 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         body: z.string().max(200_000).optional(),
         url: httpUrl.optional(),
         changeNote: z.string().max(500).optional(),
+        image: z
+          .object({
+            mediaId: z.string().uuid().optional().describe("existing uploaded image (media id)"),
+            url: httpUrl.optional().describe("external image URL, imported server-side"),
+            remove: z.boolean().optional().describe("true removes the entry image"),
+          })
+          .optional()
+          .describe("structured entries only – entry image: exactly one of mediaId, url or remove; omit to keep the current image"),
       },
     },
-    async ({ id, title, answers, upgrade, body, url, changeNote }) => {
+    async ({ id, title, answers, upgrade, body, url, changeNote, image }) => {
       require(auth, "knowledge:write");
       const c = await getContent(id);
       if (!c || !c.version) return fail("entry not found");
@@ -601,9 +644,23 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       const area = await getAreaById(c.areaId);
 
       const input: ContentVersionInput = { title: title ?? c.title, bodyMarkdown: v.bodyMarkdown, mediaId: v.mediaId, url: v.url, meta: v.meta, changeNote: changeNote ?? null };
+      if (image && c.type !== "structured") return fail(`image is only supported on structured entries (type is "${c.type}")`);
       if (c.type === "structured") {
         const prev = v.meta.structure;
         if (!prev) return fail("entry has no structure snapshot");
+        // omitted image keeps the current one; remove clears it; mediaId/url replace it
+        let imageMediaId: string | null = v.mediaId;
+        if (image) {
+          const chosen = (image.mediaId ? 1 : 0) + (image.url ? 1 : 0) + (image.remove ? 1 : 0);
+          if (chosen !== 1) return fail("image: pass exactly one of mediaId, url or remove");
+          if (image.remove) {
+            imageMediaId = null;
+          } else {
+            const resolved = await resolveEntryImage(image);
+            if ("error" in resolved) return fail(resolved.error);
+            imageMediaId = resolved.mediaId;
+          }
+        }
         let snapshot: Pick<typeof prev, "structureId" | "structureVersion" | "definition"> = prev;
         if (upgrade) {
           const tpl = await getTemplateById(prev.structureId);
@@ -612,9 +669,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
           if (!answers) return fail("upgrade needs full `answers` for the template's current definition (call get_template)");
           snapshot = { structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition };
         }
-        const built = await buildStructuredVersionInput(snapshot, title ?? c.title, answers ?? prev.answers, { changeNote: changeNote ?? null, prevEnrichment: prev.enrichment });
+        const built = await buildStructuredVersionInput(snapshot, title ?? c.title, answers ?? prev.answers, { changeNote: changeNote ?? null, prevEnrichment: prev.enrichment, imageMediaId });
         if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: upgrade ? "answers are validated against the template's CURRENT definition" : "answers are validated against this entry's own definition snapshot – call get_entry to see it" }, null, 2));
         input.bodyMarkdown = built.input.bodyMarkdown;
+        input.mediaId = built.input.mediaId;
         input.meta = { ...v.meta, ...built.input.meta };
       } else {
         if (answers) return fail(`entry type is "${c.type}" – answers are only valid for structured entries`);
