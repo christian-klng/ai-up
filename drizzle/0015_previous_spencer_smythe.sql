@@ -1,0 +1,1 @@
+ALTER TABLE "knowledge_areas" ADD COLUMN "sort_mode" text DEFAULT 'updated' NOT NULL;

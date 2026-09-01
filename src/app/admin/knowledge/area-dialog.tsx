@@ -14,9 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { COLLECTION_LAYOUTS, type CollectionLayout } from "@/lib/collection-layouts";
+import { COLLECTION_LAYOUTS, COLLECTION_SORTS, type CollectionLayout, type CollectionSort } from "@/lib/collection-layouts";
 
-export type AreaFormValues = { id: string; name: string; purpose: string; description: string | null; icon: string; layout: CollectionLayout };
+export type AreaFormValues = { id: string; name: string; purpose: string; description: string | null; icon: string; layout: CollectionLayout; sortMode: CollectionSort };
 
 export function AreaDialog({ mode, area, trigger }: { mode: "create" | "edit"; area?: AreaFormValues; trigger?: React.ReactNode }) {
   const t = useTranslations("admin.knowledge");
@@ -25,6 +25,7 @@ export function AreaDialog({ mode, area, trigger }: { mode: "create" | "edit"; a
   const [open, setOpen] = useState(false);
   const [icon, setIcon] = useState(area?.icon ?? "book");
   const [layout, setLayout] = useState<CollectionLayout>(area?.layout ?? "grid");
+  const [sortMode, setSortMode] = useState<CollectionSort>(area?.sortMode ?? "updated");
   const [state, action, pending] = useActionState<AreaFormState, FormData>(saveAreaAction, { status: "idle" });
 
   useActionFeedback(state, (s) => {
@@ -55,6 +56,7 @@ export function AreaDialog({ mode, area, trigger }: { mode: "create" | "edit"; a
           {area && <input type="hidden" name="id" value={area.id} />}
           <input type="hidden" name="icon" value={icon} />
           <input type="hidden" name="layout" value={layout} />
+          <input type="hidden" name="sortMode" value={sortMode} />
 
           <div className="grid gap-2">
             <Label htmlFor="area-name">{t("name")}</Label>
@@ -90,6 +92,22 @@ export function AreaDialog({ mode, area, trigger }: { mode: "create" | "edit"; a
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">{t("layoutHint")}</p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="area-sort">{t("sort")}</Label>
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as CollectionSort)}>
+              <SelectTrigger id="area-sort">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COLLECTION_SORTS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {t(`sorts.${key}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{t("sortHint")}</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

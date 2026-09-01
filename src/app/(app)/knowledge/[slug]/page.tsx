@@ -27,7 +27,7 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
     getTranslations("knowledge"),
     getTranslations("common"),
     getFormatter(),
-    listContents({ areaId: area.id, type, query: q || undefined }),
+    listContents({ areaId: area.id, type, query: q || undefined, sort: area.sortMode }),
     countContentsByType(area.id),
   ]);
   const availableTypes = TYPES.filter((tp) => (typeCounts[tp] ?? 0) > 0);

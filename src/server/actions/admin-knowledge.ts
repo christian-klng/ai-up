@@ -5,7 +5,7 @@ import { z } from "zod";
 import { assertAdmin } from "@/server/auth/session";
 import { createArea, deleteArea, moveArea, updateArea } from "@/server/domain/knowledge";
 import { isAreaIconKey } from "@/components/knowledge/area-icon";
-import { COLLECTION_LAYOUTS } from "@/lib/collection-layouts";
+import { COLLECTION_LAYOUTS, COLLECTION_SORTS } from "@/lib/collection-layouts";
 
 export type AreaFormState = { status: "idle" } | { status: "saved"; slug: string } | { status: "error"; code: "nameRequired" | "purposeRequired" | "unexpected" };
 
@@ -16,6 +16,7 @@ const schema = z.object({
   description: z.string().trim().max(2000).optional(),
   icon: z.string().refine(isAreaIconKey).catch("book"),
   layout: z.enum(COLLECTION_LAYOUTS).catch("grid"),
+  sortMode: z.enum(COLLECTION_SORTS).catch("updated"),
 });
 
 export async function saveAreaAction(_prev: AreaFormState, formData: FormData): Promise<AreaFormState> {
@@ -27,6 +28,7 @@ export async function saveAreaAction(_prev: AreaFormState, formData: FormData): 
     description: formData.get("description") || undefined,
     icon: formData.get("icon") ?? "book",
     layout: formData.get("layout") ?? "grid",
+    sortMode: formData.get("sortMode") ?? "updated",
   });
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];

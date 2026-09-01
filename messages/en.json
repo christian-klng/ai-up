@@ -242,6 +242,14 @@
         "list": "List",
         "blog": "Blog feed"
       },
+      "sort": "Sorting",
+      "sortHint": "Order of the entries. Pinned entries always come first.",
+      "sorts": {
+        "updated": "Last edited (default)",
+        "newest": "Newest first",
+        "oldest": "Oldest first",
+        "title": "Alphabetical"
+      },
       "empty": "No collections yet. Create the first one.",
       "contentCount": "{count, plural, =1 {# item} other {# items}}",
       "confirmDelete": "Really delete collection “{name}”?",

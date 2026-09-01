@@ -242,6 +242,14 @@
         "list": "Liste",
         "blog": "Blog-Feed"
       },
+      "sort": "Sortierung",
+      "sortHint": "Reihenfolge der Einträge. Angeheftete Einträge stehen immer oben.",
+      "sorts": {
+        "updated": "Zuletzt bearbeitet (Standard)",
+        "newest": "Neueste zuerst",
+        "oldest": "Älteste zuerst",
+        "title": "Alphabetisch"
+      },
       "empty": "Noch keine Sammlungen. Lege die erste an.",
       "contentCount": "{count, plural, =1 {# Inhalt} other {# Inhalte}}",
       "confirmDelete": "Sammlung „{name}“ wirklich löschen?",

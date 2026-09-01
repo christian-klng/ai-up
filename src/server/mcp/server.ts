@@ -119,8 +119,10 @@ stores a full snapshot of its template definition, so template changes never bre
 ## Layouts
 
 Each collection has a member-view layout: "grid" (default), "compact" (smaller grid), "list" or
-"blog" (single-column feed). list_collections reports it read-only – admins set it in the app
-under Admin → Collections; there is deliberately no MCP tool to create or modify collections.
+"blog" (single-column feed), and a sort mode for its entries: "updated" (default, last edited
+first), "newest", "oldest" or "title" (pinned entries always come first). list_collections
+reports both read-only – admins set them in the app under Admin → Collections; there is
+deliberately no MCP tool to create or modify collections.
 
 ## Template definition
 
@@ -192,7 +194,7 @@ async function collectionsContext(): Promise<string> {
   const areaLines = areas.map((a) => {
     const assigned = assignments.get(a.id);
     const tpl = assigned?.length ? `templates: ${assigned.map((x) => x.name).join(", ")}` : "templates: system defaults";
-    return `- ${a.name} (id ${a.id}, slug "${a.slug}", layout ${a.layout}, ${a.contentCount} entries, ${tpl}): ${a.purpose.slice(0, 200)}`;
+    return `- ${a.name} (id ${a.id}, slug "${a.slug}", layout ${a.layout}, sort ${a.sortMode}, ${a.contentCount} entries, ${tpl}): ${a.purpose.slice(0, 200)}`;
   });
   return [
     "## Current templates",
@@ -446,7 +448,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text(
       areas.map((a) => {
         const assigned = assignments.get(a.id);
-        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, layout: a.layout, entryCount: a.contentCount, templates: assigned?.length ? assigned : "system-defaults" };
+        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, layout: a.layout, sortMode: a.sortMode, entryCount: a.contentCount, templates: assigned?.length ? assigned : "system-defaults" };
       }),
     );
   });

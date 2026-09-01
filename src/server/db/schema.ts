@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import type { CollectionLayout } from "@/lib/collection-layouts";
+import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
 import {
@@ -703,6 +703,8 @@ export const knowledgeAreas = pgTable(
     icon: text("icon").notNull().default("book"),
     /** member view layout, see src/lib/collection-layouts.ts */
     layout: text("layout").$type<CollectionLayout>().notNull().default("grid"),
+    /** member view entry order (pinned always first), see src/lib/collection-layouts.ts */
+    sortMode: text("sort_mode").$type<CollectionSort>().notNull().default("updated"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,

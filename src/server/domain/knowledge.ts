@@ -15,7 +15,7 @@ import {
   type MediaFile,
 } from "@/server/db/schema";
 import { emitDomainEvent, type ContentEventPayload, type EventOrigin } from "@/server/events/bus";
-import type { CollectionLayout } from "@/lib/collection-layouts";
+import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import { flattenAnswersText } from "@/lib/structures/markdown";
 import { slugify } from "@/lib/slug";
 
@@ -58,7 +58,7 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   return `${slugify(base)}-${Date.now().toString(36)}`;
 }
 
-export type AreaInput = { name: string; purpose: string; description?: string | null; icon?: string; layout?: CollectionLayout };
+export type AreaInput = { name: string; purpose: string; description?: string | null; icon?: string; layout?: CollectionLayout; sortMode?: CollectionSort };
 
 export async function createArea(input: AreaInput, actorId: string): Promise<KnowledgeArea> {
   const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${knowledgeAreas.sortOrder}), -1)::int` }).from(knowledgeAreas);
@@ -71,6 +71,7 @@ export async function createArea(input: AreaInput, actorId: string): Promise<Kno
       description: input.description?.trim() || null,
       icon: input.icon ?? "book",
       layout: input.layout ?? "grid",
+      sortMode: input.sortMode ?? "updated",
       sortOrder: max + 1,
       createdBy: actorId,
     })
@@ -91,6 +92,7 @@ export async function updateArea(id: string, input: AreaInput, actorId: string):
       description: input.description?.trim() || null,
       icon: input.icon ?? existing.icon,
       layout: input.layout ?? existing.layout,
+      sortMode: input.sortMode ?? existing.sortMode,
     })
     .where(eq(knowledgeAreas.id, id))
     .returning();
@@ -265,7 +267,21 @@ export async function getContent(contentId: string): Promise<ContentListItem | u
   return { ...r.content, version: r.version, media: r.media, author: r.author?.id ? r.author : null };
 }
 
-export type ListContentsOptions = { areaId?: string; type?: ContentType; query?: string; limit?: number; offset?: number };
+export type ListContentsOptions = { areaId?: string; type?: ContentType; query?: string; limit?: number; offset?: number; sort?: CollectionSort };
+
+/** Pinned entries always first; the tail order follows the collection's sort mode. */
+function contentOrderBy(sort: CollectionSort) {
+  switch (sort) {
+    case "newest":
+      return [desc(contents.pinned), desc(contents.createdAt)];
+    case "oldest":
+      return [desc(contents.pinned), asc(contents.createdAt)];
+    case "title":
+      return [desc(contents.pinned), asc(sql`lower(${contents.title})`)];
+    default:
+      return [desc(contents.pinned), desc(contents.updatedAt)];
+  }
+}
 
 export async function listContents(opts: ListContentsOptions = {}): Promise<ContentListItem[]> {
   const conds = [isNull(contents.deletedAt)];
@@ -279,7 +295,7 @@ export async function listContents(opts: ListContentsOptions = {}): Promise<Cont
     .leftJoin(mediaFiles, eq(mediaFiles.id, contentVersions.mediaId))
     .leftJoin(users, eq(users.id, contents.authorId))
     .where(and(...conds))
-    .orderBy(desc(contents.pinned), desc(contents.updatedAt))
+    .orderBy(...contentOrderBy(opts.sort ?? "updated"))
     .limit(opts.limit ?? 50)
     .offset(opts.offset ?? 0);
   return rows.map((r) => ({ ...r.content, version: r.version, media: r.media, author: r.author?.id ? r.author : null }));

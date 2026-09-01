@@ -21,6 +21,7 @@ export default async function AdminKnowledgePage() {
           description: a.description,
           icon: a.icon,
           layout: a.layout,
+          sortMode: a.sortMode,
           contentCount: a.contentCount,
           assignedTemplateIds: (assignments.get(a.id) ?? []).map((tpl) => tpl.id),
         }))}
