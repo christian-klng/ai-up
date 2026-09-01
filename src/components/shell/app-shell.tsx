@@ -8,7 +8,6 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarNav, type SidebarNavProps } from "./sidebar-nav";
-import { LocaleSwitcher } from "./locale-switcher";
 import { UserAvatar } from "./user-avatar";
 import { cn } from "@/lib/utils";
 import { useRealtime } from "@/components/realtime/realtime-provider";
@@ -17,7 +16,7 @@ export type AppShellProps = {
   brand: { name: string; logo: React.ReactNode };
   user: { id: string; name: string; email: string; avatarMediaId: string | null; role: "member" | "admin" };
   nav: Omit<SidebarNavProps, "onNavigate">;
-  labels: { messages: string; notifications: string; profile: string; admin: string; signOut: string; language: string; menu: string };
+  labels: { messages: string; notifications: string; profile: string; admin: string; signOut: string; menu: string };
   signOutAction: () => Promise<void>;
   children: React.ReactNode;
 };
@@ -35,10 +34,6 @@ export function AppShell({ brand, user, nav, labels, signOutAction, children }: 
       </Link>
       <div className="flex-1 overflow-y-auto">
         <SidebarNav {...nav} onNavigate={() => setOpen(false)} />
-      </div>
-      {/* Locale switcher lives in the top bar on desktop; on mobile it is only reachable here (sheet) */}
-      <div className="border-t border-sidebar-border px-4 py-3 md:hidden">
-        <LocaleSwitcher label={labels.language} />
       </div>
       <div className="border-t border-sidebar-border p-2">
         <Link href="/profile" className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-sidebar-accent/70" onClick={() => setOpen(false)}>
@@ -77,8 +72,6 @@ export function AppShell({ brand, user, nav, labels, signOutAction, children }: 
           </Link>
 
           <div className="ml-auto flex items-center gap-1">
-            <LocaleSwitcher label={labels.language} className="mr-2 hidden sm:inline-flex" />
-
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button asChild variant="ghost" size="icon" className="relative" aria-label={labels.messages}>

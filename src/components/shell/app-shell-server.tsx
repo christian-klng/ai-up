@@ -56,7 +56,6 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
         profile: tNav("profile"),
         admin: tNav("admin"),
         signOut: tAuth("signOut"),
-        language: tCommon("language"),
         menu: tCommon("menu"),
       }}
       signOutAction={signOut}
