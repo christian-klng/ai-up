@@ -1,24 +1,18 @@
-import { Book, BookOpen, Brain, CalendarClock, Code2, Compass, FolderOpen, GraduationCap, Lightbulb, Megaphone, Mic, Newspaper, Presentation, Rocket, Star, Users, Video, Wrench, type LucideProps } from "lucide-react";
+import { CalendarClock, Code2, Compass, FolderOpen, Presentation, type LucideProps } from "lucide-react";
+import { LANDING_ICON_MAP } from "@/components/landing/icon-map";
 
+/**
+ * Icons selectable for collections and meeting spaces: the shared site-page icon set
+ * plus a few legacy keys/looks kept for existing areas (calendar, code, folder render
+ * their original variants; compass and presentation predate the shared set).
+ */
 export const AREA_ICONS = {
-  book: Book,
-  "book-open": BookOpen,
+  ...LANDING_ICON_MAP,
   calendar: CalendarClock,
-  video: Video,
-  mic: Mic,
-  users: Users,
-  presentation: Presentation,
-  brain: Brain,
   code: Code2,
   compass: Compass,
   folder: FolderOpen,
-  "graduation-cap": GraduationCap,
-  lightbulb: Lightbulb,
-  megaphone: Megaphone,
-  newspaper: Newspaper,
-  rocket: Rocket,
-  star: Star,
-  wrench: Wrench,
+  presentation: Presentation,
 } as const;
 
 export type AreaIconKey = keyof typeof AREA_ICONS;
@@ -29,6 +23,6 @@ export function isAreaIconKey(v: unknown): v is AreaIconKey {
 }
 
 export function AreaIcon({ icon, ...props }: { icon: string } & LucideProps) {
-  const Cmp = isAreaIconKey(icon) ? AREA_ICONS[icon] : Book;
+  const Cmp = isAreaIconKey(icon) ? AREA_ICONS[icon] : AREA_ICONS.book;
   return <Cmp {...props} />;
 }

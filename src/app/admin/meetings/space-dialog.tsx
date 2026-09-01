@@ -7,14 +7,13 @@ import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { useActionFeedback } from "@/hooks/use-action-feedback";
 import { saveSpaceAction, type SpaceFormState } from "@/server/actions/admin-meetings";
-import { AREA_ICON_KEYS, AreaIcon } from "@/components/knowledge/area-icon";
+import { IconPicker } from "@/components/common/icon-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 
 export type SpaceFormValues = { id: string; name: string; purpose: string; description: string | null; icon: string; recordingDefault: boolean };
 
@@ -77,21 +76,8 @@ export function SpaceDialog({ mode, space, trigger }: { mode: "create" | "edit";
             </div>
           </div>
           <div className="grid gap-2">
-            <Label>{t("icon")}</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {AREA_ICON_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-label={key}
-                  aria-pressed={icon === key}
-                  onClick={() => setIcon(key)}
-                  className={cn("flex size-9 items-center justify-center rounded-md border transition-colors hover:bg-accent", icon === key && "border-primary bg-primary/10 text-primary")}
-                >
-                  <AreaIcon icon={key} className="size-4" />
-                </button>
-              ))}
-            </div>
+            <Label htmlFor="space-icon">{t("icon")}</Label>
+            <IconPicker id="space-icon" value={icon} onChange={setIcon} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

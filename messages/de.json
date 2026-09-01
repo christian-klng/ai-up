@@ -27,7 +27,9 @@
     "menu": "Menü",
     "confirm": "Bestätigen",
     "by": "von",
-    "open": "Öffnen"
+    "open": "Öffnen",
+    "searchIcons": "Icon suchen …",
+    "noResults": "Keine Treffer"
   },
   "auth": {
     "signIn": "Anmelden",
