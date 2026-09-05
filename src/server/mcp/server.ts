@@ -19,7 +19,10 @@ import { addContentVersion, createContent, getAreaById, getAreaBySlug, getConten
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { importImageFromUrl } from "@/server/media/import-image";
 import { env } from "@/server/env";
-import { deleteTemplate, getTemplateById, getTemplateBySystemKey, isTemplateAvailableForArea, listAllAssignments, listAvailableTemplates, listTemplates, saveTemplate, setAreaTemplates } from "@/server/domain/templates";
+import { deleteTemplate, getTemplateById, getTemplateBySystemKey, isTemplateAvailableForArea, listAllAssignments, listAvailableTemplates, listTemplates, saveTemplate, setAreaTemplates, setTemplateEvaluation } from "@/server/domain/templates";
+import { deleteEvaluationsForTemplate, listContentIdsForTemplate, listEvaluations } from "@/server/domain/evaluation";
+import { enqueueEvaluation } from "@/server/workflows/queue";
+import { criterionKeyFromTitle, validateEvaluation, MAX_CRITERIA, MAX_CRITERION_INSTRUCTION, MAX_CRITERION_TITLE, type EvaluationCriterion } from "@/lib/structures/evaluation";
 import { isSystemTemplateKey } from "@/lib/structures/defaults";
 import { validateStructure } from "@/lib/structures/validate";
 import type { ContentTemplate, KnowledgeArea } from "@/server/db/schema";
@@ -183,8 +186,27 @@ showIf makes an element conditional on an EARLIER answerable element – exactly
   and as the preview in the collection views, and is versioned with the entry. update_entry keeps
   the current image unless "image" is passed; { "remove": true } clears it.
 - Write labels, options and content in the community's language (see context below).
-- save_template creates a new template version; entries keep their snapshot until upgraded.
+- save_template creates a new template version; entries keep their snapshot until upgraded
+  (name, icon and evaluation criteria live outside the snapshot – changing only those keeps the version).
 - set_collection_templates assigns templates to a collection (empty list = system templates).
+
+## Evaluation criteria
+
+A template can carry qualitative criteria that an LLM checks against every entry after each save
+(one call per criterion, verdict pass/fail plus a short reason, shown to members on the entry):
+
+{ "providerId": "default | <llm provider id>", "model": "default | <model id>",
+  "criteria": [ { "key": "^[a-z][a-z0-9_]{0,39}$", "title": "1–3 words", "instruction": "what to check" } ] }
+
+- Criteria are NOT snapshotted with the entry: the current criteria always win, so a change applies
+  to every entry of the template. Existing verdicts stay until the entry is saved again or re-checked
+  (set_template_evaluation with recheck=true).
+- "key" may be omitted on write – it is then derived from the title. Keep keys stable when renaming a
+  title, otherwise the stored verdicts of that criterion are dropped.
+- Write titles and instructions in the community's language; an empty criteria list switches the check off.
+- save_template carries the evaluation for custom templates; set_template_evaluation also works for the
+  system templates (their definition is seed-managed, their criteria are not).
+- get_entry returns the stored verdicts of the entry's current version.
 `;
 
 /** Current templates and collections appended to the doc so the calling LLM knows ids, slugs and versions. */
@@ -232,7 +254,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_collection_templates / create_entry / update_entry.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry.",
     },
   );
 
@@ -430,6 +452,29 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   const collectionInput = z.string().describe("collection id (uuid) or slug");
   const templateInput = z.string().describe("template id (uuid) or systemKey (text | image | link | video)");
   const httpUrl = z.string().trim().max(2000).regex(/^https?:\/\//i, "must be an http(s) URL");
+  // Evaluation criteria: keys are optional on write and derived from the title when missing.
+  const evaluationInput = z
+    .object({
+      providerId: z.string().max(100).optional().describe('llm provider id or "default"'),
+      model: z.string().max(200).optional().describe('model id or "default"'),
+      criteria: z
+        .array(
+          z.object({
+            key: z.string().max(40).optional(),
+            title: z.string().trim().min(1).max(MAX_CRITERION_TITLE).describe("1–3 words"),
+            instruction: z.string().trim().min(1).max(MAX_CRITERION_INSTRUCTION).describe("what the model has to check"),
+          }),
+        )
+        .max(MAX_CRITERIA),
+    })
+    .describe("LLM criteria checked against every entry of the template");
+  type EvaluationInput = z.infer<typeof evaluationInput>;
+  const normalizeEvaluation = (input: EvaluationInput) => {
+    const criteria: EvaluationCriterion[] = [];
+    for (const c of input.criteria) criteria.push({ key: c.key || criterionKeyFromTitle(c.title, criteria.map((x) => x.key)), title: c.title, instruction: c.instruction });
+    const res = validateEvaluation({ providerId: input.providerId || "default", model: input.model || "default", criteria });
+    return res.evaluation ?? { issues: res.issues };
+  };
   // Entry image (structured entries, stored on version.mediaId): existing media id or server-side URL import.
   const resolveEntryImage = async (image: { mediaId?: string; url?: string }): Promise<{ mediaId: string } | { error: string }> => {
     if ((image.mediaId ? 1 : 0) + (image.url ? 1 : 0) !== 1) return { error: "image: pass exactly one of mediaId or url" };
@@ -456,14 +501,26 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   server.registerTool("list_templates", { title: "Templates - List templates", description: "All content templates with version and how many collections they are assigned to.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
     const templates = await listTemplates();
-    return text(templates.map((t) => ({ id: t.id, name: t.name, description: t.description, systemKey: t.systemKey, isSystem: t.isSystem, version: t.version, assignmentCount: t.assignmentCount, updatedAt: t.updatedAt })));
+    return text(
+      templates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        systemKey: t.systemKey,
+        isSystem: t.isSystem,
+        version: t.version,
+        assignmentCount: t.assignmentCount,
+        criteriaCount: t.evaluation.criteria.length,
+        updatedAt: t.updatedAt,
+      })),
+    );
   });
 
   server.registerTool("get_template", { title: "Templates - Get template", description: "One template with its full definition (element keys for create_entry answers).", inputSchema: { template: templateInput } }, async ({ template }) => {
     require(auth, "knowledge:read");
     const t = await resolveTemplate(template);
     if (!t) return fail("template not found");
-    return text({ id: t.id, name: t.name, description: t.description, systemKey: t.systemKey, isSystem: t.isSystem, version: t.version, definition: t.definition, updatedAt: t.updatedAt });
+    return text({ id: t.id, name: t.name, description: t.description, systemKey: t.systemKey, isSystem: t.isSystem, version: t.version, definition: t.definition, evaluation: t.evaluation, updatedAt: t.updatedAt });
   });
 
   server.registerTool("validate_structure", { title: "Templates - Validate definition", description: "Dry-run validation of a template definition. Returns issues (blocking) and warnings without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
@@ -475,16 +532,56 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "save_template",
     {
       title: "Templates - Save template",
-      description: "Creates a template (omit id) or updates one (new version; entries keep their snapshot until they opt into the upgrade). System templates are managed by the application and cannot be changed.",
-      inputSchema: { id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), description: z.string().max(1000).optional(), icon: z.string().max(50).optional(), definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(500).optional() },
+      description:
+        "Creates a template (omit id) or updates one (a new version is written only when the definition changed; entries keep their snapshot until they opt into the upgrade). Pass `evaluation` to set the LLM criteria (omit to keep them). System templates are managed by the application and cannot be changed – use set_template_evaluation for their criteria.",
+      inputSchema: {
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(1).max(200),
+        description: z.string().max(1000).optional(),
+        icon: z.string().max(50).optional(),
+        definition: z.record(z.string(), z.unknown()),
+        evaluation: evaluationInput.optional(),
+        changeNote: z.string().max(500).optional(),
+      },
     },
-    async ({ id, name, description, icon, definition, changeNote }) => {
+    async ({ id, name, description, icon, definition, evaluation, changeNote }) => {
       require(auth, "knowledge:write");
       const res = validateStructure(definition);
       if (!res.def) return fail(JSON.stringify({ issues: res.issues }, null, 2));
-      const saved = await saveTemplate({ id, name, description: description || null, icon, definition: res.def }, auth.user.id, changeNote);
+      const evaluated = evaluation ? normalizeEvaluation(evaluation) : undefined;
+      if (evaluated && "issues" in evaluated) return fail(JSON.stringify({ issues: evaluated.issues }, null, 2));
+      const saved = await saveTemplate({ id, name, description: description || null, icon, definition: res.def, evaluation: evaluated }, auth.user.id, changeNote);
       if ("error" in saved) return fail(saved.error === "system" ? "system templates cannot be changed" : "template not found");
-      return text({ id: saved.id, version: saved.version, warnings: res.warnings });
+      if (evaluated) await deleteEvaluationsForTemplate(saved.id, evaluated.criteria.map((c) => c.key));
+      return text({ id: saved.id, version: saved.version, criteriaCount: saved.evaluation.criteria.length, warnings: res.warnings });
+    },
+  );
+
+  server.registerTool(
+    "set_template_evaluation",
+    {
+      title: "Templates - Set evaluation criteria",
+      description:
+        "Replaces the LLM criteria (and the model) of a template without touching its definition – works for system templates too. Pass an empty criteria array to switch the check off. With recheck=true every existing entry of the template is queued for a fresh check (one LLM call per entry and criterion).",
+      inputSchema: { template: templateInput, evaluation: evaluationInput, recheck: z.boolean().optional() },
+    },
+    async ({ template, evaluation, recheck }) => {
+      require(auth, "knowledge:write");
+      const t = await resolveTemplate(template);
+      if (!t) return fail("template not found");
+      const normalized = normalizeEvaluation(evaluation);
+      if ("issues" in normalized) return fail(JSON.stringify({ issues: normalized.issues }, null, 2));
+      const saved = await setTemplateEvaluation(t.id, normalized, auth.user.id);
+      if (!saved) return fail("template not found");
+      await deleteEvaluationsForTemplate(t.id, normalized.criteria.map((c) => c.key));
+      let queued = 0;
+      if (recheck && normalized.criteria.length > 0) {
+        const entries = await listContentIdsForTemplate(t.id);
+        for (const e of entries) await enqueueEvaluation(e.contentId, e.versionId);
+        queued = entries.length;
+      }
+      await audit(auth, "content_template.evaluation_updated", t.id, { criteria: normalized.criteria.length, queued }, "content_template");
+      return text({ id: t.id, criteria: normalized.criteria, queuedForRecheck: queued });
     },
   );
 
@@ -542,6 +639,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       bodyMarkdown: c.version?.bodyMarkdown ?? null,
       image: c.media?.kind === "image" ? { mediaId: c.media.id, url: `/api/files/${c.media.id}` } : null,
       structure: s ? { structureVersion: s.structureVersion, definition: s.definition, answers: s.answers } : null,
+      evaluations: c.currentVersionId ? (await listEvaluations(c.currentVersionId)).map((e) => ({ criterion: e.criterionTitle, key: e.criterionKey, status: e.status, reason: e.reason, checkedAt: e.createdAt })) : [],
       updatedAt: c.updatedAt,
     });
   });

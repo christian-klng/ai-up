@@ -4,9 +4,11 @@ import { getFormatter, getTranslations } from "next-intl/server";
 import { ArrowLeft, History, Pencil } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
+import { getEvaluationSummary } from "@/server/domain/evaluation";
 import { ContentBody } from "@/components/content/content-body";
 import { ImageLightbox } from "@/components/content/image-lightbox";
 import { StructuredContentView } from "@/components/structures/structured-content-view";
+import { EvaluationPopover } from "@/components/knowledge/evaluation-popover";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,7 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
   const [t, format] = await Promise.all([getTranslations("knowledge"), getFormatter()]);
   const v = content.version;
   const editable = canEditContent(user, content);
+  const evaluation = await getEvaluationSummary(content.id, content.currentVersionId, v?.meta.structure?.structureId ?? null);
 
   return (
     <article className="mx-auto max-w-3xl">
@@ -42,6 +45,15 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
                   <Pencil className="size-4" /> {t("view.edit")}
                 </Link>
               </Button>
+            )}
+            {evaluation && (
+              <EvaluationPopover
+                contentId={content.id}
+                rows={evaluation.rows.map((r) => ({ key: r.criterionKey, title: r.criterionTitle, status: r.status, reason: r.reason, checkedAt: r.createdAt.toISOString() }))}
+                pending={evaluation.pending}
+                criteriaCount={evaluation.criteriaCount}
+                canRecheck={editable}
+              />
             )}
             <ContentActions contentId={content.id} areaSlug={area.slug} pinned={content.pinned} canEdit={editable} isAdmin={user.role === "admin"} markdown={v?.bodyMarkdown ?? null} title={content.title} />
           </div>

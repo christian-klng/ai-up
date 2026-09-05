@@ -156,3 +156,16 @@ export async function runChat(providerId: string | undefined | null, req: ChatRe
   const { provider, model } = await resolveModel(providerId, req.model);
   return chatCompletion(await clientConfigFor(provider), { ...req, model });
 }
+
+/** Provider + enabled-model list for the pickers (workflow editor, template evaluation). */
+export async function listProviderOptions(): Promise<{ id: string; name: string; kind: ProviderKind; isDefault: boolean; defaultModel: string | null; models: { id: string; name?: string }[] }[]> {
+  const providers = await listProviders();
+  return providers.map((p) => ({
+    id: p.id,
+    name: p.name,
+    kind: p.kind,
+    isDefault: p.isDefault,
+    defaultModel: p.defaultModel,
+    models: p.availableModels.filter((m) => p.enabledModels.includes(m.id)).map((m) => ({ id: m.id, name: m.name })),
+  }));
+}

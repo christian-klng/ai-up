@@ -12,6 +12,7 @@ import { getTemplateBySystemKey } from "@/server/domain/templates";
 import { getSpaceById, setMeetingTranscript } from "@/server/domain/meetings";
 import { absolutePath } from "@/server/media/storage";
 import { readWebpage } from "@/server/webreader/read-webpage";
+import { extractJson } from "@/lib/extract-json";
 import { modelCapabilities } from "@/server/llm/client";
 import { chatCompletion } from "@/server/llm/client";
 import { clientConfigFor, getDefaultProvider, getProvider, resolveModel } from "@/server/llm/providers";
@@ -49,32 +50,7 @@ const llmConfig = z.object({
 });
 export type LlmActionConfig = z.infer<typeof llmConfig>;
 
-/** Pulls the first JSON object/array out of a text answer (fallback when the model ignores response_format). */
-export function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
-  const candidates = [trimmed, fenced?.[1] ?? ""];
-  for (const c of candidates) {
-    if (!c) continue;
-    try {
-      return JSON.parse(c);
-    } catch {
-      /* try slicing */
-    }
-    const start = Math.min(...["{", "["].map((ch) => c.indexOf(ch)).filter((i) => i >= 0));
-    if (Number.isFinite(start)) {
-      const end = Math.max(c.lastIndexOf("}"), c.lastIndexOf("]"));
-      if (end > start) {
-        try {
-          return JSON.parse(c.slice(start, end + 1));
-        } catch {
-          /* give up */
-        }
-      }
-    }
-  }
-  return undefined;
-}
+export { extractJson };
 
 registerAction<LlmActionConfig>({
   type: "llm",

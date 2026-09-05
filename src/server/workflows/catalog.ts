@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { users } from "@/server/db/schema";
 import { listAreas } from "@/server/domain/knowledge";
-import { listProviders } from "@/server/llm/providers";
+import { listProviderOptions } from "@/server/llm/providers";
 import { listQuestionKeys } from "@/server/domain/questions";
 import { listActions, listTriggers, loadRegistry } from "./registry";
 import type { FieldSpec, Localized } from "./types";
@@ -26,7 +26,7 @@ export async function getEditorCatalog(): Promise<EditorCatalog> {
   await loadRegistry();
   const [areas, providers, members, questionKeysDb, wfs] = await Promise.all([
     listAreas(),
-    listProviders(),
+    listProviderOptions(),
     db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.status, "active"), eq(users.isBot, false))).orderBy(asc(users.name)),
     listQuestionKeys(),
     db.query.workflows.findMany({ columns: { steps: true } }),
@@ -38,14 +38,7 @@ export async function getEditorCatalog(): Promise<EditorCatalog> {
     triggers: listTriggers().map((t) => ({ type: t.type, labels: t.labels, doc: t.doc, fields: t.fields, payloadDoc: t.payloadDoc, samplePayload: t.samplePayload })),
     actions: listActions().map((a) => ({ type: a.type, labels: a.labels, doc: a.doc, fields: a.fields, outputDoc: a.outputDoc })),
     areas: areas.map((a) => ({ id: a.id, name: a.name, slug: a.slug })),
-    providers: providers.map((p) => ({
-      id: p.id,
-      name: p.name,
-      kind: p.kind,
-      isDefault: p.isDefault,
-      defaultModel: p.defaultModel,
-      models: p.availableModels.filter((m) => p.enabledModels.includes(m.id)).map((m) => ({ id: m.id, name: m.name })),
-    })),
+    providers,
     members,
     questionKeys: [...keys.entries()].map(([key, title]) => ({ key, title })),
   };

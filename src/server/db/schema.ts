@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import type { LandingDefinition } from "@/lib/landing-schema";
+import type { TemplateEvaluation } from "@/lib/structures/evaluation";
 import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
 import {
   boolean,
@@ -732,6 +733,9 @@ export const contentTemplates = pgTable(
     /** lucide icon key, same set as collection icons */
     icon: text("icon").notNull().default("file-text"),
     definition: jsonb("definition").$type<StructureDefinition>().notNull(),
+    /** LLM checks run after every entry save; NOT part of the entry snapshot – the current
+     * criteria always win (empty criteria = evaluation off). See lib/structures/evaluation.ts. */
+    evaluation: jsonb("evaluation").$type<TemplateEvaluation>().notNull().default({ providerId: "default", model: "default", criteria: [] }),
     version: integer("version").notNull().default(1),
     isSystem: boolean("is_system").notNull().default(false),
     /** stable key for system templates: text | image | link | video */
@@ -846,6 +850,37 @@ export const contentVersions = pgTable(
   (t) => [uniqueIndex("content_versions_content_no_idx").on(t.contentId, t.versionNo)],
 );
 
+export const evaluationStatusEnum = pgEnum("evaluation_status", ["pass", "fail", "error"]);
+
+/**
+ * One LLM verdict per (entry version, criterion). Written by the worker after every
+ * entry save; rows stay bound to the version so the history keeps its verdicts.
+ */
+export const contentEvaluations = pgTable(
+  "content_evaluations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contents.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => contentVersions.id, { onDelete: "cascade" }),
+    templateId: uuid("template_id").references(() => contentTemplates.id, { onDelete: "set null" }),
+    criterionKey: text("criterion_key").notNull(),
+    /** criterion as it was at judging time – keeps the reason interpretable after edits */
+    criterionTitle: text("criterion_title").notNull(),
+    criterionInstruction: text("criterion_instruction").notNull(),
+    status: evaluationStatusEnum("status").notNull(),
+    reason: text("reason"),
+    providerId: uuid("provider_id").references(() => llmProviders.id, { onDelete: "set null" }),
+    model: text("model"),
+    usage: jsonb("usage").$type<{ promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number }>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("content_evaluations_version_criterion_idx").on(t.versionId, t.criterionKey), index("content_evaluations_content_idx").on(t.contentId)],
+);
+
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
@@ -873,6 +908,12 @@ export const contentsRelations = relations(contents, ({ one, many }) => ({
   area: one(knowledgeAreas, { fields: [contents.areaId], references: [knowledgeAreas.id] }),
   author: one(users, { fields: [contents.authorId], references: [users.id] }),
   versions: many(contentVersions),
+}));
+
+export const contentEvaluationsRelations = relations(contentEvaluations, ({ one }) => ({
+  content: one(contents, { fields: [contentEvaluations.contentId], references: [contents.id] }),
+  version: one(contentVersions, { fields: [contentEvaluations.versionId], references: [contentVersions.id] }),
+  template: one(contentTemplates, { fields: [contentEvaluations.templateId], references: [contentTemplates.id] }),
 }));
 
 export const contentVersionsRelations = relations(contentVersions, ({ one }) => ({
@@ -984,3 +1025,5 @@ export type KnowledgeAreaTemplate = typeof knowledgeAreaTemplates.$inferSelect;
 export type Content = typeof contents.$inferSelect;
 export type ContentType = Content["type"];
 export type ContentVersion = typeof contentVersions.$inferSelect;
+export type ContentEvaluation = typeof contentEvaluations.$inferSelect;
+export type EvaluationStatus = ContentEvaluation["status"];

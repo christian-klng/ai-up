@@ -29,7 +29,12 @@
     "by": "von",
     "open": "Öffnen",
     "searchIcons": "Icon suchen …",
-    "noResults": "Keine Treffer"
+    "noResults": "Keine Treffer",
+    "llm": {
+      "noProviders": "Kein LLM-Provider konfiguriert – lege unter Verwaltung → LLM einen an.",
+      "defaultProvider": "Standard-Provider",
+      "defaultModel": "Standardmodell ({model})"
+    }
   },
   "auth": {
     "signIn": "Anmelden",
@@ -336,7 +341,27 @@
       "removed": "Vorlage gelöscht.",
       "moveUp": "Nach oben",
       "moveDown": "Nach unten",
-      "removeElement": "Element entfernen"
+      "removeElement": "Element entfernen",
+      "evaluation": {
+        "title": "Evaluation",
+        "intro": "Ein Sprachmodell prüft jeden Eintrag dieser Vorlage nach dem Speichern gegen die Kriterien – jedes Kriterium einzeln. Die aktuellen Kriterien gelten für alle Einträge.",
+        "modelLabel": "Modell für die Prüfung",
+        "empty": "Noch keine Kriterien – ohne Kriterien läuft keine Prüfung.",
+        "add": "Kriterium",
+        "titlePlaceholder": "Kurzer Titel (1–3 Wörter)",
+        "instructionPlaceholder": "Was soll geprüft werden? Z. B.: Der Eintrag nennt mindestens ein konkretes Beispiel aus der Praxis.",
+        "criterionTitleLabel": "Titel des Kriteriums",
+        "criterionInstructionLabel": "Prüfungskriterium",
+        "moveUp": "Nach oben",
+        "moveDown": "Nach unten",
+        "remove": "Kriterium entfernen",
+        "save": "Kriterien speichern",
+        "saved": "Kriterien gespeichert",
+        "recheckAll": "Alle Einträge neu prüfen",
+        "recheckHint": "Bestehende Einträge behalten ihr altes Ergebnis, bis sie neu gespeichert oder hier neu geprüft werden.",
+        "recheckQueued": "{count, plural, =0 {Keine Einträge zu prüfen} one {Ein Eintrag wird geprüft} other {# Einträge werden geprüft}}",
+        "recheckFailed": "Prüfung konnte nicht gestartet werden"
+      }
     },
     "llm": {
       "title": "LLM-Provider",
@@ -658,6 +683,16 @@
       "noDiff": "Keine Textänderungen.",
       "viewVersion": "Version anzeigen",
       "back": "Zurück zum Inhalt"
+    },
+    "evaluation": {
+      "ariaLabel": "Prüfungsergebnisse anzeigen",
+      "title": "Prüfung",
+      "hint": "Zeile anklicken oder darauf zeigen für die Begründung.",
+      "running": "Prüfung läuft",
+      "runningHint": "{count, plural, one {Ein Kriterium wird geprüft} other {# Kriterien werden geprüft}} – das dauert einen Moment.",
+      "recheck": "Neu prüfen",
+      "noReason": "Keine Begründung geliefert.",
+      "checkedAt": "Geprüft am {date}"
     }
   },
   "contacts": {

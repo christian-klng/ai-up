@@ -8,13 +8,14 @@ import { logger } from "@/server/logger";
 import { scheduleToRepeat, type ScheduleConfig } from "./triggers";
 
 /**
- * BullMQ queue "workflow-runs": jobs of two kinds
- *  - { kind: "run", runId }          → execute an already created run
- *  - { kind: "schedule", workflowId } → repeatable job (job scheduler) → creates + executes a run
+ * BullMQ queue "workflow-runs": jobs of three kinds
+ *  - { kind: "run", runId }                  → execute an already created run
+ *  - { kind: "schedule", workflowId }        → repeatable job (job scheduler) → creates + executes a run
+ *  - { kind: "evaluate", contentId, versionId } → LLM check of an entry against its template criteria
  * Web enqueues; the worker consumes (see worker/index.ts).
  */
 export const WORKFLOW_QUEUE = "workflow-runs";
-export type WorkflowJob = { kind: "run"; runId: string } | { kind: "schedule"; workflowId: string };
+export type WorkflowJob = { kind: "run"; runId: string } | { kind: "schedule"; workflowId: string } | { kind: "evaluate"; contentId: string; versionId: string };
 
 const g = globalThis as unknown as { __aiupQueue?: Queue<WorkflowJob>; __aiupQueueConn?: IORedis };
 
@@ -31,6 +32,20 @@ export function getQueue(): Queue<WorkflowJob> {
 
 export async function enqueueRun(runId: string): Promise<void> {
   await getQueue().add("run", { kind: "run", runId }, { jobId: `run-${runId}` });
+}
+
+/**
+ * Queues an entry evaluation. Best effort: saving an entry must never fail because Redis hiccuped.
+ * The job id dedupes repeated requests for the same version (e.g. re-check while one is still queued).
+ */
+export async function enqueueEvaluation(contentId: string, versionId: string): Promise<void> {
+  try {
+    // removeOnComplete/Fail frees the job id again – otherwise a later re-check of the same
+    // version would be swallowed as a duplicate. Outcomes are logged and stored in the DB anyway.
+    await getQueue().add("evaluate", { kind: "evaluate", contentId, versionId }, { jobId: `eval-${versionId}`, removeOnComplete: true, removeOnFail: true });
+  } catch (err) {
+    logger.warn({ err, contentId, versionId }, "could not enqueue entry evaluation");
+  }
 }
 
 // BullMQ forbids ":" in custom ids

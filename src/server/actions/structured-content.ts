@@ -6,6 +6,7 @@ import { assertUser } from "@/server/auth/session";
 import { addContentVersion, canEditContent, createContent, getAreaById, getContent } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { getTemplateById, isTemplateAvailableForArea } from "@/server/domain/templates";
+import { enqueueEvaluation } from "@/server/workflows/queue";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import type { StructureEntryMeta } from "@/lib/structures/types";
 import { logger } from "@/server/logger";
@@ -89,4 +90,13 @@ export async function saveStructuredEntryAction(input: {
     logger.error({ err }, "structured entry save failed");
     return { ok: false, issues: [{ key: "", code: "invalid" }] };
   }
+}
+
+/** Queues a fresh criteria check for one entry (author or admin; e.g. after a template change). */
+export async function reevaluateEntryAction(contentId: string): Promise<{ ok: boolean }> {
+  const user = await assertUser();
+  const content = await getContent(contentId);
+  if (!content || !content.currentVersionId || !canEditContent(user, content)) return { ok: false };
+  await enqueueEvaluation(content.id, content.currentVersionId);
+  return { ok: true };
 }

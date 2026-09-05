@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { requireAdmin } from "@/server/auth/session";
 import { getTemplateById } from "@/server/domain/templates";
+import { listProviderOptions } from "@/server/llm/providers";
 import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 import { StructureEditor } from "@/components/structures/structure-editor";
@@ -11,7 +12,7 @@ import { StructureEditor } from "@/components/structures/structure-editor";
 export default async function EditTemplatePage({ params }: PageProps<"/admin/templates/[id]">) {
   await requireAdmin();
   const { id } = await params;
-  const [t, template] = await Promise.all([getTranslations("admin.templates"), getTemplateById(id)]);
+  const [t, template, providers] = await Promise.all([getTranslations("admin.templates"), getTemplateById(id), listProviderOptions()]);
   if (!template) notFound();
   return (
     <div>
@@ -30,9 +31,10 @@ export default async function EditTemplatePage({ params }: PageProps<"/admin/tem
       />
       <StructureEditor
         templateId={template.id}
-        initial={{ name: template.name, description: template.description, icon: template.icon, definition: template.definition }}
+        initial={{ name: template.name, description: template.description, icon: template.icon, definition: template.definition, evaluation: template.evaluation }}
         initialVersion={template.version}
         isSystem={template.isSystem}
+        providers={providers}
       />
     </div>
   );

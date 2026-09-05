@@ -29,7 +29,12 @@
     "by": "by",
     "open": "Open",
     "searchIcons": "Search icons …",
-    "noResults": "No matches"
+    "noResults": "No matches",
+    "llm": {
+      "noProviders": "No LLM provider configured – add one under Admin → LLM.",
+      "defaultProvider": "Default provider",
+      "defaultModel": "Default model ({model})"
+    }
   },
   "auth": {
     "signIn": "Sign in",
@@ -336,7 +341,27 @@
       "removed": "Template deleted.",
       "moveUp": "Move up",
       "moveDown": "Move down",
-      "removeElement": "Remove element"
+      "removeElement": "Remove element",
+      "evaluation": {
+        "title": "Evaluation",
+        "intro": "After every save a language model checks each entry of this template against the criteria – one call per criterion. The current criteria apply to all entries.",
+        "modelLabel": "Model used for the check",
+        "empty": "No criteria yet – without criteria nothing is checked.",
+        "add": "Criterion",
+        "titlePlaceholder": "Short title (1–3 words)",
+        "instructionPlaceholder": "What has to be checked? E.g.: The entry names at least one concrete example from practice.",
+        "criterionTitleLabel": "Criterion title",
+        "criterionInstructionLabel": "Check criterion",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "remove": "Remove criterion",
+        "save": "Save criteria",
+        "saved": "Criteria saved",
+        "recheckAll": "Re-check all entries",
+        "recheckHint": "Existing entries keep their previous verdict until they are saved again or re-checked from here.",
+        "recheckQueued": "{count, plural, =0 {No entries to check} one {One entry is being checked} other {# entries are being checked}}",
+        "recheckFailed": "Could not start the check"
+      }
     },
     "llm": {
       "title": "LLM providers",
@@ -658,6 +683,16 @@
       "noDiff": "No text changes.",
       "viewVersion": "View version",
       "back": "Back to content"
+    },
+    "evaluation": {
+      "ariaLabel": "Show check results",
+      "title": "Check",
+      "hint": "Click or hover a row for the reason.",
+      "running": "Checking",
+      "runningHint": "{count, plural, one {One criterion is being checked} other {# criteria are being checked}} – this takes a moment.",
+      "recheck": "Re-check",
+      "noReason": "No reason provided.",
+      "checkedAt": "Checked on {date}"
     }
   },
   "contacts": {

@@ -1,5 +1,5 @@
 /**
- * Background worker (BullMQ): executes workflow runs and schedule triggers.
+ * Background worker (BullMQ): executes workflow runs, schedule triggers and entry evaluations.
  * Shares src/server/** with the web process; never imports next/* or React.
  */
 import { Worker, type Job } from "bullmq";
@@ -12,6 +12,7 @@ import { workflows } from "@/server/db/schema";
 import { WORKFLOW_QUEUE, getQueue, syncSchedules, type WorkflowJob } from "@/server/workflows/queue";
 import { createRun, executeRun } from "@/server/workflows/engine";
 import { loadRegistry } from "@/server/workflows/registry";
+import { evaluateContentVersion } from "@/server/domain/evaluation";
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
@@ -19,6 +20,11 @@ async function processJob(job: Job<WorkflowJob>): Promise<void> {
   const data = job.data;
   if (data.kind === "run") {
     await executeRun(data.runId);
+    return;
+  }
+  if (data.kind === "evaluate") {
+    const result = await evaluateContentVersion(data.contentId, data.versionId);
+    if (!result.ok) logger.debug({ contentId: data.contentId, versionId: data.versionId, reason: result.reason }, "entry evaluation skipped");
     return;
   }
   if (data.kind === "schedule") {

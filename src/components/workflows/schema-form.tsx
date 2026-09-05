@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LlmModelSelect } from "@/components/common/llm-model-select";
 import { cn } from "@/lib/utils";
 
 type Loc = "de" | "en";
@@ -162,44 +163,16 @@ export function SchemaForm({ fields, values, onChange, catalog, idPrefix }: { fi
             );
           }
           case "llm-model": {
-            const providerId = (values.providerId as string) ?? "default";
-            const model = (values.model as string) ?? "default";
-            const provider = catalog.providers.find((p) => p.id === providerId) ?? catalog.providers.find((p) => p.isDefault) ?? catalog.providers[0];
             return (
               <div key={f.key} className="grid gap-1.5">
                 {label}
-                {catalog.providers.length === 0 ? (
-                  <p className="text-sm text-destructive">{t("noProviders")}</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Select value={providerId} onValueChange={(val) => onChange({ ...values, providerId: val, model: "default" })}>
-                      <SelectTrigger className="w-56">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">{t("defaultProvider")}</SelectItem>
-                        {catalog.providers.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={model} onValueChange={(val) => set("model", val)}>
-                      <SelectTrigger className="w-72">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">{t("defaultModel", { model: provider?.defaultModel ?? "–" })}</SelectItem>
-                        {provider?.models.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            {m.name ? `${m.name} (${m.id})` : m.id}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <LlmModelSelect
+                  id={id}
+                  providers={catalog.providers}
+                  providerId={(values.providerId as string) ?? "default"}
+                  model={(values.model as string) ?? "default"}
+                  onChange={(next) => onChange({ ...values, ...next })}
+                />
                 {help}
               </div>
             );

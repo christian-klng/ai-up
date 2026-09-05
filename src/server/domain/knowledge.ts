@@ -15,6 +15,7 @@ import {
   type MediaFile,
 } from "@/server/db/schema";
 import { emitDomainEvent, type ContentEventPayload, type EventOrigin } from "@/server/events/bus";
+import { enqueueEvaluation } from "@/server/workflows/queue";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import { flattenAnswersText } from "@/lib/structures/markdown";
 import { slugify } from "@/lib/slug";
@@ -199,7 +200,14 @@ export async function createContent(areaId: string, type: ContentType, input: Co
     return updated;
   });
   emitDomainEvent("content.created", await contentEventPayload(result, input, 1, authorId, origin));
+  await queueEvaluation(result, input);
   return result;
+}
+
+/** Structured entries are re-checked against their template criteria after every save (worker job). */
+async function queueEvaluation(content: Content, input: ContentVersionInput): Promise<void> {
+  if (content.type !== "structured" || !input.meta?.structure || !content.currentVersionId) return;
+  await enqueueEvaluation(content.id, content.currentVersionId);
 }
 
 /** Appends a new version (edits are never destructive). */
@@ -230,6 +238,7 @@ export async function addContentVersion(contentId: string, input: ContentVersion
     return updated;
   });
   emitDomainEvent("content.updated", await contentEventPayload(result, input, nextNo, editorId, origin));
+  if (result) await queueEvaluation(result, input);
   return result;
 }
 

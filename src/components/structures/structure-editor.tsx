@@ -9,8 +9,12 @@ import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Chevro
 import { saveTemplateAction, deleteTemplateAction } from "@/server/actions/admin-templates";
 import type { ValidationIssue } from "@/lib/structures/validate";
 import type { ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType } from "@/lib/structures/types";
+import { emptyEvaluation, type TemplateEvaluation } from "@/lib/structures/evaluation";
 import { emptyProcessGraph, isAnswerable } from "@/lib/structures/types";
 import { StructureFillForm } from "@/components/structures/structure-fill-form";
+import { IconPicker } from "@/components/common/icon-picker";
+import { EvaluationEditor } from "@/components/structures/evaluation-editor";
+import type { LlmProviderOption } from "@/components/common/llm-model-select";
 import { TEMPLATE_ICON_KEYS, TemplateIcon } from "@/components/structures/template-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,9 +73,22 @@ export type TemplateEditorInitial = {
   description: string | null;
   icon: string;
   definition: StructureDefinition;
+  evaluation: TemplateEvaluation;
 };
 
-export function StructureEditor({ templateId, initial, initialVersion, isSystem }: { templateId: string | null; initial: TemplateEditorInitial | null; initialVersion: number | null; isSystem: boolean }) {
+export function StructureEditor({
+  templateId,
+  initial,
+  initialVersion,
+  isSystem,
+  providers,
+}: {
+  templateId: string | null;
+  initial: TemplateEditorInitial | null;
+  initialVersion: number | null;
+  isSystem: boolean;
+  providers: LlmProviderOption[];
+}) {
   const t = useTranslations("admin.templates");
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
@@ -79,6 +96,7 @@ export function StructureEditor({ templateId, initial, initialVersion, isSystem 
   const [icon, setIcon] = useState(initial?.icon ?? "file-text");
   const [intro, setIntro] = useState(initial?.definition.intro ?? "");
   const [elements, setElements] = useState<StructureElement[]>(initial?.definition.elements ?? []);
+  const [evaluation, setEvaluation] = useState<TemplateEvaluation>(initial?.evaluation ?? emptyEvaluation());
   const [changeNote, setChangeNote] = useState("");
   const [version, setVersion] = useState<number | null>(initialVersion);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
@@ -130,7 +148,15 @@ export function StructureEditor({ templateId, initial, initialVersion, isSystem 
 
   const save = () =>
     start(async () => {
-      const res = await saveTemplateAction({ templateId: templateId ?? undefined, name: name.trim(), description: description.trim() || undefined, icon, definition: def, changeNote: changeNote.trim() || undefined });
+      const res = await saveTemplateAction({
+        templateId: templateId ?? undefined,
+        name: name.trim(),
+        description: description.trim() || undefined,
+        icon,
+        definition: def,
+        evaluation,
+        changeNote: changeNote.trim() || undefined,
+      });
       if (res.ok) {
         setIssues([]);
         setWarnings(res.warnings);
@@ -178,22 +204,10 @@ export function StructureEditor({ templateId, initial, initialVersion, isSystem 
           <Textarea id="template-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} disabled={readOnly} />
         </div>
         <div className="grid grid-cols-1 gap-1.5">
-          <div className="text-sm font-medium">{t("iconLabel")}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {TEMPLATE_ICON_KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                aria-label={key}
-                aria-pressed={icon === key}
-                disabled={readOnly}
-                onClick={() => setIcon(key)}
-                className={cn("flex size-9 items-center justify-center rounded-md border transition-colors hover:bg-accent", icon === key && "border-primary bg-primary/10 text-primary")}
-              >
-                <TemplateIcon icon={key} className="size-4" />
-              </button>
-            ))}
-          </div>
+          <label htmlFor="template-icon" className="text-sm font-medium">
+            {t("iconLabel")}
+          </label>
+          <IconPicker id="template-icon" value={icon} onChange={setIcon} keys={TEMPLATE_ICON_KEYS} Icon={TemplateIcon} disabled={readOnly} />
         </div>
 
         <div className="grid grid-cols-1 gap-1.5">
@@ -268,6 +282,15 @@ export function StructureEditor({ templateId, initial, initialVersion, isSystem 
             />
           ))}
         </div>
+
+        <EvaluationEditor
+          value={evaluation}
+          onChange={setEvaluation}
+          providers={providers}
+          disabled={pending}
+          templateId={templateId}
+          standalone={readOnly}
+        />
 
         {!readOnly && (
           <>
