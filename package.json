@@ -12,7 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env.local src/server/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "worker": "tsx --env-file-if-exists=.env.local watch worker/index.ts",
+    "worker": "tsx watch --env-file-if-exists=.env.local worker/index.ts",
     "worker:build": "esbuild worker/index.ts src/server/db/migrate.ts --bundle --platform=node --target=node22 --outdir=dist --outbase=. --packages=external --format=cjs",
     "test": "vitest run",
     "worker:start": "node dist/worker/index.js"
