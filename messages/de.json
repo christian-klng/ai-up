@@ -747,7 +747,19 @@
     "instructions": "Anleitende Einträge",
     "instructionsHint": "Diese Einträge stehen im System-Prompt – z. B. Schreibstil, Bewertungsmaßstab oder Dokumentvorlage.",
     "removeInstruction": "Eintrag entfernen",
-    "searchEntries": "Eintrag suchen …"
+    "searchEntries": "Eintrag suchen …",
+    "mode": "Arbeitsmodus",
+    "modeAssist": "Arbeiten",
+    "modeCurate": "Sammlungen pflegen",
+    "modeAssistHint": "Nur lesen: Recherche, Antworten, Texte im Chat.",
+    "modeCurateHint": "Darf Einträge anlegen und bearbeiten – in den Sammlungen, die du dafür freigibst.",
+    "mayEdit": "Bearbeiten",
+    "approvalAlways": "Immer nachfragen",
+    "approvalNever": "Automatisch ausführen",
+    "approvalTitle": "Aktion bestätigen: {tool}",
+    "approvalPending": "Bitte zuerst die Aktion bestätigen oder ablehnen.",
+    "approve": "Ausführen",
+    "decline": "Ablehnen"
   },
   "contacts": {
     "request": "Kontaktanfrage senden",

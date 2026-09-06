@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { BookOpen, FileText, Loader2, Search, X } from "lucide-react";
-import { saveThreadConfigAction, searchEntriesAction } from "@/server/actions/agents";
+import { BookOpen, FileText, Loader2, Pencil, Search, X } from "lucide-react";
+import { saveThreadConfigAction, searchEntriesAction, setThreadModeAction } from "@/server/actions/agents";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,16 +22,23 @@ export function ThreadConfigPanel({
   threadId,
   areas,
   initialReadAreaIds,
+  initialWriteAreaIds,
   initialInstructions,
+  mode,
+  onModeChange,
 }: {
   threadId: string;
   areas: AreaOption[];
   initialReadAreaIds: string[];
+  initialWriteAreaIds: string[];
   initialInstructions: EntryOption[];
+  mode: "assist" | "curate";
+  onModeChange: (mode: "assist" | "curate") => void;
 }) {
   const t = useTranslations("agents");
   const tc = useTranslations("common");
   const [readIds, setReadIds] = useState<string[]>(initialReadAreaIds);
+  const [writeIds, setWriteIds] = useState<string[]>(initialWriteAreaIds);
   const [instructions, setInstructions] = useState<EntryOption[]>(initialInstructions);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<EntryOption[]>([]);
@@ -61,6 +68,12 @@ export function ThreadConfigPanel({
 
   const toggleArea = (id: string) => {
     setReadIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    // Dropping a collection drops its write permission with it.
+    setWriteIds((prev) => prev.filter((x) => x !== id || !readIds.includes(id)));
+    setDirty(true);
+  };
+  const toggleWrite = (id: string) => {
+    setWriteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     setDirty(true);
   };
   const addInstruction = (entry: EntryOption) => {
@@ -75,7 +88,12 @@ export function ThreadConfigPanel({
 
   const save = () =>
     startSave(async () => {
-      const res = await saveThreadConfigAction(threadId, { readAreaIds: readIds, writeAreaIds: [], instructionContentIds: instructions.map((i) => i.id) });
+      const res = await saveThreadConfigAction(threadId, {
+        readAreaIds: readIds,
+        // Writing is a curate-mode capability; in assist mode nothing may be written.
+        writeAreaIds: mode === "curate" ? writeIds.filter((id) => readIds.includes(id)) : [],
+        instructionContentIds: instructions.map((i) => i.id),
+      });
       if (res.ok) {
         setDirty(false);
         toast.success(tc("saved"));
@@ -85,6 +103,28 @@ export function ThreadConfigPanel({
   return (
     <div className="flex h-full flex-col gap-5 overflow-y-auto p-4">
       <section className="grid gap-2">
+        <h3 className="text-sm font-medium">{t("mode")}</h3>
+        <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+          {(["assist", "curate"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => {
+                if (m === mode) return;
+                onModeChange(m);
+                void setThreadModeAction(threadId, m, "always");
+              }}
+              className={cn("rounded px-2 py-1.5 text-xs font-medium transition-colors", mode === m ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              {t(m === "assist" ? "modeAssist" : "modeCurate")}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{t(mode === "assist" ? "modeAssistHint" : "modeCurateHint")}</p>
+      </section>
+
+      <section className="grid gap-2">
         <h3 className="flex items-center gap-2 text-sm font-medium">
           <BookOpen className="size-4 opacity-70" /> {t("collections")}
         </h3>
@@ -92,20 +132,24 @@ export function ThreadConfigPanel({
         <ul className="grid gap-1">
           {areas.map((a) => {
             const on = readIds.includes(a.id);
+            const writable = writeIds.includes(a.id);
             return (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  onClick={() => toggleArea(a.id)}
-                  aria-pressed={on}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors",
-                    on ? "border-primary/40 bg-primary/5" : "border-transparent hover:bg-accent/60",
-                  )}
-                >
+              <li key={a.id} className={cn("flex items-center gap-1 rounded-md border transition-colors", on ? "border-primary/40 bg-primary/5" : "border-transparent")}>
+                <button type="button" onClick={() => toggleArea(a.id)} aria-pressed={on} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-accent/40">
                   <AreaIcon icon={a.icon} className={cn("size-4 shrink-0", on ? "text-primary" : "opacity-60")} aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{a.name}</span>
                 </button>
+                {mode === "curate" && on && (
+                  <button
+                    type="button"
+                    onClick={() => toggleWrite(a.id)}
+                    aria-pressed={writable}
+                    title={t("mayEdit")}
+                    className={cn("mr-1 flex items-center gap-1 rounded px-1.5 py-1 text-[11px] transition-colors", writable ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent")}
+                  >
+                    <Pencil className="size-3" aria-hidden /> {t("mayEdit")}
+                  </button>
+                )}
               </li>
             );
           })}

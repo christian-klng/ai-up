@@ -101,6 +101,20 @@ export async function listMessages(threadId: string): Promise<AgentMessage[]> {
   return db.query.agentMessages.findMany({ where: eq(agentMessages.threadId, threadId), orderBy: [asc(agentMessages.createdAt)], limit: 500 });
 }
 
+export async function getMessage(id: string): Promise<AgentMessage | undefined> {
+  return db.query.agentMessages.findFirst({ where: eq(agentMessages.id, id) });
+}
+
+/** A parked write call blocks the turn until every one of them is approved or declined. */
+export async function hasPendingApproval(threadId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: agentMessages.id })
+    .from(agentMessages)
+    .where(and(eq(agentMessages.threadId, threadId), eq(agentMessages.status, "awaiting_approval")))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function addMessage(input: typeof agentMessages.$inferInsert): Promise<AgentMessage> {
   const [row] = await db.insert(agentMessages).values(input).returning();
   await db.update(agentThreads).set({ lastMessageAt: row.createdAt }).where(eq(agentThreads.id, row.threadId));

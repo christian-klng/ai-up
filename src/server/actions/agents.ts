@@ -5,18 +5,20 @@ import { z } from "zod";
 import { assertUser } from "@/server/auth/session";
 import { getAgentBySlug } from "@/server/domain/agents";
 import { listAreas, listContents } from "@/server/domain/knowledge";
-import { requestCancel } from "@/server/agents/loop";
+import { requestCancel, resolveToolCall } from "@/server/agents/loop";
 import { toDto } from "@/server/agents/history";
 import {
   addMessage,
   createThread,
   deleteThread,
   getOwnedThread,
+  getMessage,
   getThreadConfig,
   hasRunningTurn,
   renameThread,
   setThreadCollections,
   setThreadInstructions,
+  setThreadMode,
 } from "@/server/agents/threads";
 import { enqueueAgentTurn } from "@/server/workflows/queue";
 import { publishToUser } from "@/server/realtime/publish";
@@ -86,6 +88,30 @@ export async function cancelAgentTurnAction(threadId: string): Promise<{ ok: boo
   const owned = await ownThread(threadId);
   if (!owned) return { ok: false };
   await requestCancel(owned.thread.id);
+  return { ok: true };
+}
+
+/**
+ * Approves or declines a parked write call. When the round has no pending calls left, the turn
+ * continues where it stopped.
+ */
+export async function resolveToolCallAction(messageId: string, approve: boolean): Promise<{ ok: boolean }> {
+  const me = await assertUser();
+  const res = await resolveToolCall(z.string().uuid().parse(messageId), approve, me.id);
+  if (!res.ok) return { ok: false };
+  if (res.continued) {
+    const message = await getMessage(z.string().uuid().parse(messageId));
+    if (message) await enqueueAgentTurn(message.threadId);
+  }
+  return { ok: true };
+}
+
+export async function setThreadModeAction(threadId: string, mode: "assist" | "curate", writeApproval: "always" | "never"): Promise<{ ok: boolean }> {
+  const owned = await ownThread(threadId);
+  if (!owned) return { ok: false };
+  const parsed = z.object({ mode: z.enum(["assist", "curate"]), writeApproval: z.enum(["always", "never"]) }).safeParse({ mode, writeApproval });
+  if (!parsed.success) return { ok: false };
+  await setThreadMode(owned.thread.id, parsed.data.mode, parsed.data.writeApproval);
   return { ok: true };
 }
 

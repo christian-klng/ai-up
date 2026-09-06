@@ -6,7 +6,12 @@ import { logger } from "@/server/logger";
  * Keep every domain event flowing through `emitDomainEvent` so later phases only add handlers.
  */
 /** Where an event came from – workflows tag their own side effects so triggers can avoid loops. */
-export type EventOrigin = { kind: "user" } | { kind: "workflow"; runId: string; workflowId: string; depth: number } | { kind: "system" };
+export type EventOrigin =
+  | { kind: "user" }
+  | { kind: "workflow"; runId: string; workflowId: string; depth: number }
+  /** A tool call of an AI agent, acting for `userId` (see docs/ki-agenten.md 1.5) */
+  | { kind: "agent"; threadId: string; agentId: string; userId: string }
+  | { kind: "system" };
 
 export type ContentEventPayload = {
   content: {

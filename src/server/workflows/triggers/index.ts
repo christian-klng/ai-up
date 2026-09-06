@@ -8,6 +8,8 @@ const contentConfig = z.object({
   areaIds: z.array(z.string().uuid()).default([]),
   /** Also fire for content created by workflows (default false to avoid loops) */
   includeWorkflowOrigin: z.boolean().default(false),
+  /** Also fire for content an AI agent wrote (default false: one chat sentence can touch many entries) */
+  includeAgentOrigin: z.boolean().default(false),
 });
 type ContentConfig = z.infer<typeof contentConfig>;
 
@@ -15,6 +17,7 @@ const contentFields = [
   { key: "contentTypes", type: "content-types" as const, label: { de: "Inhaltstypen", en: "Content types" }, help: { de: "Leer = alle Typen.", en: "Empty = all types." } },
   { key: "areaIds", type: "area" as const, label: { de: "Sammlungen", en: "Collections" }, help: { de: "Leer = alle Sammlungen.", en: "Empty = all collections." } },
   { key: "includeWorkflowOrigin", type: "boolean" as const, label: { de: "Auch von Workflows erzeugte Inhalte", en: "Also content created by workflows" }, help: { de: "Vorsicht: kann Schleifen erzeugen.", en: "Careful: can create loops." } },
+  { key: "includeAgentOrigin", type: "boolean" as const, label: { de: "Auch von KI-Agenten erzeugte Inhalte", en: "Also content created by AI agents" }, help: { de: "Vorsicht: Ein Agent kann in einem Zug viele Einträge ändern.", en: "Careful: one agent turn can touch many entries." } },
 ];
 
 const contentPayloadDoc = {
@@ -42,6 +45,7 @@ function matchesContent(config: ContentConfig, payload: Record<string, unknown>)
   const origin = payload.origin as { kind?: string } | undefined;
   if (!c) return false;
   if (origin?.kind === "workflow" && !config.includeWorkflowOrigin) return false;
+  if (origin?.kind === "agent" && !config.includeAgentOrigin) return false;
   if (config.contentTypes.length && !config.contentTypes.includes(c.type as never)) return false;
   if (config.areaIds.length && !config.areaIds.includes(c.areaId ?? "")) return false;
   return true;

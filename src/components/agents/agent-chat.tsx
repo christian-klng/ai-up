@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Loader2, PanelRightClose, PanelRightOpen, SendHorizontal, Square, Wrench } from "lucide-react";
+import { Check, Loader2, PanelRightClose, PanelRightOpen, SendHorizontal, ShieldCheck, Square, Wrench, X, Zap } from "lucide-react";
 import { useRealtimeEvent } from "@/components/realtime/realtime-provider";
-import { cancelAgentTurnAction, sendAgentMessageAction } from "@/server/actions/agents";
+import { cancelAgentTurnAction, resolveToolCallAction, sendAgentMessageAction, setThreadModeAction } from "@/server/actions/agents";
 import { Markdown } from "@/components/content/markdown";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -23,16 +23,35 @@ type Props = {
   initialRunning: boolean;
   areas: AreaOption[];
   readAreaIds: string[];
+  writeAreaIds: string[];
   instructions: EntryOption[];
   toolLabels: Record<string, string>;
+  mode: "assist" | "curate";
+  writeApproval: "always" | "never";
 };
 
-export function AgentChat({ threadId, agent, me, initialMessages, initialRunning, areas, readAreaIds, instructions, toolLabels }: Props) {
+export function AgentChat({
+  threadId,
+  agent,
+  me,
+  initialMessages,
+  initialRunning,
+  areas,
+  readAreaIds,
+  writeAreaIds,
+  instructions,
+  toolLabels,
+  mode: initialMode,
+  writeApproval: initialApproval,
+}: Props) {
   const t = useTranslations("agents");
   const [messages, setMessages] = useState<AgentMessageDto[]>(initialMessages);
   const [running, setRunning] = useState(initialRunning);
   const [text, setText] = useState("");
   const [panelOpen, setPanelOpen] = useState(false);
+  const [mode, setMode] = useState(initialMode);
+  const [approval, setApproval] = useState(initialApproval);
+  const [resolving, setResolving] = useState<string | null>(null);
   const [sending, startSend] = useTransition();
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -45,6 +64,8 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
     setPrevThread(threadId);
     setMessages(initialMessages);
     setRunning(initialRunning);
+    setMode(initialMode);
+    setApproval(initialApproval);
     setText("");
   }
 
@@ -83,7 +104,7 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
 
   const send = () => {
     const body = text.trim();
-    if (!body || running) return;
+    if (!body || locked) return;
     setText("");
     stick.current = true;
     setRunning(true);
@@ -104,12 +125,45 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
       setRunning(false);
     });
 
-  const visible = messages.filter((m) => m.role !== "tool");
+  // Tool results stay hidden; a parked write call is shown as a confirmation card.
+  const visible = messages.filter((m) => m.role !== "tool" || m.status === "awaiting_approval");
+  const pendingApproval = messages.some((m) => m.status === "awaiting_approval");
+  const locked = running || pendingApproval;
+
+  const resolve = (messageId: string, approve: boolean) => {
+    setResolving(messageId);
+    startSend(async () => {
+      const res = await resolveToolCallAction(messageId, approve);
+      setResolving(null);
+      // Either way the turn continues – a decline is an answer the model has to react to.
+      if (!res.ok) toast.error(t("turnFailed"));
+      else setRunning(true);
+    });
+  };
+
+  const toggleApproval = () => {
+    const next = approval === "always" ? "never" : "always";
+    setApproval(next);
+    void setThreadModeAction(threadId, mode, next);
+  };
 
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-end border-b px-3 py-2">
+        <div className="flex items-center justify-end gap-1 border-b px-3 py-2">
+          {mode === "curate" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={toggleApproval}
+              aria-pressed={approval === "never"}
+              title={t(approval === "always" ? "approvalAlways" : "approvalNever")}
+              aria-label={t(approval === "always" ? "approvalAlways" : "approvalNever")}
+            >
+              {approval === "always" ? <ShieldCheck className="size-5" /> : <Zap className="size-5 text-amber-500" />}
+            </Button>
+          )}
           <Button type="button" variant="ghost" size="icon" onClick={() => setPanelOpen((o) => !o)} aria-label={t("toggleConfig")} aria-expanded={panelOpen}>
             {panelOpen ? <PanelRightClose className="size-5" /> : <PanelRightOpen className="size-5" />}
           </Button>
@@ -131,6 +185,25 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
           )}
           <ol className="mx-auto grid max-w-3xl gap-4">
             {visible.map((m) => {
+              if (m.status === "awaiting_approval") {
+                return (
+                  <li key={m.id} className="flex gap-3">
+                    <UserAvatar user={agent} size={28} variant="thumb" className="mt-0.5" />
+                    <div className="min-w-0 max-w-[85%] rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                      <p className="text-sm font-medium">{t("approvalTitle", { tool: toolLabels[m.toolName ?? ""] ?? m.toolName ?? "" })}</p>
+                      <pre className="mt-2 max-h-56 overflow-auto rounded bg-background/60 p-2 text-[11px] leading-relaxed">{m.content}</pre>
+                      <div className="mt-3 flex gap-2">
+                        <Button type="button" size="sm" disabled={resolving === m.id} onClick={() => resolve(m.id, true)}>
+                          <Check className="size-4" /> {t("approve")}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" disabled={resolving === m.id} onClick={() => resolve(m.id, false)}>
+                          <X className="size-4" /> {t("decline")}
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              }
               const mine = m.role === "user";
               const toolNames = (m.toolCalls ?? []).map((c) => toolLabels[c.name] ?? c.name);
               return (
@@ -195,10 +268,10 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
                   send();
                 }
               }}
-              placeholder={t("placeholder")}
+              placeholder={pendingApproval ? t("approvalPending") : t("placeholder")}
               rows={1}
               className="max-h-40 min-h-10 resize-none"
-              disabled={running}
+              disabled={locked}
               autoFocus
             />
             {running ? (
@@ -206,7 +279,7 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
                 <Square className="size-4" />
               </Button>
             ) : (
-              <Button type="submit" size="icon" disabled={sending || !text.trim()} aria-label={t("send")}>
+              <Button type="submit" size="icon" disabled={sending || locked || !text.trim()} aria-label={t("send")}>
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
               </Button>
             )}
@@ -216,7 +289,18 @@ export function AgentChat({ threadId, agent, me, initialMessages, initialRunning
 
       {panelOpen && (
         <aside className="hidden w-80 shrink-0 border-l lg:block">
-          <ThreadConfigPanel threadId={threadId} areas={areas} initialReadAreaIds={readAreaIds} initialInstructions={instructions} />
+          <ThreadConfigPanel
+            threadId={threadId}
+            areas={areas}
+            initialReadAreaIds={readAreaIds}
+            initialWriteAreaIds={writeAreaIds}
+            initialInstructions={instructions}
+            mode={mode}
+            onModeChange={(next) => {
+              setMode(next);
+              setApproval("always");
+            }}
+          />
         </aside>
       )}
     </div>

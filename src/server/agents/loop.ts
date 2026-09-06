@@ -1,4 +1,7 @@
 import { getAgentById } from "@/server/domain/agents";
+import { getUserById } from "@/server/domain/users";
+import { getContent } from "@/server/domain/knowledge";
+import { enqueueEvaluation } from "@/server/workflows/queue";
 import { logger } from "@/server/logger";
 import { getRedis } from "@/server/redis";
 import { publishToUser } from "@/server/realtime/publish";
@@ -6,7 +9,7 @@ import { LlmError, modelCapabilities, streamChatCompletion, type ChatUsage } fro
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
 import { buildSystemPrompt } from "./context";
 import { buildHistory, toDto } from "./history";
-import { addMessage, failStaleMessages, getThread, getThreadConfig, listMessages, renameThread, updateMessage } from "./threads";
+import { addMessage, failStaleMessages, getMessage, getThread, getThreadConfig, hasPendingApproval, listMessages, renameThread, updateMessage } from "./threads";
 import { getTool, listTools, toolDefinitions, type AgentToolContext } from "./tools";
 
 /**
@@ -62,7 +65,7 @@ function explainLlmError(err: unknown): string {
   return err.message;
 }
 
-export type TurnResult = { status: "done" | "error" | "cancelled" | "limit"; error: string | null };
+export type TurnResult = { status: "done" | "error" | "cancelled" | "limit" | "approval"; error: string | null };
 
 export async function runTurn(threadId: string): Promise<TurnResult> {
   const thread = await getThread(threadId);
@@ -77,14 +80,23 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
   await clearCancel(threadId);
   await failStaleMessages(threadId, "The previous turn did not finish.");
 
-  const agent = await getAgentById(thread.agentId);
+  const [agent, owner] = await Promise.all([getAgentById(thread.agentId), getUserById(userId)]);
   if (!agent) return finish({ status: "error", error: "agent not found" });
+  if (!owner || owner.status !== "active") return finish({ status: "error", error: "user not active" });
 
   try {
     const config = await getThreadConfig(threadId);
     const { prompt } = await buildSystemPrompt(agent, config.instructionContentIds);
     const tools = listTools(thread.mode === "curate" ? "write" : "read");
-    const toolCtx: AgentToolContext = { userId, threadId, readAreaIds: config.readAreaIds, writeAreaIds: config.writeAreaIds };
+    const toolCtx: AgentToolContext = {
+      userId,
+      userRole: owner?.role ?? "member",
+      threadId,
+      agentId: agent.id,
+      readAreaIds: config.readAreaIds,
+      writeAreaIds: config.writeAreaIds,
+      written: new Set<string>(),
+    };
 
     const { provider, model, info } = await resolveModel(agent.providerId, agent.model);
     const caps = modelCapabilities(info, provider.kind);
@@ -170,9 +182,33 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
       if (saved) await publishToUser(userId, "agent.message.saved", { threadId, message: toDto(saved) });
       history.push({ role: "assistant", content: res.text, toolCalls: res.toolCalls.length ? res.toolCalls : undefined });
 
-      if (!res.toolCalls.length) return finish({ status: "done", error: null });
+      if (!res.toolCalls.length) {
+        await queueWrittenEvaluations(toolCtx);
+        return finish({ status: "done", error: null });
+      }
 
+      // Write calls stop the turn for confirmation unless the thread runs unattended. Read calls
+      // still execute – the model gets everything it can have without touching anything.
+      const needsApproval = thread.mode === "curate" && thread.writeApproval === "always";
+      let parked = false;
       for (const call of res.toolCalls) {
+        const tool = getTool(call.name);
+        if (needsApproval && tool?.access === "write") {
+          const pending = await addMessage({
+            threadId,
+            role: "tool",
+            content: describeCall(call),
+            // The pending call is kept on the message so it can be executed after approval.
+            toolCalls: [call],
+            toolCallId: call.id,
+            toolName: call.name,
+            status: "awaiting_approval",
+            stepNo: step,
+          });
+          await publishToUser(userId, "agent.message.saved", { threadId, message: toDto(pending) });
+          parked = true;
+          continue;
+        }
         const output = await runTool(call, toolCtx);
         const toolMessage = await addMessage({
           threadId,
@@ -186,16 +222,89 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
         await publishToUser(userId, "agent.message.saved", { threadId, message: toDto(toolMessage) });
         history.push({ role: "tool", content: output, toolCallId: call.id });
       }
+      if (parked) {
+        await queueWrittenEvaluations(toolCtx);
+        return finish({ status: "approval", error: null });
+      }
 
       const spent = usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
-      if (spent >= agent.maxTokensPerTurn) return finish({ status: "limit", error: null });
+      if (spent >= agent.maxTokensPerTurn) {
+        await queueWrittenEvaluations(toolCtx);
+        return finish({ status: "limit", error: null });
+      }
     }
+    await queueWrittenEvaluations(toolCtx);
     return finish({ status: "limit", error: null });
   } catch (err) {
     const message = (err as Error).message;
     logger.error({ err, threadId }, "agent turn crashed");
     return finish({ status: "error", error: message });
   }
+}
+
+/**
+ * One evaluation per entry the turn touched, at the end. Entry saves normally queue their own
+ * check, but an agent turn can touch several entries – bundling keeps one chat sentence from
+ * firing a burst of LLM calls (see docs/ki-agenten.md 1.5).
+ */
+async function queueWrittenEvaluations(ctx: AgentToolContext): Promise<void> {
+  for (const contentId of ctx.written) {
+    const entry = await getContent(contentId);
+    if (entry?.type === "structured" && entry.currentVersionId) await enqueueEvaluation(contentId, entry.currentVersionId);
+  }
+  ctx.written.clear();
+}
+
+/** What the user is asked to confirm. Arguments are shown raw – they are the model's own words. */
+function describeCall(call: { name: string; arguments: string }): string {
+  let pretty = call.arguments;
+  try {
+    pretty = JSON.stringify(JSON.parse(call.arguments || "{}"), null, 2);
+  } catch {
+    /* keep the raw string – it is shown as-is */
+  }
+  return pretty;
+}
+
+/**
+ * Runs a parked write call after the user approved it, or records the refusal. Returns whether the
+ * thread may continue (no further pending approvals).
+ */
+export async function resolveToolCall(messageId: string, approve: boolean, userId: string): Promise<{ ok: boolean; continued: boolean }> {
+  const message = await getMessage(messageId);
+  if (!message || message.status !== "awaiting_approval") return { ok: false, continued: false };
+  const thread = await getThread(message.threadId);
+  if (!thread || thread.userId !== userId) return { ok: false, continued: false };
+  const agent = await getAgentById(thread.agentId);
+  const owner = await getUserById(userId);
+  if (!agent || !owner) return { ok: false, continued: false };
+
+  const call = message.toolCalls?.[0];
+  let output: string;
+  if (!approve) {
+    output = "The user declined this action. Do not try it again; ask what to do instead.";
+  } else if (!call) {
+    output = "The pending call was lost and could not be executed.";
+  } else {
+    const config = await getThreadConfig(thread.id);
+    const ctx: AgentToolContext = {
+      userId,
+      userRole: owner.role,
+      threadId: thread.id,
+      agentId: agent.id,
+      readAreaIds: config.readAreaIds,
+      writeAreaIds: config.writeAreaIds,
+      written: new Set<string>(),
+    };
+    output = await runTool(call, ctx);
+    await queueWrittenEvaluations(ctx);
+  }
+
+  const saved = await updateMessage(messageId, { content: output, status: "complete" });
+  if (saved) await publishToUser(userId, "agent.message.saved", { threadId: thread.id, message: toDto(saved) });
+  // Every parked call of the round has to be answered before the model may run again.
+  const stillPending = await hasPendingApproval(thread.id);
+  return { ok: true, continued: !stillPending };
 }
 
 /** Executes one tool call. Every failure becomes a readable tool result – the model may recover. */

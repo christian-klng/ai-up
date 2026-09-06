@@ -34,6 +34,9 @@ export default async function AgentThreadPage({ params }: PageProps<"/agents/[sl
       initialRunning={running}
       areas={areas.map((a) => ({ id: a.id, name: a.name, icon: a.icon, purpose: a.purpose }))}
       readAreaIds={config.readAreaIds}
+      writeAreaIds={config.writeAreaIds}
+      mode={thread.mode}
+      writeApproval={thread.writeApproval}
       instructions={docs.map((d) => ({ id: d.id, title: d.title, areaId: d.areaId, areaName: areaNames.get(d.areaId) ?? "" }))}
       toolLabels={Object.fromEntries(listTools("write").map((tool) => [tool.name, tool.labels[locale as "de" | "en"] ?? tool.labels.en]))}
     />

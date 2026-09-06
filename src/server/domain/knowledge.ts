@@ -200,13 +200,18 @@ export async function createContent(areaId: string, type: ContentType, input: Co
     return updated;
   });
   emitDomainEvent("content.created", await contentEventPayload(result, input, 1, authorId, origin));
-  await queueEvaluation(result, input);
+  await queueEvaluation(result, input, origin);
   return result;
 }
 
-/** Structured entries are re-checked against their template criteria after every save (worker job). */
-async function queueEvaluation(content: Content, input: ContentVersionInput): Promise<void> {
+/**
+ * Structured entries are re-checked against their template criteria after every save (worker job).
+ * Agent writes are the exception: one turn may touch several entries, so the loop collects them
+ * and enqueues one evaluation per entry at the end (see src/server/agents/loop.ts).
+ */
+async function queueEvaluation(content: Content, input: ContentVersionInput, origin: EventOrigin): Promise<void> {
   if (content.type !== "structured" || !input.meta?.structure || !content.currentVersionId) return;
+  if (origin.kind === "agent") return;
   await enqueueEvaluation(content.id, content.currentVersionId);
 }
 
@@ -238,7 +243,7 @@ export async function addContentVersion(contentId: string, input: ContentVersion
     return updated;
   });
   emitDomainEvent("content.updated", await contentEventPayload(result, input, nextNo, editorId, origin));
-  if (result) await queueEvaluation(result, input);
+  if (result) await queueEvaluation(result, input, origin);
   return result;
 }
 

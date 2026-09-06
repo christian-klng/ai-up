@@ -747,7 +747,19 @@
     "instructions": "Guiding entries",
     "instructionsHint": "These entries go into the system prompt – e.g. a writing style, an evaluation yardstick or a document format.",
     "removeInstruction": "Remove entry",
-    "searchEntries": "Search for an entry …"
+    "searchEntries": "Search for an entry …",
+    "mode": "Work mode",
+    "modeAssist": "Assist",
+    "modeCurate": "Curate collections",
+    "modeAssistHint": "Read only: research, answers, drafts in the chat.",
+    "modeCurateHint": "May create and edit entries – in the collections you allow.",
+    "mayEdit": "Edit",
+    "approvalAlways": "Always ask",
+    "approvalNever": "Run automatically",
+    "approvalTitle": "Confirm action: {tool}",
+    "approvalPending": "Confirm or decline the action first.",
+    "approve": "Run",
+    "decline": "Decline"
   },
   "contacts": {
     "request": "Send contact request",
