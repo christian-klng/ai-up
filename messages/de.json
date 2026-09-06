@@ -33,7 +33,9 @@
     "llm": {
       "noProviders": "Kein LLM-Provider konfiguriert – lege unter Verwaltung → LLM einen an.",
       "defaultProvider": "Standard-Provider",
-      "defaultModel": "Standardmodell ({model})"
+      "defaultModel": "Standardmodell ({model})",
+      "noToolModels": "Kein Modell dieses Providers unterstützt Werkzeuge. Wähle einen anderen Provider oder aktiviere unter Verwaltung → LLM ein passendes Modell.",
+      "toolSupportUnknown": "Für dieses Modell meldet der Provider keine Fähigkeiten – ob Werkzeuge funktionieren, zeigt erst der erste Aufruf."
     }
   },
   "auth": {

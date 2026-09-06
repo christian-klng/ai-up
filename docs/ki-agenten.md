@@ -3,7 +3,7 @@
 Planungsdokument für das Feature „KI-Agenten“: Chat-Oberfläche mit agentischem Loop und Werkzeugen,
 Datenbasis sind die **Sammlungen**. Der System-Bot wird zum Standard-Agenten für alle Nutzer.
 
-Stand: **Phase A umgesetzt** (06.09.2026), Phasen B–G offen. Das Dokument enthält (1) die kritische
+Stand: **Phasen A und B umgesetzt** (06.09.2026), Phasen C–G offen. Das Dokument enthält (1) die kritische
 Prüfung gegen den Bestand, (2) das Zielbild, (3) Datenmodell und Module, (4) den Schnitt in Phasen,
 (5) die getroffenen Entscheidungen.
 
@@ -71,9 +71,12 @@ jedes beliebige Modell als Standard setzen – darunter reichlich Modelle ohne T
 Providern der Art `generic` und `cortecs` ist `supported_parameters` oft gar nicht befüllt, die
 Erkennung ist dann bestenfalls optimistisch.
 
-**Empfehlung:** `tools` in `modelCapabilities` aufnehmen, in der Agenten-Konfiguration nur Modelle mit
-Tool-Fähigkeit zur Auswahl stellen (bei unbekannter Fähigkeit mit Warnhinweis erlauben) und beim ersten
-fehlgeschlagenen Tool-Call eine verständliche Fehlermeldung in den Thread schreiben statt eines Absturzes.
+**Umgesetzt in Phase B:** `chatCompletion` sendet und liest `tools`/`tool_calls`,
+`streamChatCompletion` liefert Text-, Reasoning- und Tool-Call-Deltas (SSE, abbrechbar über ein
+`AbortSignal`). `modelCapabilities` kennt `tools`; `modelToolSupport` ist dreiwertig, damit die
+Agenten-Konfiguration Modelle *ohne* Tool-Unterstützung ausblendet und bei *unbekannter* Fähigkeit
+(generische Endpunkte melden keine) nur warnt. Offen bis Phase C: die verständliche Fehlermeldung im
+Thread, wenn ein Modell entgegen der Meldung doch keine Werkzeuge kann.
 
 ### 1.4 Schreibende Werkzeuge sind ein Autorisierungsproblem
 
@@ -385,7 +388,7 @@ Nur an den Thread-Eigentümer (`publishToUser`).
 | Phase | Inhalt | Abnahme |
 |---|---|---|
 | **A** Fundament ✅ *(06.09.2026)* | `ai_agents` + Migration des System-Bots, Admin-Seite (Name, Avatar, Provider/Modell, Systemprompt, Limits), `ensureBotUser` liest den Agenten; Messenger-Bot auf Empfang umstellen (UI + Server-Guard), Trigger `bot.message.received` entfernen | Admin konfiguriert den Standard-Agenten; an den Bot lässt sich nicht mehr schreiben, an Mitglieder schon |
-| **B** LLM-Client | Tool-Calling + Streaming in `client.ts`, `tools` in `modelCapabilities`, Modell-Auswahl gefiltert | Ein Test-Call mit Tool-Definition liefert `tool_calls` |
+| **B** LLM-Client ✅ *(06.09.2026)* | Tool-Calling + Streaming in `client.ts`, `tools` in `modelCapabilities`, Modell-Auswahl gefiltert | Unit-Tests für Wire-Format und Stream-Parser (`client.test.ts`); der erste echte Tool-Call kommt mit Phase C |
 | **C** Threads + Chat | Tabellen, Menüpunkt, Thread-Liste, Chat-UI, Konfig-Panel (Zugriff + Instruktions-Einträge), Standard-Systemprompt, Loop im Worker, Streaming, Abbruch, Lese-Tools, `max_steps`/Token-Deckel je Turn, Usage-Erfassung | Nutzer chattet mit dem Agenten; ein ausgewählter Eintrag steuert nachweislich das Verhalten |
 | **D** Schreiben | Schreib-Tools, Freigabe-Fluss + Icon-Umschalter, `origin: agent`, `includeAgentOrigin`, Evaluations-Bündelung | Agent legt nach Freigabe einen Eintrag an; kein Workflow läuft ungewollt mit |
 | **E** Kosten & Betrieb | Wochenkontingent je Nutzer (gewichtete Summe), Admin-Übersicht, Fehlerbilder | Ein Nutzer kann das Wochenkontingent nicht überschreiten |

@@ -4,7 +4,7 @@ import { auditLog, llmProviders, type LlmModelInfo, type LlmProvider } from "@/s
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto";
 import { env } from "@/server/env";
 import { loadAppSettings } from "@/server/domain/settings";
-import { chatCompletion, listModels, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
+import { chatCompletion, listModels, modelToolSupport, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
 
 export const PROVIDER_PRESETS: Record<ProviderKind, { label: string; baseUrl: string; hint: string }> = {
   openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", hint: "Router with hundreds of models; model list includes capabilities and pricing." },
@@ -157,8 +157,14 @@ export async function runChat(providerId: string | undefined | null, req: ChatRe
   return chatCompletion(await clientConfigFor(provider), { ...req, model });
 }
 
-/** Provider + enabled-model list for the pickers (workflow editor, template evaluation). */
-export async function listProviderOptions(): Promise<{ id: string; name: string; kind: ProviderKind; isDefault: boolean; defaultModel: string | null; models: { id: string; name?: string }[] }[]> {
+/**
+ * Provider + enabled-model list for the pickers (workflow editor, template evaluation, agents).
+ * `supportsTools` is tri-state: undefined when the provider reports no parameter list, which is
+ * the normal case for generic endpoints – the agent picker warns instead of hiding those.
+ */
+export async function listProviderOptions(): Promise<
+  { id: string; name: string; kind: ProviderKind; isDefault: boolean; defaultModel: string | null; models: { id: string; name?: string; supportsTools?: boolean }[] }[]
+> {
   const providers = await listProviders();
   return providers.map((p) => ({
     id: p.id,
@@ -166,6 +172,6 @@ export async function listProviderOptions(): Promise<{ id: string; name: string;
     kind: p.kind,
     isDefault: p.isDefault,
     defaultModel: p.defaultModel,
-    models: p.availableModels.filter((m) => p.enabledModels.includes(m.id)).map((m) => ({ id: m.id, name: m.name })),
+    models: p.availableModels.filter((m) => p.enabledModels.includes(m.id)).map((m) => ({ id: m.id, name: m.name, supportsTools: modelToolSupport(m) })),
   }));
 }

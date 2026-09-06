@@ -8,10 +8,11 @@ export type LlmProviderOption = {
   name: string;
   isDefault: boolean;
   defaultModel: string | null;
-  models: { id: string; name?: string }[];
+  /** `supportsTools` undefined = the provider reports no capabilities (generic endpoints). */
+  models: { id: string; name?: string; supportsTools?: boolean }[];
 };
 
-/** Provider + model pair used by the workflow editor and the template evaluation settings. */
+/** Provider + model pair used by the workflow editor, the template evaluation and the agents. */
 export function LlmModelSelect({
   providers,
   providerId,
@@ -19,6 +20,7 @@ export function LlmModelSelect({
   onChange,
   disabled,
   id,
+  requireTools,
 }: {
   providers: LlmProviderOption[];
   /** provider id or "default" */
@@ -28,9 +30,14 @@ export function LlmModelSelect({
   onChange: (next: { providerId: string; model: string }) => void;
   disabled?: boolean;
   id?: string;
+  /** Agents: hide models known to lack tool calling and warn about the ones we cannot tell. */
+  requireTools?: boolean;
 }) {
   const t = useTranslations("common.llm");
   const provider = providers.find((p) => p.id === providerId) ?? providers.find((p) => p.isDefault) ?? providers[0];
+  const models = requireTools ? (provider?.models ?? []).filter((m) => m.supportsTools !== false) : provider?.models ?? [];
+  // Only warn about a concrete pick – "default" resolves server-side and may be anything.
+  const unknownTools = requireTools && model !== "default" && models.find((m) => m.id === model)?.supportsTools === undefined;
   if (providers.length === 0) return <p className="text-sm text-destructive">{t("noProviders")}</p>;
   return (
     <div className="flex flex-wrap gap-2">
@@ -53,13 +60,15 @@ export function LlmModelSelect({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="default">{t("defaultModel", { model: provider?.defaultModel ?? "–" })}</SelectItem>
-          {provider?.models.map((m) => (
+          {models.map((m) => (
             <SelectItem key={m.id} value={m.id}>
               {m.name ? `${m.name} (${m.id})` : m.id}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+      {requireTools && models.length === 0 && <p className="w-full text-sm text-destructive">{t("noToolModels")}</p>}
+      {unknownTools && <p className="w-full text-xs text-muted-foreground">{t("toolSupportUnknown")}</p>}
     </div>
   );
 }

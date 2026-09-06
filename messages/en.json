@@ -33,7 +33,9 @@
     "llm": {
       "noProviders": "No LLM provider configured – add one under Admin → LLM.",
       "defaultProvider": "Default provider",
-      "defaultModel": "Default model ({model})"
+      "defaultModel": "Default model ({model})",
+      "noToolModels": "No model of this provider supports tools. Pick another provider or enable a suitable model under Admin → LLM.",
+      "toolSupportUnknown": "This provider reports no capabilities for the model – whether tools work shows on the first call."
     }
   },
   "auth": {

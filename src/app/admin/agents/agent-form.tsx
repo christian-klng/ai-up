@@ -105,7 +105,7 @@ export function AgentForm({ agent, providers, defaultSystemPrompt }: { agent: Ag
 
             <div className="grid gap-2">
               <Label htmlFor="providerId">{t("model")}</Label>
-              <LlmModelSelect id="providerId" providers={providers} providerId={llm.providerId} model={llm.model} onChange={setLlm} />
+              <LlmModelSelect id="providerId" providers={providers} providerId={llm.providerId} model={llm.model} onChange={setLlm} requireTools />
               <input type="hidden" name="providerId" value={llm.providerId} />
               <input type="hidden" name="model" value={llm.model} />
               <p className="text-xs text-muted-foreground">{t("modelHint")}</p>
