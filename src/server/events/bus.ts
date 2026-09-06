@@ -41,8 +41,6 @@ export type DomainEventMap = {
   "meeting.started": { meeting: MeetingEventMeeting; actorId: string | null; origin: EventOrigin };
   "meeting.ended": { meeting: MeetingEventMeeting; actorId: string | null; origin: EventOrigin };
   "meeting.recording.available": { meeting: MeetingEventMeeting; mediaId: string; recordingUrl: string; durationSeconds: number | null; actorId: string | null; origin: EventOrigin };
-  /** A member wrote to the system bot in the messenger */
-  "bot.message.received": { conversationId: string; messageId: string; text: string; attachments: unknown[]; user: { id: string; name: string }; actorId: string; origin: EventOrigin };
 };
 
 export type MeetingEventMeeting = { id: string; title: string; kind: string; status: string; spaceId: string; spaceSlug: string; spaceName: string; hostId: string | null; href: string };

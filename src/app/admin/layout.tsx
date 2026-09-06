@@ -18,6 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/templates", label: tAdmin("nav.templates") },
     { href: "/admin/meetings", label: tAdmin("nav.meetings") },
     { href: "/admin/workflows", label: tAdmin("nav.workflows") },
+    { href: "/admin/agents", label: tAdmin("nav.agents") },
     { href: "/admin/questions", label: tAdmin("nav.questions") },
     { href: "/admin/llm", label: tAdmin("nav.llm") },
     { href: "/admin/integrations", label: tAdmin("nav.integrations") },

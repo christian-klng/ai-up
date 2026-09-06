@@ -457,7 +457,7 @@ const sendMessageConfig = z.object({
 registerAction<z.infer<typeof sendMessageConfig>>({
   type: "send_message",
   labels: { name: { de: "Nachricht senden (Bot)", en: "Send message (bot)" }, description: { de: "Schickt den Empfängern eine Chat-Nachricht vom System-Bot im Messenger – ohne Kontaktanfrage.", en: "Sends recipients a chat message from the system bot in the messenger – no contact request needed." } },
-  doc: "Sends a messenger message from the system bot (name configurable under Admin → General) to the audience. A direct conversation bot↔user is created on demand. Replies to the bot fire the `bot.message.received` trigger. `body` is a Liquid template; plain text with line breaks.",
+  doc: "Sends a messenger message from the system bot (name and avatar configurable under Admin → AI agents) to the audience. A direct conversation bot↔user is created on demand. The bot conversation is receive-only – members cannot reply to it. `body` is a Liquid template; plain text with line breaks.",
   configSchema: sendMessageConfig,
   fields: [
     { key: "audience", type: "audience", label: { de: "Empfänger", en: "Audience" }, required: true },

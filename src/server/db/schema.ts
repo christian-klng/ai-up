@@ -134,7 +134,7 @@ export const appSettings = pgTable("app_settings", {
   faviconMediaId: uuid("favicon_media_id"),
   theme: jsonb("theme").$type<ThemeSettings>().notNull().default({ primaryColor: "#2563eb", radius: 0.5, mode: "system" }),
   defaultLocale: localeEnum("default_locale").notNull().default("de"),
-  /** Display name of the system bot that sends workflow messages */
+  /** @deprecated Seed source for the system agent's name; the live name lives in ai_agents. */
   botName: text("bot_name").notNull().default("Assistent"),
   /** Serve the public landing page at "/"; when false, "/" redirects to /login resp. /home. */
   landingEnabled: boolean("landing_enabled").notNull().default(false),
@@ -472,6 +472,49 @@ export const llmProviders = pgTable(
     lastError: text("last_error"),
     ...timestamps,
   },
+);
+
+// ---------------------------------------------------------------------------
+// AI agents (chat with tools; see docs/ki-agenten.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * One configurable agent. Exactly one row is the system agent (`is_system`, seeded with
+ * SYSTEM_AGENT_ID); it is the default agent every member sees and doubles as the messenger
+ * identity of the system bot (`bot_user_id` → users."system-bot"). Later rows carry an
+ * `owner_id` and belong to a single member.
+ * Name and avatar are mirrored onto the bot user so the messenger keeps working (domain/bot.ts).
+ */
+export const aiAgents = pgTable(
+  "ai_agents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** url segment: /agents/<slug> */
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    avatarMediaId: uuid("avatar_media_id"),
+    /** null = the admin's default provider resp. its default model */
+    providerId: uuid("provider_id").references(() => llmProviders.id, { onDelete: "set null" }),
+    model: text("model"),
+    /** empty = DEFAULT_AGENT_SYSTEM_PROMPT (src/server/domain/agents.ts) */
+    systemPrompt: text("system_prompt").notNull().default(""),
+    temperature: text("temperature"),
+    maxTokens: integer("max_tokens"),
+    reasoningEffort: text("reasoning_effort").$type<"none" | "low" | "medium" | "high">(),
+    /** hard stop for the agentic loop: tool rounds per turn */
+    maxSteps: integer("max_steps").notNull().default(12),
+    /** hard stop for the agentic loop: total tokens per turn */
+    maxTokensPerTurn: integer("max_tokens_per_turn").notNull().default(120_000),
+    isSystem: boolean("is_system").notNull().default(false),
+    /** system agent only: the users row it speaks as in the messenger */
+    botUserId: text("bot_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** null = available to everyone (the system agent); later: the owning member */
+    ownerId: text("owner_id").references(() => users.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("ai_agents_slug_idx").on(t.slug), index("ai_agents_owner_idx").on(t.ownerId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -1007,6 +1050,7 @@ export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type RunStatus = WorkflowRun["status"];
 export type LlmProvider = typeof llmProviders.$inferSelect;
+export type AiAgent = typeof aiAgents.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type QuestionResponse = typeof questionResponses.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;

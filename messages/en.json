@@ -132,6 +132,7 @@
       "knowledge": "Collections",
       "meetings": "Meeting spaces",
       "workflows": "Workflows",
+      "agents": "AI agents",
       "llm": "LLM",
       "integrations": "Integrations",
       "apiKeys": "API keys",
@@ -156,9 +157,7 @@
       "modeDark": "Dark",
       "modeSystem": "System",
       "defaultLocale": "Default language",
-      "preview": "Preview",
-      "botName": "System bot name",
-      "botNameHint": "Sender of chat messages from workflows (action “Send message”)."
+      "preview": "Preview"
     },
     "purpose": {
       "title": "Community purpose",
@@ -426,6 +425,29 @@
       "output": "Output",
       "skipped": "Skipped",
       "noStepsYet": "No steps started yet."
+    },
+    "agents": {
+      "title": "AI agents",
+      "intro": "The default agent is available to every member. Name and picture also apply to workflow notifications in the messenger.",
+      "avatar": "Picture",
+      "avatarHint": "JPG, PNG or WebP, 5 MB max. Or roll a random one.",
+      "upload": "Upload picture",
+      "rerollAvatar": "Random",
+      "nameHint": "Shown in the chat and as the sender of workflow messages.",
+      "description": "Short description",
+      "descriptionPlaceholder": "Helps with research and curating the collections",
+      "model": "Provider & model",
+      "modelHint": "Without a choice the default provider from Admin → LLM applies. Tools require a model that supports tool calling.",
+      "systemPrompt": "System prompt",
+      "systemPromptHint": "Leave empty for the built-in version (shown as placeholder). Members extend it per conversation with entries from the collections.",
+      "maxSteps": "Steps per answer",
+      "maxTokensPerTurn": "Tokens per answer",
+      "reasoningEffort": "Reasoning effort",
+      "reasoningOff": "Off",
+      "reasoningLow": "Low",
+      "reasoningMedium": "Medium",
+      "reasoningHigh": "High",
+      "limitsHint": "Hard limits per answer – they stop an agent that runs in circles."
     },
     "questions": {
       "title": "Questions & surveys",
@@ -751,7 +773,8 @@
     "viewProfile": "View profile",
     "noAccess": "This conversation does not exist or you are not a member.",
     "bot": "Bot",
-    "botHint": "System bot · replies via workflows"
+    "botHint": "System bot · notifications from workflows",
+    "botReadOnly": "This channel is read-only. Use the AI agent to get work done."
   },
   "workflows": {
     "title": "Workflows",

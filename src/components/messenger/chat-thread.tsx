@@ -268,67 +268,73 @@ export function ChatThread({ conversationId, me, other, otherLastReadAt, initial
         <div ref={bottomRef} />
       </div>
 
-      <form
-        className="shrink-0 border-t p-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
-        }}
-      >
-        {pendingUploads.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {pendingUploads.map((u) => (
-              <span key={u.localId} className="relative size-16 overflow-hidden rounded-md border bg-muted">
-                {u.media ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={u.media.thumbUrl ?? u.media.url} alt="" className="size-full object-cover" />
-                ) : (
-                  <span className="flex size-full items-center justify-center text-[10px] text-muted-foreground">{Math.round(u.progress * 100)}%</span>
-                )}
-                <button type="button" onClick={() => setPendingUploads((p) => p.filter((x) => x.localId !== u.localId))} className="absolute right-0.5 top-0.5 rounded-full bg-background/90 p-0.5 shadow" aria-label="remove">
-                  <X className="size-3" />
-                </button>
-              </span>
-            ))}
+      {other?.isBot ? (
+        // Receive-only: the bot conversation carries workflow notifications, conversational work
+        // happens with the AI agent. The server rejects sends here as well (domain/messenger.ts).
+        <p className="shrink-0 border-t p-3 text-center text-xs text-muted-foreground">{t("botReadOnly")}</p>
+      ) : (
+        <form
+          className="shrink-0 border-t p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
+          }}
+        >
+          {pendingUploads.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {pendingUploads.map((u) => (
+                <span key={u.localId} className="relative size-16 overflow-hidden rounded-md border bg-muted">
+                  {u.media ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={u.media.thumbUrl ?? u.media.url} alt="" className="size-full object-cover" />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-[10px] text-muted-foreground">{Math.round(u.progress * 100)}%</span>
+                  )}
+                  <button type="button" onClick={() => setPendingUploads((p) => p.filter((x) => x.localId !== u.localId))} className="absolute right-0.5 top-0.5 rounded-full bg-background/90 p-0.5 shadow" aria-label="remove">
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <input ref={fileRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => e.currentTarget.files && void addFiles(e.currentTarget.files)} />
+            <Button type="button" variant="ghost" size="icon" onClick={() => fileRef.current?.click()} aria-label={t("attach")}>
+              <ImagePlus className="size-5" />
+            </Button>
+            <Textarea
+              ref={textRef}
+              value={text}
+              onChange={(e) => onType(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files ?? []);
+                if (files.length) {
+                  e.preventDefault();
+                  void addFiles(files);
+                }
+              }}
+              placeholder={t("placeholder")}
+              rows={1}
+              className="max-h-40 min-h-10 resize-none"
+              autoFocus
+            />
+            <Button type="submit" size="icon" disabled={sending || (!text.trim() && pendingUploads.length === 0) || pendingUploads.some((u) => !u.media)} aria-label={t("send")}>
+              {sending ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
+            </Button>
           </div>
-        )}
-        <div className="flex items-end gap-2">
-          <input ref={fileRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => e.currentTarget.files && void addFiles(e.currentTarget.files)} />
-          <Button type="button" variant="ghost" size="icon" onClick={() => fileRef.current?.click()} aria-label={t("attach")}>
-            <ImagePlus className="size-5" />
-          </Button>
-          <Textarea
-            ref={textRef}
-            value={text}
-            onChange={(e) => onType(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData.files ?? []);
-              if (files.length) {
-                e.preventDefault();
-                void addFiles(files);
-              }
-            }}
-            placeholder={t("placeholder")}
-            rows={1}
-            className="max-h-40 min-h-10 resize-none"
-            autoFocus
-          />
-          <Button type="submit" size="icon" disabled={sending || (!text.trim() && pendingUploads.length === 0) || pendingUploads.some((u) => !u.media)} aria-label={t("send")}>
-            {sending ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
-          </Button>
-        </div>
-      </form>
+        </form>
+      )}
     </div>
   );
 }

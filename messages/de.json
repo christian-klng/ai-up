@@ -132,6 +132,7 @@
       "knowledge": "Sammlungen",
       "meetings": "Meeting-Bereiche",
       "workflows": "Workflows",
+      "agents": "KI-Agenten",
       "llm": "LLM",
       "integrations": "Integrationen",
       "apiKeys": "API-Schlüssel",
@@ -156,9 +157,7 @@
       "modeDark": "Dunkel",
       "modeSystem": "System",
       "defaultLocale": "Standardsprache",
-      "preview": "Vorschau",
-      "botName": "Name des System-Bots",
-      "botNameHint": "Absender für Chat-Nachrichten aus Workflows (Aktion „Nachricht senden“)."
+      "preview": "Vorschau"
     },
     "purpose": {
       "title": "Zweck der Community",
@@ -426,6 +425,29 @@
       "output": "Ausgabe",
       "skipped": "Übersprungen",
       "noStepsYet": "Noch keine Schritte gestartet."
+    },
+    "agents": {
+      "title": "KI-Agenten",
+      "intro": "Der Standard-Agent steht allen Mitgliedern zur Verfügung. Name und Bild gelten auch für Benachrichtigungen aus Workflows im Messenger.",
+      "avatar": "Bild",
+      "avatarHint": "JPG, PNG oder WebP, maximal 5 MB. Oder ein zufälliges Bild würfeln.",
+      "upload": "Bild hochladen",
+      "rerollAvatar": "Zufällig",
+      "nameHint": "Erscheint im Chat und als Absender der Workflow-Nachrichten.",
+      "description": "Kurzbeschreibung",
+      "descriptionPlaceholder": "Hilft beim Recherchieren und Pflegen der Sammlungen",
+      "model": "Provider & Modell",
+      "modelHint": "Ohne Auswahl gilt der Standard-Provider aus Verwaltung → LLM. Für Werkzeuge braucht das Modell Tool-Unterstützung.",
+      "systemPrompt": "System-Prompt",
+      "systemPromptHint": "Leer lassen für die mitgelieferte Fassung (im Feld als Platzhalter zu sehen). Nutzer ergänzen ihn je Unterhaltung um Einträge aus den Sammlungen.",
+      "maxSteps": "Schritte je Antwort",
+      "maxTokensPerTurn": "Token je Antwort",
+      "reasoningEffort": "Thinking-Level",
+      "reasoningOff": "Aus",
+      "reasoningLow": "Niedrig",
+      "reasoningMedium": "Mittel",
+      "reasoningHigh": "Hoch",
+      "limitsHint": "Harte Grenzen je Antwort – sie stoppen einen Agenten, der sich im Kreis dreht."
     },
     "questions": {
       "title": "Fragen & Umfragen",
@@ -751,7 +773,8 @@
     "viewProfile": "Profil ansehen",
     "noAccess": "Diese Unterhaltung gibt es nicht oder du bist kein Mitglied.",
     "bot": "Bot",
-    "botHint": "System-Bot · antwortet über Workflows"
+    "botHint": "System-Bot · Benachrichtigungen aus Workflows",
+    "botReadOnly": "Dieser Kanal ist nur zum Lesen. Zum Arbeiten den KI-Agenten nutzen."
   },
   "workflows": {
     "title": "Workflows",

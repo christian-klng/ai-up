@@ -15,7 +15,6 @@ import {
 } from "@/server/db/schema";
 import { publishToUser, publishToUsers } from "@/server/realtime/publish";
 import { createNotification, localized, resolveNotifications } from "./notifications";
-import { emitDomainEvent } from "@/server/events/bus";
 import type { ChatMessageDto } from "@/lib/realtime-events";
 import { BOT_USER_ID } from "@/lib/bot";
 
@@ -319,7 +318,11 @@ async function memberIds(conversationId: string): Promise<string[]> {
 }
 
 export async function sendMessage(me: Pick<User, "id" | "name" | "avatarMediaId">, conversationId: string, body: string, attachments: MessageAttachment[] = []): Promise<ChatMessageDto | undefined> {
-  if (!(await isConversationMember(me.id, conversationId))) return undefined;
+  const ids = await memberIds(conversationId);
+  if (!ids.includes(me.id)) return undefined;
+  // The bot conversation is receive-only: workflows write, members read. Conversational work
+  // happens with the AI agent, so nothing may be sent *to* the bot (see domain/bot.ts).
+  if (me.id !== BOT_USER_ID && ids.includes(BOT_USER_ID)) return undefined;
   const preview = body.trim() ? body.trim().slice(0, 140) : attachments.length ? `📎 ${attachments[0].name}` : "";
   const dto = await db.transaction(async (tx) => {
     const [m] = await tx.insert(messages).values({ conversationId, senderId: me.id, body: body.trim(), attachments }).returning();
@@ -328,11 +331,7 @@ export async function sendMessage(me: Pick<User, "id" | "name" | "avatarMediaId"
     await tx.update(conversationMembers).set({ lastReadAt: m.createdAt }).where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, me.id)));
     return toDto(m, { id: me.id, name: me.name, avatarMediaId: me.avatarMediaId });
   });
-  const ids = await memberIds(conversationId);
   await Promise.all(ids.map(async (uid) => publishToUser(uid, "message.created", { message: dto, unreadMessages: await unreadMessagesCount(uid) })));
-  if (me.id !== BOT_USER_ID && ids.includes(BOT_USER_ID)) {
-    emitDomainEvent("bot.message.received", { conversationId, messageId: dto.id, text: dto.body, attachments: dto.attachments, user: { id: me.id, name: me.name }, actorId: me.id, origin: { kind: "user" } });
-  }
   return dto;
 }
 

@@ -2,13 +2,15 @@ import { eq } from "drizzle-orm";
 import { SYSTEM_TEMPLATES } from "@/lib/structures/defaults";
 import { env } from "@/server/env";
 import type { Db } from "./client";
-import { appSettings, contentTemplates, contentTemplateVersions, users } from "./schema";
+import { SYSTEM_AGENT_ID, SYSTEM_AGENT_SLUG } from "@/lib/agents";
+import { aiAgents, appSettings, contentTemplates, contentTemplateVersions, users } from "./schema";
 
 /**
  * Idempotent baseline seed:
  *  - ensures the singleton app_settings row exists
  *  - promotes SEED_ADMIN_EMAIL to an active admin (creates the user if missing)
  *  - creates/updates the system content templates (defaults.ts is authoritative)
+ *  - creates the system AI agent (name/avatar of the bot; see domain/agents.ts)
  */
 export async function seed(db: Db) {
   await db
@@ -44,6 +46,14 @@ export async function seed(db: Db) {
   await db
     .insert(users)
     .values({ id: "system-bot", email: "bot@system.local", name: "Assistent", emailVerified: true, role: "member", status: "active", isBot: true, locale: env.DEFAULT_LOCALE })
+    .onConflictDoNothing();
+
+  // System AI agent – owns name and avatar of the bot from here on. Inherits the name an existing
+  // installation configured under app_settings.bot_name. Must run after the bot user (FK).
+  const settingsRow = await db.query.appSettings.findFirst({ where: eq(appSettings.id, "default") });
+  await db
+    .insert(aiAgents)
+    .values({ id: SYSTEM_AGENT_ID, slug: SYSTEM_AGENT_SLUG, name: settingsRow?.botName ?? "Assistent", isSystem: true, botUserId: "system-bot" })
     .onConflictDoNothing();
 
   // System content templates: insert missing ones; when a definition in
