@@ -1,5 +1,6 @@
 /**
- * Background worker (BullMQ): executes workflow runs, schedule triggers and entry evaluations.
+ * Background worker (BullMQ): executes workflow runs, schedule triggers, entry evaluations and
+ * AI agent turns.
  * Shares src/server/** with the web process; never imports next/* or React.
  */
 import { Worker, type Job } from "bullmq";
@@ -13,6 +14,7 @@ import { WORKFLOW_QUEUE, getQueue, syncSchedules, type WorkflowJob } from "@/ser
 import { createRun, executeRun } from "@/server/workflows/engine";
 import { loadRegistry } from "@/server/workflows/registry";
 import { evaluateContentVersion } from "@/server/domain/evaluation";
+import { runTurn } from "@/server/agents/loop";
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
@@ -25,6 +27,11 @@ async function processJob(job: Job<WorkflowJob>): Promise<void> {
   if (data.kind === "evaluate") {
     const result = await evaluateContentVersion(data.contentId, data.versionId);
     if (!result.ok) logger.debug({ contentId: data.contentId, versionId: data.versionId, reason: result.reason }, "entry evaluation skipped");
+    return;
+  }
+  if (data.kind === "agent-turn") {
+    const result = await runTurn(data.threadId);
+    if (result.status === "error") logger.warn({ threadId: data.threadId, error: result.error }, "agent turn ended with an error");
     return;
   }
   if (data.kind === "schedule") {

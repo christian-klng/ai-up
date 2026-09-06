@@ -13,11 +13,12 @@ import { WorkflowToasts } from "@/components/workflows/workflow-toasts";
 import { QuestionDock } from "@/components/questions/question-dock";
 import { listOpenQuestionsForUser } from "@/server/domain/questions";
 import { listSpaces } from "@/server/domain/meetings";
+import { listAgentsForUser } from "@/server/domain/agents";
 import { BrandLogo } from "./brand-logo";
 
 /** Server wrapper: loads everything the shell needs (settings, nav data, counters) once per request. */
 export async function AppShellServer({ user, children }: { user: CurrentUser; children: React.ReactNode }) {
-  const [settings, tNav, tAuth, tCommon, unreadNotifications, unreadMessages, areas, openQuestions, spaces] = await Promise.all([
+  const [settings, tNav, tAuth, tCommon, unreadNotifications, unreadMessages, areas, openQuestions, spaces, agents] = await Promise.all([
     getAppSettings(),
     getTranslations("nav"),
     getTranslations("auth"),
@@ -27,6 +28,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
     listAreas(),
     listOpenQuestionsForUser(user.id),
     listSpaces(),
+    listAgentsForUser(user.id),
   ]);
 
   return (
@@ -42,12 +44,14 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
           members: tNav("members"),
           meetings: tNav("meetings"),
           workflows: tNav("workflows"),
+          agents: tNav("agents"),
           admin: tNav("admin"),
           noAreasYet: tNav("noAreasYet"),
           noSpacesYet: tNav("noSpacesYet"),
         },
         knowledgeAreas: areas.map((a) => ({ id: a.id, name: a.name, slug: a.slug, icon: a.icon })),
         meetingSpaces: spaces.map((s) => ({ id: s.id, name: s.name, slug: s.slug, icon: s.icon, live: s.liveCount > 0 })),
+        agents: agents.map((a) => ({ id: a.id, name: a.name, slug: a.slug, avatarMediaId: a.avatarMediaId })),
         isAdmin: user.role === "admin",
       }}
       labels={{

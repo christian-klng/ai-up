@@ -25,6 +25,18 @@ export type QuestionDto = {
   workflowName: string | null;
 };
 
+export type AgentMessageDto = {
+  id: string;
+  threadId: string;
+  role: "user" | "assistant" | "tool";
+  content: string;
+  toolCalls: { id: string; name: string; arguments: string }[] | null;
+  toolName: string | null;
+  status: "streaming" | "complete" | "awaiting_approval" | "error" | "cancelled";
+  error: string | null;
+  createdAt: string;
+};
+
 export type RealtimeEventMap = {
   /** A new question (ask_user action) for this user – shows in the bottom-left dock */
   "question.created": { question: QuestionDto };
@@ -55,6 +67,14 @@ export type RealtimeEventMap = {
   "meeting.updated": { meetingId: string; spaceId: string; spaceSlug: string; status: "scheduled" | "live" | "ended"; participantCount: number; recordingStatus: string };
   /** LLM criteria check for an entry finished – the entry page refreshes its verdict popover */
   "content.evaluation.updated": { contentId: string; versionId: string; passed: number; failed: number; errored: number; total: number };
+  /** An agent turn started writing a message – the chat appends an empty bubble */
+  "agent.message.started": { threadId: string; message: AgentMessageDto };
+  /** Streamed answer fragment (batched server-side, not one event per token) */
+  "agent.message.delta": { threadId: string; messageId: string; delta: string };
+  /** A message reached its final state (assistant answer, tool result, error) */
+  "agent.message.saved": { threadId: string; message: AgentMessageDto };
+  /** The turn ended – the composer unlocks */
+  "agent.turn.finished": { threadId: string; status: "done" | "error" | "cancelled" | "limit"; error: string | null };
   /** Server hint: reload current data (used after reconnect) */
   "sync": Record<string, never>;
 };

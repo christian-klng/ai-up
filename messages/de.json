@@ -81,7 +81,8 @@
     "profile": "Profil",
     "home": "Start",
     "noAreasYet": "Noch keine Sammlungen",
-    "noSpacesYet": "Noch keine Meeting-Bereiche"
+    "noSpacesYet": "Noch keine Meeting-Bereiche",
+    "agents": "KI-Agenten"
   },
   "home": {
     "welcome": "Willkommen, {name}!",
@@ -718,6 +719,35 @@
       "noReason": "Keine Begründung geliefert.",
       "checkedAt": "Geprüft am {date}"
     }
+  },
+  "agents": {
+    "title": "KI-Agenten",
+    "newThread": "Neue Unterhaltung",
+    "noThreads": "Noch keine Unterhaltungen.",
+    "untitled": "Ohne Titel",
+    "deleteThread": "Unterhaltung löschen",
+    "confirmDelete": "Wirklich löschen?",
+    "selectThread": "Wähle eine Unterhaltung aus.",
+    "selectThreadHint": "Oder starte links eine neue.",
+    "emptyThread": "Womit kann ich helfen?",
+    "emptyThreadHint": "Rechts legst du fest, welche Sammlungen ich lesen darf und welche Einträge mich anleiten.",
+    "placeholder": "Nachricht schreiben … (Enter senden, Shift+Enter neue Zeile)",
+    "send": "Senden",
+    "stop": "Stoppen",
+    "thinking": "Denkt nach",
+    "cancelled": "Abgebrochen",
+    "busy": "Diese Unterhaltung arbeitet noch – warte, bis die Antwort fertig ist.",
+    "turnFailed": "Die Antwort ist fehlgeschlagen.",
+    "turnLimit": "Grenze erreicht – die Antwort wurde gestoppt. Frage kleinteiliger nach.",
+    "toggleConfig": "Konfiguration ein-/ausblenden",
+    "collections": "Sammlungen",
+    "collectionsHint": "Nur die ausgewählten Sammlungen sind lesbar.",
+    "collectionsAllHint": "Ohne Auswahl sind alle Sammlungen lesbar.",
+    "noCollections": "Noch keine Sammlungen angelegt.",
+    "instructions": "Anleitende Einträge",
+    "instructionsHint": "Diese Einträge stehen im System-Prompt – z. B. Schreibstil, Bewertungsmaßstab oder Dokumentvorlage.",
+    "removeInstruction": "Eintrag entfernen",
+    "searchEntries": "Eintrag suchen …"
   },
   "contacts": {
     "request": "Kontaktanfrage senden",

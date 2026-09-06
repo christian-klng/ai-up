@@ -14,6 +14,10 @@ Technische Referenz zum „Maschinenraum“. Nutzersicht: Verwaltung → Workflo
 - Aktion `ask_user`: erzeugt eine Frage (Umfrage/Bewertung/CTA), die Mitgliedern unten links als Mini-Formular erscheint; Antworten feuern den Trigger `question.answered` (Filter `questionKey`). Auswertung unter Verwaltung → Fragen.
 - Aktion `transcribe`: Speech-to-Text für eine `media_files`-Datei über den OpenAI-kompatiblen Endpunkt `/audio/transcriptions` des gewählten LLM-Providers (OpenAI `whisper-1`/`gpt-4o-transcribe`, Groq, eigenes Whisper – **nicht** OpenRouter). Max. 25 MB pro Datei, Ausgabe `text`/`markdown` (mit Zeitmarken)/`segments`. Typische Kette: Trigger `meeting.recording.available` → `transcribe` (`{{ trigger.mediaId }}`) → `llm` (Zusammenfassung) → `set_meeting_transcript` (schreibt `meetings.transcript_markdown`, erscheint einklappbar auf der Meeting-Seite; `mode: "append"` (Default) hängt bei vorhandenem Transkript einen datierten Abschnitt an – z. B. nach Wiedereröffnen und zweiter Aufnahme –, `mode: "replace"` überschreibt) → `notify_user`/`create_content`.
 
+## KI-Agenten
+
+Eigene Doku: `docs/ki-agenten.md`. Für den Maschinenraum relevant: Agenten-Turns laufen als vierte Job-Art `{kind:"agent-turn"}` in derselben BullMQ-Queue wie Workflow-Läufe, Zeitpläne und Eintrags-Bewertungen. Die Werkzeuge liegen in einer eigenen Registry (`src/server/agents/tools/`) und rufen dieselben Domänenfunktionen wie MCP – die Dopplung zur MCP-Schicht ist bewusste, dokumentierte Schuld (siehe `docs/ki-agenten.md`, 1.9).
+
 ## MCP-Server
 
 - Endpunkt `POST /api/mcp` (Streamable HTTP, stateless), Auth `Authorization: Bearer aiup_…` **oder** `x-api-key: aiup_…` (API-Schlüssel unter Verwaltung → API-Schlüssel; nur Admins, Scopes `workflows:read|write`, `runs:read|trigger`, `llm:read`, `questions:read`, `landing:read|write`, `knowledge:read|write`).

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { aiAgents, auditLog, type AiAgent } from "@/server/db/schema";
 import { BOT_USER_ID } from "@/lib/bot";
@@ -38,6 +38,14 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
 
 export async function listAgents(): Promise<AiAgent[]> {
   return db.query.aiAgents.findMany({ orderBy: [asc(aiAgents.createdAt)] });
+}
+
+/** Agents the member sees in the sidebar: the shared ones plus their own (phase F). */
+export async function listAgentsForUser(userId: string): Promise<AiAgent[]> {
+  return db.query.aiAgents.findMany({
+    where: and(eq(aiAgents.enabled, true), or(isNull(aiAgents.ownerId), eq(aiAgents.ownerId, userId))),
+    orderBy: [asc(aiAgents.createdAt)],
+  });
 }
 
 export async function getAgentById(id: string): Promise<AiAgent | undefined> {

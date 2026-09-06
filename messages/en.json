@@ -81,7 +81,8 @@
     "profile": "Profile",
     "home": "Home",
     "noAreasYet": "No collections yet",
-    "noSpacesYet": "No meeting spaces yet"
+    "noSpacesYet": "No meeting spaces yet",
+    "agents": "AI agents"
   },
   "home": {
     "welcome": "Welcome, {name}!",
@@ -718,6 +719,35 @@
       "noReason": "No reason provided.",
       "checkedAt": "Checked on {date}"
     }
+  },
+  "agents": {
+    "title": "AI agents",
+    "newThread": "New conversation",
+    "noThreads": "No conversations yet.",
+    "untitled": "Untitled",
+    "deleteThread": "Delete conversation",
+    "confirmDelete": "Really delete?",
+    "selectThread": "Pick a conversation.",
+    "selectThreadHint": "Or start a new one on the left.",
+    "emptyThread": "What can I help with?",
+    "emptyThreadHint": "On the right you choose which collections I may read and which entries guide me.",
+    "placeholder": "Write a message … (Enter to send, Shift+Enter for a new line)",
+    "send": "Send",
+    "stop": "Stop",
+    "thinking": "Thinking",
+    "cancelled": "Cancelled",
+    "busy": "This conversation is still working – wait for the answer to finish.",
+    "turnFailed": "The answer failed.",
+    "turnLimit": "Limit reached – the answer was stopped. Ask in smaller steps.",
+    "toggleConfig": "Show or hide the configuration",
+    "collections": "Collections",
+    "collectionsHint": "Only the selected collections are readable.",
+    "collectionsAllHint": "Without a selection every collection is readable.",
+    "noCollections": "No collections yet.",
+    "instructions": "Guiding entries",
+    "instructionsHint": "These entries go into the system prompt – e.g. a writing style, an evaluation yardstick or a document format.",
+    "removeInstruction": "Remove entry",
+    "searchEntries": "Search for an entry …"
   },
   "contacts": {
     "request": "Send contact request",

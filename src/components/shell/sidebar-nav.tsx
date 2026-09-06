@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, CalendarClock, Home, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
+import { BookOpen, Bot, CalendarClock, Home, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 
 export type NavArea = { id: string; name: string; slug: string; icon?: string; live?: boolean };
+export type NavAgent = { id: string; name: string; slug: string; avatarMediaId: string | null };
 
 export type SidebarNavProps = {
   labels: {
@@ -15,24 +16,45 @@ export type SidebarNavProps = {
     members: string;
     meetings: string;
     workflows: string;
+    agents: string;
     admin: string;
     noAreasYet: string;
     noSpacesYet: string;
   };
   knowledgeAreas: NavArea[];
   meetingSpaces: NavArea[];
+  agents: NavAgent[];
   isAdmin: boolean;
   onNavigate?: () => void;
 };
 
-const ICONS = { home: Home, knowledge: BookOpen, members: Users, meetings: CalendarClock, workflows: Workflow, admin: Settings } satisfies Record<string, LucideIcon>;
+const ICONS = { home: Home, knowledge: BookOpen, members: Users, meetings: CalendarClock, workflows: Workflow, agents: Bot, admin: Settings } satisfies Record<string, LucideIcon>;
 type IconKey = keyof typeof ICONS;
 
 function isActivePath(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavItem({ href, icon, areaIcon, live, active, onNavigate, children }: { href: string; icon?: IconKey; areaIcon?: string; live?: boolean; active: boolean; onNavigate?: () => void; children: React.ReactNode }) {
+function NavItem({
+  href,
+  icon,
+  areaIcon,
+  avatarMediaId,
+  live,
+  active,
+  onNavigate,
+  children,
+}: {
+  href: string;
+  icon?: IconKey;
+  areaIcon?: string;
+  /** agents show their picture instead of an icon */
+  avatarMediaId?: string | null;
+  live?: boolean;
+  active: boolean;
+  onNavigate?: () => void;
+  children: React.ReactNode;
+}) {
   const Icon = icon ? ICONS[icon] : null;
   return (
     <Link
@@ -44,7 +66,16 @@ function NavItem({ href, icon, areaIcon, live, active, onNavigate, children }: {
         active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
       )}
     >
-      {Icon ? <Icon className="size-4 shrink-0 opacity-80" aria-hidden /> : areaIcon ? <AreaIcon icon={areaIcon} className="size-4 shrink-0 opacity-70" aria-hidden /> : <span className="size-4 shrink-0" aria-hidden />}
+      {Icon ? (
+        <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
+      ) : areaIcon ? (
+        <AreaIcon icon={areaIcon} className="size-4 shrink-0 opacity-70" aria-hidden />
+      ) : avatarMediaId ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/files/${avatarMediaId}?v=thumb`} alt="" className="size-4 shrink-0 rounded-full object-cover" />
+      ) : (
+        <Bot className="size-4 shrink-0 opacity-70" aria-hidden />
+      )}
       <span className="truncate">{children}</span>
       {live && (
         <span className="ml-auto inline-flex items-center" aria-label="live">
@@ -64,7 +95,7 @@ function NavSection({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, isAdmin, onNavigate }: SidebarNavProps) {
+export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, agents, isAdmin, onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const item = (href: string, icon: IconKey | undefined, label: string, live?: boolean, areaIcon?: string) => (
     <NavItem key={href} href={href} icon={icon} areaIcon={areaIcon} live={live} active={isActivePath(pathname, href)} onNavigate={onNavigate}>
@@ -79,6 +110,14 @@ export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, isAdmin, onN
       <NavSection title={labels.knowledge}>
         {knowledgeAreas.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground">{labels.noAreasYet}</p>}
         {knowledgeAreas.map((a) => item(`/knowledge/${a.slug}`, undefined, a.name, false, a.icon))}
+      </NavSection>
+
+      <NavSection title={labels.agents}>
+        {agents.map((a) => (
+          <NavItem key={a.slug} href={`/agents/${a.slug}`} avatarMediaId={a.avatarMediaId} active={isActivePath(pathname, `/agents/${a.slug}`)} onNavigate={onNavigate}>
+            {a.name}
+          </NavItem>
+        ))}
       </NavSection>
 
       <NavSection title={labels.meetings}>

@@ -8,14 +8,19 @@ import { logger } from "@/server/logger";
 import { scheduleToRepeat, type ScheduleConfig } from "./triggers";
 
 /**
- * BullMQ queue "workflow-runs": jobs of three kinds
+ * BullMQ queue "workflow-runs": jobs of four kinds
  *  - { kind: "run", runId }                  → execute an already created run
  *  - { kind: "schedule", workflowId }        → repeatable job (job scheduler) → creates + executes a run
  *  - { kind: "evaluate", contentId, versionId } → LLM check of an entry against its template criteria
+ *  - { kind: "agent-turn", threadId }        → one turn of an AI agent chat (tool loop, streams to the UI)
  * Web enqueues; the worker consumes (see worker/index.ts).
  */
 export const WORKFLOW_QUEUE = "workflow-runs";
-export type WorkflowJob = { kind: "run"; runId: string } | { kind: "schedule"; workflowId: string } | { kind: "evaluate"; contentId: string; versionId: string };
+export type WorkflowJob =
+  | { kind: "run"; runId: string }
+  | { kind: "schedule"; workflowId: string }
+  | { kind: "evaluate"; contentId: string; versionId: string }
+  | { kind: "agent-turn"; threadId: string };
 
 const g = globalThis as unknown as { __aiupQueue?: Queue<WorkflowJob>; __aiupQueueConn?: IORedis };
 
@@ -46,6 +51,20 @@ export async function enqueueEvaluation(contentId: string, versionId: string): P
   } catch (err) {
     logger.warn({ err, contentId, versionId }, "could not enqueue entry evaluation");
   }
+}
+
+/**
+ * Queues one agent turn. The job id keeps a thread single-tracked: while a turn is queued or
+ * running, a second send cannot start a parallel loop on the same conversation.
+ */
+export async function enqueueAgentTurn(threadId: string): Promise<"queued" | "busy"> {
+  const queue = getQueue();
+  const jobId = `agent-${threadId}`;
+  // A plain add() with an existing job id is silently swallowed, which would lose the message.
+  // Checking first lets the caller say "busy" instead.
+  if (await queue.getJob(jobId)) return "busy";
+  await queue.add("agent-turn", { kind: "agent-turn", threadId }, { jobId, removeOnComplete: true, removeOnFail: true });
+  return "queued";
 }
 
 // BullMQ forbids ":" in custom ids

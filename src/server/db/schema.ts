@@ -517,6 +517,92 @@ export const aiAgents = pgTable(
   (t) => [uniqueIndex("ai_agents_slug_idx").on(t.slug), index("ai_agents_owner_idx").on(t.ownerId)],
 );
 
+/** Work mode of a thread: read-only assistance vs. curating the collections (write tools). */
+export const agentThreadModeEnum = pgEnum("agent_thread_mode", ["assist", "curate"]);
+export const agentMessageRoleEnum = pgEnum("agent_message_role", ["user", "assistant", "tool"]);
+/** `awaiting_approval` parks a write tool call until the user confirms it (phase D). */
+export const agentMessageStatusEnum = pgEnum("agent_message_status", ["streaming", "complete", "awaiting_approval", "error", "cancelled"]);
+
+export const agentThreads = pgTable(
+  "agent_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => aiAgents.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
+    mode: agentThreadModeEnum("mode").notNull().default("assist"),
+    /** always = confirm every write tool call, never = run them straight away */
+    writeApproval: text("write_approval").$type<"always" | "never">().notNull().default("always"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("agent_threads_user_idx").on(t.userId, t.agentId, t.lastMessageAt)],
+);
+
+/** Which collections this thread may read resp. write. No rows = every collection is readable. */
+export const agentThreadCollections = pgTable(
+  "agent_thread_collections",
+  {
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => agentThreads.id, { onDelete: "cascade" }),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => knowledgeAreas.id, { onDelete: "cascade" }),
+    access: text("access").$type<"read" | "write">().notNull().default("read"),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.areaId] })],
+);
+
+/**
+ * Entries whose markdown is rendered into the system prompt (the "CLAUDE.md" pattern):
+ * a writing style, an evaluation yardstick, a document format. Any entry qualifies.
+ */
+export const agentThreadInstructions = pgTable(
+  "agent_thread_instructions",
+  {
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => agentThreads.id, { onDelete: "cascade" }),
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contents.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.contentId] })],
+);
+
+export const agentMessages = pgTable(
+  "agent_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => agentThreads.id, { onDelete: "cascade" }),
+    role: agentMessageRoleEnum("role").notNull(),
+    content: text("content").notNull().default(""),
+    /** assistant: the calls it asked for; arguments stay raw JSON strings */
+    toolCalls: jsonb("tool_calls").$type<{ id: string; name: string; arguments: string }[]>(),
+    /** tool: which call this answers */
+    toolCallId: text("tool_call_id"),
+    toolName: text("tool_name"),
+    status: agentMessageStatusEnum("status").notNull().default("complete"),
+    error: text("error"),
+    /** per assistant message – the basis for the weekly quota (see docs/ki-agenten.md 1.7) */
+    usage: jsonb("usage").$type<{ promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number }>(),
+    model: text("model"),
+    /** tool round inside one turn */
+    stepNo: integer("step_no").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("agent_messages_thread_idx").on(t.threadId, t.createdAt)],
+);
+
 // ---------------------------------------------------------------------------
 // Questions (workflow action "ask_user": mini forms shown bottom-left)
 // ---------------------------------------------------------------------------
@@ -1051,6 +1137,11 @@ export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type RunStatus = WorkflowRun["status"];
 export type LlmProvider = typeof llmProviders.$inferSelect;
 export type AiAgent = typeof aiAgents.$inferSelect;
+export type AgentThread = typeof agentThreads.$inferSelect;
+export type AgentThreadMode = AgentThread["mode"];
+export type AgentThreadCollection = typeof agentThreadCollections.$inferSelect;
+export type AgentThreadInstruction = typeof agentThreadInstructions.$inferSelect;
+export type AgentMessage = typeof agentMessages.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type QuestionResponse = typeof questionResponses.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
