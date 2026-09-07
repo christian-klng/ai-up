@@ -64,7 +64,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     .returning();
 
   try {
-    const avatar = await generateRandomAvatar(id);
+    const avatar = await generateRandomAvatar({ seed: id, uploadedBy: id });
     await db.update(users).set({ avatarMediaId: avatar.id }).where(eq(users.id, id));
   } catch (err) {
     logger.error({ err, userId: id }, "avatar generation failed");

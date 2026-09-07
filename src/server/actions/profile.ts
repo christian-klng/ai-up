@@ -65,7 +65,7 @@ export async function uploadProfilePhotoAction(_prev: ProfileFormState, formData
 
 export async function rerollAvatarAction(): Promise<void> {
   const user = await assertUser();
-  const media = await generateRandomAvatar(user.id, crypto.randomUUID());
+  const media = await generateRandomAvatar({ seed: user.id, salt: crypto.randomUUID(), uploadedBy: user.id });
   await updateProfile(user.id, { avatarMediaId: media.id });
   revalidatePath("/", "layout");
 }

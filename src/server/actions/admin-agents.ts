@@ -91,7 +91,7 @@ export async function uploadAgentAvatarAction(agentId: string, _prev: AdminFormS
 /** Generates a fresh dicebear avatar (same generator as the member avatars). */
 export async function rerollAgentAvatarAction(agentId: string): Promise<void> {
   const admin = await assertAdmin();
-  const media = await generateRandomAvatar(agentId, crypto.randomUUID());
+  const media = await generateRandomAvatar({ seed: agentId, salt: crypto.randomUUID(), uploadedBy: admin.id });
   await setAgentAvatar(agentId, media.id, admin.id);
 }
 

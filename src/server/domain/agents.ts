@@ -1,6 +1,8 @@
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { aiAgents, auditLog, type AiAgent } from "@/server/db/schema";
+import { aiAgents, auditLog, users, type AiAgent } from "@/server/db/schema";
+import { generateRandomAvatar } from "@/server/media/avatars";
+import { logger } from "@/server/logger";
 import { BOT_USER_ID } from "@/lib/bot";
 import { SYSTEM_AGENT_ID, SYSTEM_AGENT_SLUG } from "@/lib/agents";
 import { loadAppSettings } from "./settings";
@@ -58,18 +60,38 @@ export async function getAgentBySlug(slug: string): Promise<AiAgent | undefined>
 
 /**
  * Loads the system agent, creating it if missing. The first creation inherits the name from the
- * (now deprecated) app_settings.bot_name so an existing installation keeps its bot identity.
+ * (now deprecated) app_settings.bot_name so an existing installation keeps its bot identity, and
+ * the picture from the bot user if it already had one.
  */
 export async function ensureSystemAgent(): Promise<AiAgent> {
-  const existing = await db.query.aiAgents.findFirst({ where: eq(aiAgents.id, SYSTEM_AGENT_ID) });
-  if (existing) return existing;
-  const settings = await loadAppSettings();
-  const [created] = await db
-    .insert(aiAgents)
-    .values({ id: SYSTEM_AGENT_ID, slug: SYSTEM_AGENT_SLUG, name: settings.botName, isSystem: true, botUserId: BOT_USER_ID })
-    .onConflictDoNothing()
-    .returning();
-  return created ?? (await db.query.aiAgents.findFirst({ where: eq(aiAgents.id, SYSTEM_AGENT_ID) }))!;
+  let agent = await db.query.aiAgents.findFirst({ where: eq(aiAgents.id, SYSTEM_AGENT_ID) });
+  if (!agent) {
+    const settings = await loadAppSettings();
+    const [created] = await db
+      .insert(aiAgents)
+      .values({ id: SYSTEM_AGENT_ID, slug: SYSTEM_AGENT_SLUG, name: settings.botName, isSystem: true, botUserId: BOT_USER_ID })
+      .onConflictDoNothing()
+      .returning();
+    agent = created ?? (await db.query.aiAgents.findFirst({ where: eq(aiAgents.id, SYSTEM_AGENT_ID) }))!;
+  }
+  if (agent.avatarMediaId) return agent;
+
+  // No picture yet: take the bot user's, otherwise generate one. Doing this here (rather than only
+  // in ensureBotUser) means the agent has a face as soon as anyone opens it.
+  const bot = await db.query.users.findFirst({ where: eq(users.id, BOT_USER_ID), columns: { avatarMediaId: true } });
+  let avatarMediaId = bot?.avatarMediaId ?? null;
+  if (!avatarMediaId) {
+    try {
+      // uploadedBy stays null: nobody uploaded this, it is generated – and media_files.uploaded_by
+      // is a foreign key to users, which the agent id is not.
+      avatarMediaId = (await generateRandomAvatar({ seed: SYSTEM_AGENT_ID, salt: "agent", uploadedBy: null })).id;
+    } catch (err) {
+      logger.warn({ err }, "agent avatar generation failed");
+      return agent;
+    }
+  }
+  const [updated] = await db.update(aiAgents).set({ avatarMediaId }).where(eq(aiAgents.id, agent.id)).returning();
+  return updated ?? agent;
 }
 
 export type AgentInput = Partial<

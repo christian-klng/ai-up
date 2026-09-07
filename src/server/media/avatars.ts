@@ -4,12 +4,16 @@ import { storeFile } from "./storage";
 import type { MediaFile } from "@/server/db/schema";
 
 /**
- * Generates a deterministic, friendly avatar for a seed (user id + optional salt) and stores it as SVG.
+ * Generates a deterministic, friendly avatar for a seed (+ optional salt) and stores it as SVG.
  * "thumbs" is neutral and works on light and dark backgrounds.
+ *
+ * `seed` and `uploadedBy` are separate on purpose: the picture of an AI agent is seeded with the
+ * agent id, but media_files.uploaded_by is a foreign key to users – passing a non-user id there
+ * fails the constraint.
  */
-export async function generateRandomAvatar(userId: string, salt = ""): Promise<MediaFile> {
+export async function generateRandomAvatar({ seed, salt = "", uploadedBy }: { seed: string; salt?: string; uploadedBy: string | null }): Promise<MediaFile> {
   const svg = createAvatar(thumbs, {
-    seed: `${userId}:${salt}`,
+    seed: `${seed}:${salt}`,
     radius: 50,
     backgroundColor: ["dbeafe", "dcfce7", "fef3c7", "fce7f3", "e0e7ff", "ffedd5", "cffafe"],
     backgroundType: ["solid"],
@@ -20,7 +24,7 @@ export async function generateRandomAvatar(userId: string, salt = ""): Promise<M
     mime: "image/svg+xml",
     originalName: "avatar.svg",
     purpose: "avatar",
-    uploadedBy: userId,
+    uploadedBy,
     width: 256,
     height: 256,
   });

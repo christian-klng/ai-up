@@ -21,7 +21,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (!user.avatarMediaId) {
     // Seeded/legacy accounts: give them a random avatar on first visit.
     try {
-      const avatar = await generateRandomAvatar(user.id);
+      const avatar = await generateRandomAvatar({ seed: user.id, uploadedBy: user.id });
       user = await updateProfile(user.id, { avatarMediaId: avatar.id });
     } catch {
       /* non-critical */
