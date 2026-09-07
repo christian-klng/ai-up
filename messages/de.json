@@ -450,7 +450,16 @@
       "reasoningLow": "Niedrig",
       "reasoningMedium": "Mittel",
       "reasoningHigh": "Hoch",
-      "limitsHint": "Harte Grenzen je Antwort – sie stoppen einen Agenten, der sich im Kreis dreht."
+      "limitsHint": "Harte Grenzen je Antwort – sie stoppen einen Agenten, der sich im Kreis dreht.",
+      "quotaTitle": "Kontingent",
+      "weeklyBudget": "Wochenkontingent je Mitglied",
+      "weeklyBudgetHint": "Gewichtete Tokens pro Woche, Reset montags. 0 = kein Limit (der Verbrauch wird trotzdem erfasst).",
+      "outputWeight": "Gewicht der Ausgabe",
+      "outputWeightHint": "Ausgabe-Tokens kosten ein Vielfaches der Eingabe. Verbrauch = Eingabe + Ausgabe × Gewicht.",
+      "usageTitle": "Verbrauch diese Woche",
+      "usageSince": "Seit {date}",
+      "usageEmpty": "Diese Woche wurde noch kein Agent genutzt.",
+      "usageBreakdown": "{input} Eingabe · {output} Ausgabe"
     },
     "questions": {
       "title": "Fragen & Umfragen",
@@ -759,7 +768,12 @@
     "approvalTitle": "Aktion bestätigen: {tool}",
     "approvalPending": "Bitte zuerst die Aktion bestätigen oder ablehnen.",
     "approve": "Ausführen",
-    "decline": "Ablehnen"
+    "decline": "Ablehnen",
+    "quota": "Wochenkontingent",
+    "quotaUsed": "{percent} % verbraucht",
+    "quotaHint": "Setzt sich jeden Montag zurück.",
+    "quotaExceededHint": "Aufgebraucht – ab Montag geht es weiter.",
+    "quotaReached": "Dein Wochenkontingent ist aufgebraucht. Ab Montag geht es weiter."
   },
   "contacts": {
     "request": "Kontaktanfrage senden",

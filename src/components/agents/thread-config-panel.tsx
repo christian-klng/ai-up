@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { BookOpen, FileText, Loader2, Pencil, Search, X } from "lucide-react";
-import { saveThreadConfigAction, searchEntriesAction, setThreadModeAction } from "@/server/actions/agents";
+import { getBudgetStatusAction, saveThreadConfigAction, searchEntriesAction, setThreadModeAction } from "@/server/actions/agents";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +44,12 @@ export function ThreadConfigPanel({
   const [results, setResults] = useState<EntryOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, startSave] = useTransition();
+  const [budget, setBudget] = useState<{ budget: number; percent: number; exceeded: boolean; resetsAt: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    void getBudgetStatusAction().then(setBudget);
+  }, [threadId]);
 
   const term = query.trim();
   // Results are only rendered while the term is long enough, so nothing has to be cleared here.
@@ -200,6 +205,19 @@ export function ThreadConfigPanel({
           </ul>
         )}
       </section>
+
+      {budget && budget.budget > 0 && (
+        <section className="grid gap-1.5">
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-sm font-medium">{t("quota")}</h3>
+            <span className={cn("text-xs tabular-nums", budget.exceeded ? "text-destructive" : "text-muted-foreground")}>{t("quotaUsed", { percent: budget.percent })}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={budget.percent} aria-valuemin={0} aria-valuemax={100}>
+            <div className={cn("h-full rounded-full transition-all", budget.exceeded ? "bg-destructive" : "bg-primary")} style={{ width: `${budget.percent}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">{budget.exceeded ? t("quotaExceededHint") : t("quotaHint")}</p>
+        </section>
+      )}
 
       <div className="mt-auto pt-2">
         <Button type="button" size="sm" className="w-full" disabled={!dirty || saving} onClick={save}>

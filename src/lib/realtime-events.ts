@@ -74,7 +74,7 @@ export type RealtimeEventMap = {
   /** A message reached its final state (assistant answer, tool result, error) */
   "agent.message.saved": { threadId: string; message: AgentMessageDto };
   /** The turn ended – the composer unlocks */
-  "agent.turn.finished": { threadId: string; status: "done" | "error" | "cancelled" | "limit" | "approval"; error: string | null };
+  "agent.turn.finished": { threadId: string; status: "done" | "error" | "cancelled" | "limit" | "approval" | "quota"; error: string | null };
   /** Server hint: reload current data (used after reconnect) */
   "sync": Record<string, never>;
 };

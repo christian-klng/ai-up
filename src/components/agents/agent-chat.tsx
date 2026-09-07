@@ -98,6 +98,7 @@ export function AgentChat({
     setRunning(false);
     if (status === "error") toast.error(error ?? t("turnFailed"));
     if (status === "limit") toast.warning(t("turnLimit"));
+    if (status === "quota") toast.warning(t("quotaReached"));
     // The thread title is derived from the first message on the server – pick it up in the list.
     router.refresh();
   });
@@ -113,7 +114,7 @@ export function AgentChat({
       if (!res.ok) {
         setRunning(false);
         setText(body);
-        toast.error(res.reason === "busy" ? t("busy") : t("turnFailed"));
+        toast.error(res.reason === "busy" ? t("busy") : res.reason === "quota" ? t("quotaReached") : t("turnFailed"));
       }
     });
   };

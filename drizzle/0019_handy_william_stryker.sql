@@ -1,0 +1,2 @@
+ALTER TABLE "app_settings" ADD COLUMN "agent_weekly_token_budget" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "app_settings" ADD COLUMN "agent_output_token_weight" integer DEFAULT 4 NOT NULL;

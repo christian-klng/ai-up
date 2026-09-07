@@ -6,6 +6,7 @@ import { assertUser } from "@/server/auth/session";
 import { getAgentBySlug } from "@/server/domain/agents";
 import { listAreas, listContents } from "@/server/domain/knowledge";
 import { requestCancel, resolveToolCall } from "@/server/agents/loop";
+import { getBudgetStatus } from "@/server/agents/usage";
 import { toDto } from "@/server/agents/history";
 import {
   addMessage,
@@ -64,12 +65,15 @@ const sendSchema = z.string().trim().min(1).max(20_000);
  * Appends the member's message and hands the turn to the worker. Long-running loops never run in a
  * request handler – see docs/ki-agenten.md 1.8.
  */
-export async function sendAgentMessageAction(threadId: string, body: string): Promise<{ ok: true; message: AgentMessageDto } | { ok: false; reason: "invalid" | "busy" }> {
+export async function sendAgentMessageAction(threadId: string, body: string): Promise<{ ok: true; message: AgentMessageDto } | { ok: false; reason: "invalid" | "busy" | "quota" }> {
   const owned = await ownThread(threadId);
   if (!owned) return { ok: false, reason: "invalid" };
   const parsed = sendSchema.safeParse(body);
   if (!parsed.success) return { ok: false, reason: "invalid" };
   if (await hasRunningTurn(owned.thread.id)) return { ok: false, reason: "busy" };
+  // The turn already running may still exceed the quota by at most maxTokensPerTurn – that cap is
+  // what bounds the overshoot; starting a new turn over the limit is refused outright.
+  if ((await getBudgetStatus(owned.me.id)).exceeded) return { ok: false, reason: "quota" };
 
   const message = await addMessage({ threadId: owned.thread.id, role: "user", content: parsed.data, status: "complete" });
   const dto = toDto(message);
@@ -89,6 +93,13 @@ export async function cancelAgentTurnAction(threadId: string): Promise<{ ok: boo
   if (!owned) return { ok: false };
   await requestCancel(owned.thread.id);
   return { ok: true };
+}
+
+/** The member's own quota state – shown as a percentage in the configuration panel. */
+export async function getBudgetStatusAction(): Promise<{ budget: number; percent: number; exceeded: boolean; resetsAt: string }> {
+  const me = await assertUser();
+  const status = await getBudgetStatus(me.id);
+  return { budget: status.budget, percent: status.percent, exceeded: status.exceeded, resetsAt: status.resetsAt.toISOString() };
 }
 
 /**

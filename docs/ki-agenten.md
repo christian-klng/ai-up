@@ -3,7 +3,7 @@
 Planungsdokument für das Feature „KI-Agenten“: Chat-Oberfläche mit agentischem Loop und Werkzeugen,
 Datenbasis sind die **Sammlungen**. Der System-Bot wird zum Standard-Agenten für alle Nutzer.
 
-Stand: **Phasen A–D umgesetzt** (06.09.2026), Phasen E–G offen. Das Dokument enthält (1) die kritische
+Stand: **Phasen A–E umgesetzt** (07.09.2026), Phasen F und G offen. Das Dokument enthält (1) die kritische
 Prüfung gegen den Bestand, (2) das Zielbild, (3) Datenmodell und Module, (4) den Schnitt in Phasen,
 (5) die getroffenen Entscheidungen.
 
@@ -135,8 +135,10 @@ Bestand: Nirgends ein Budget. Workflow-Läufe erfassen `usage` je Schritt, das w
 Loop mit Werkzeugen ist der erste Ort in der App, an dem ein **Mitglied** unbegrenzt Kosten auf dem
 Schlüssel des Admins erzeugen kann – iterativ, im Hintergrund, ohne Deckel.
 
-**Entscheidung (06.09.2026): Wochenkontingent je Nutzer, Eingabe- und Ausgabe-Tokens getrennt gezählt
-und gewichtet zusammengeführt. Durchsetzung erst nach v1 – die Erfassung aber ab v1.**
+**Entscheidung (06.09.2026), umgesetzt in Phase E: Wochenkontingent je Nutzer, Eingabe- und
+Ausgabe-Tokens getrennt gezählt und gewichtet zusammengeführt.** Einstellung unter
+*Verwaltung → KI-Agenten*; `0` lässt das Limit aus, die Zahlen laufen trotzdem mit. Zurückgesetzt
+wird montags 00:00 in der App-Zeitzone (`src/lib/week.ts`, DST-fest und getestet).
 
 Das ist die richtige Reihenfolge: Ein Limit lässt sich jederzeit nachrüsten, aber nur, wenn die Zahlen
 vorher schon geschrieben werden. Fehlt die Erfassung, steht man später ohne Datenbasis da und muss
@@ -391,7 +393,7 @@ Nur an den Thread-Eigentümer (`publishToUser`).
 | **B** LLM-Client ✅ *(06.09.2026)* | Tool-Calling + Streaming in `client.ts`, `tools` in `modelCapabilities`, Modell-Auswahl gefiltert | Unit-Tests für Wire-Format und Stream-Parser (`client.test.ts`); der erste echte Tool-Call kommt mit Phase C |
 | **C** Threads + Chat ✅ *(06.09.2026)* | Tabellen, Menüpunkt, Thread-Liste, Chat-UI, Konfig-Panel (Zugriff + Instruktions-Einträge), Standard-Systemprompt, Loop im Worker, Streaming, Abbruch, Lese-Tools, `max_steps`/Token-Deckel je Turn, Usage-Erfassung | Nutzer chattet mit dem Agenten; ein ausgewählter Eintrag steuert nachweislich das Verhalten |
 | **D** Schreiben ✅ *(06.09.2026)* | Schreib-Tools, Freigabe-Fluss + Icon-Umschalter, `origin: agent`, `includeAgentOrigin`, Evaluations-Bündelung | Agent legt nach Freigabe einen Eintrag an; kein Workflow läuft ungewollt mit |
-| **E** Kosten & Betrieb | Wochenkontingent je Nutzer (gewichtete Summe), Admin-Übersicht, Fehlerbilder | Ein Nutzer kann das Wochenkontingent nicht überschreiten |
+| **E** Kosten & Betrieb ✅ *(07.09.2026)* | Wochenkontingent je Nutzer (gewichtete Summe), Admin-Übersicht, Fehlerbilder | Ein Nutzer kann das Wochenkontingent nicht überschreiten |
 | **F** Ausbau | Websuche, Dateien im Chat, lange Threads (Kompaktierung), eigene Agenten der Nutzenden | – |
 | **G** Retrieval | pgvector, Embeddings über `content_versions`, semantische Suche als Tool | – |
 

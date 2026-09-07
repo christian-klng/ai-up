@@ -136,6 +136,10 @@ export const appSettings = pgTable("app_settings", {
   defaultLocale: localeEnum("default_locale").notNull().default("de"),
   /** @deprecated Seed source for the system agent's name; the live name lives in ai_agents. */
   botName: text("bot_name").notNull().default("Assistent"),
+  /** Weekly agent token quota per member (weighted, see src/server/agents/usage.ts). 0 = no limit. */
+  agentWeeklyTokenBudget: integer("agent_weekly_token_budget").notNull().default(0),
+  /** Output tokens cost several times what input costs – this factor makes one comparable number. */
+  agentOutputTokenWeight: integer("agent_output_token_weight").notNull().default(4),
   /** Serve the public landing page at "/"; when false, "/" redirects to /login resp. /home. */
   landingEnabled: boolean("landing_enabled").notNull().default(false),
   /** Serve the public imprint page at /imprint (404 when disabled). */

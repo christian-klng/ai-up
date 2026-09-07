@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertAdmin } from "@/server/auth/session";
 import { getAgentById, updateAgent } from "@/server/domain/agents";
+import { updateAppSettings } from "@/server/domain/settings";
 import { ensureBotUser } from "@/server/domain/bot";
 import { generateRandomAvatar } from "@/server/media/avatars";
 import { IMAGE_MIMES, processAndStoreImage } from "@/server/media/images";
@@ -100,4 +101,22 @@ async function setAgentAvatar(agentId: string, mediaId: string, actorId: string)
   await updateAgent(agentId, { avatarMediaId: mediaId }, actorId);
   if (agent.isSystem) await ensureBotUser().catch((err) => logger.warn({ err }, "bot sync after avatar change failed"));
   revalidatePath("/", "layout");
+}
+
+const quotaSchema = z.object({
+  agentWeeklyTokenBudget: z.coerce.number().int().min(0).max(1_000_000_000),
+  agentOutputTokenWeight: z.coerce.number().int().min(1).max(20),
+});
+
+/** Weekly quota per member. 0 turns the limit off; the numbers keep being recorded either way. */
+export async function saveAgentQuotaAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await assertAdmin();
+  const parsed = quotaSchema.safeParse({
+    agentWeeklyTokenBudget: formData.get("agentWeeklyTokenBudget"),
+    agentOutputTokenWeight: formData.get("agentOutputTokenWeight"),
+  });
+  if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message };
+  await updateAppSettings(parsed.data);
+  revalidatePath("/admin/agents");
+  return { status: "saved" };
 }

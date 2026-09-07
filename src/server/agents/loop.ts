@@ -8,6 +8,7 @@ import { publishToUser } from "@/server/realtime/publish";
 import { LlmError, modelCapabilities, streamChatCompletion, type ChatUsage } from "@/server/llm/client";
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
 import { buildSystemPrompt } from "./context";
+import { getBudgetStatus, weighUsage } from "./usage";
 import { buildHistory, toDto } from "./history";
 import { addMessage, failStaleMessages, getMessage, getThread, getThreadConfig, hasPendingApproval, listMessages, renameThread, updateMessage } from "./threads";
 import { getTool, listTools, toolDefinitions, type AgentToolContext } from "./tools";
@@ -65,7 +66,7 @@ function explainLlmError(err: unknown): string {
   return err.message;
 }
 
-export type TurnResult = { status: "done" | "error" | "cancelled" | "limit" | "approval"; error: string | null };
+export type TurnResult = { status: "done" | "error" | "cancelled" | "limit" | "approval" | "quota"; error: string | null };
 
 export async function runTurn(threadId: string): Promise<TurnResult> {
   const thread = await getThread(threadId);
@@ -108,6 +109,11 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
       if (first) await renameThread(threadId, first.content.replace(/\s+/g, " ").trim().slice(0, 80));
     }
     const history = buildHistory(stored);
+
+    // Read once per turn, then keep adding this turn's own consumption: a query per step would
+    // cost more than it protects.
+    const budget = await getBudgetStatus(userId);
+    if (budget.exceeded) return finish({ status: "quota", error: null });
 
     let usage: ChatUsage = {};
     for (let step = 0; step < agent.maxSteps; step++) {
@@ -231,6 +237,10 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
       if (spent >= agent.maxTokensPerTurn) {
         await queueWrittenEvaluations(toolCtx);
         return finish({ status: "limit", error: null });
+      }
+      if (budget.budget > 0 && budget.weighted + weighUsage(usage.promptTokens ?? 0, usage.completionTokens ?? 0, budget.outputWeight) >= budget.budget) {
+        await queueWrittenEvaluations(toolCtx);
+        return finish({ status: "quota", error: null });
       }
     }
     await queueWrittenEvaluations(toolCtx);
