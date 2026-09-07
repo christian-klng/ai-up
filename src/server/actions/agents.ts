@@ -26,6 +26,8 @@ import { publishToUser } from "@/server/realtime/publish";
 import { logger } from "@/server/logger";
 import type { AgentMessageDto } from "@/lib/realtime-events";
 
+const sendSchema = z.string().trim().min(1).max(20_000);
+
 /** Every action re-checks ownership – a thread is private to the member who opened it. */
 async function ownThread(threadId: string) {
   const me = await assertUser();
@@ -39,6 +41,51 @@ export async function createThreadAction(agentSlug: string): Promise<{ ok: true;
   if (!agent || !agent.enabled) return { ok: false };
   if (agent.ownerId && agent.ownerId !== me.id) return { ok: false };
   const thread = await createThread(agent.id, me.id);
+  revalidatePath("/agents", "layout");
+  return { ok: true, threadId: thread.id };
+}
+
+const configSchema = z.object({
+  mode: z.enum(["assist", "curate"]),
+  readAreaIds: z.array(z.string().uuid()).max(50),
+  writeAreaIds: z.array(z.string().uuid()).max(50),
+  instructionContentIds: z.array(z.string().uuid()).max(20),
+});
+
+/**
+ * Starts a conversation from the agent's start screen: creates the thread, applies the
+ * configuration the member picked *before* sending, appends the message and hands the turn to the
+ * worker. One action, so a half-created thread cannot stay behind if the member navigates away.
+ */
+export async function startThreadAction(
+  agentSlug: string,
+  body: string,
+  config: { mode: "assist" | "curate"; readAreaIds: string[]; writeAreaIds: string[]; instructionContentIds: string[] },
+): Promise<{ ok: true; threadId: string } | { ok: false; reason: "invalid" | "quota" }> {
+  const me = await assertUser();
+  const agent = await getAgentBySlug(agentSlug);
+  if (!agent || !agent.enabled || (agent.ownerId && agent.ownerId !== me.id)) return { ok: false, reason: "invalid" };
+  const parsedBody = sendSchema.safeParse(body);
+  const parsedConfig = configSchema.safeParse(config);
+  if (!parsedBody.success || !parsedConfig.success) return { ok: false, reason: "invalid" };
+  if ((await getBudgetStatus(me.id)).exceeded) return { ok: false, reason: "quota" };
+
+  const cfg = parsedConfig.data;
+  const thread = await createThread(agent.id, me.id);
+  if (cfg.readAreaIds.length || cfg.writeAreaIds.length) {
+    await setThreadCollections(thread.id, cfg.readAreaIds, cfg.mode === "curate" ? cfg.writeAreaIds.filter((id) => cfg.readAreaIds.includes(id)) : []);
+  }
+  if (cfg.instructionContentIds.length) await setThreadInstructions(thread.id, cfg.instructionContentIds);
+  if (cfg.mode !== "assist") await setThreadMode(thread.id, cfg.mode, "always");
+
+  const message = await addMessage({ threadId: thread.id, role: "user", content: parsedBody.data, status: "complete" });
+  await publishToUser(me.id, "agent.message.saved", { threadId: thread.id, message: toDto(message) });
+  try {
+    await enqueueAgentTurn(thread.id);
+  } catch (err) {
+    logger.error({ err, threadId: thread.id }, "could not enqueue agent turn");
+    await publishToUser(me.id, "agent.turn.finished", { threadId: thread.id, status: "error", error: "queue unavailable" });
+  }
   revalidatePath("/agents", "layout");
   return { ok: true, threadId: thread.id };
 }
@@ -58,8 +105,6 @@ export async function renameThreadAction(threadId: string, title: string): Promi
   revalidatePath("/agents", "layout");
   return { ok: true };
 }
-
-const sendSchema = z.string().trim().min(1).max(20_000);
 
 /**
  * Appends the member's message and hands the turn to the worker. Long-running loops never run in a

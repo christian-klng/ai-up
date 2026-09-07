@@ -11,7 +11,8 @@ import { Markdown } from "@/components/content/markdown";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ThreadConfigPanel, type AreaOption, type EntryOption } from "./thread-config-panel";
+import { ThreadConfigPanel } from "./thread-config-panel";
+import type { AreaOption, EntryOption } from "./thread-config-fields";
 import type { AgentMessageDto } from "@/lib/realtime-events";
 import { cn } from "@/lib/utils";
 
@@ -293,10 +294,7 @@ export function AgentChat({
           <ThreadConfigPanel
             threadId={threadId}
             areas={areas}
-            initialReadAreaIds={readAreaIds}
-            initialWriteAreaIds={writeAreaIds}
-            initialInstructions={instructions}
-            mode={mode}
+            initialValue={{ mode, readAreaIds, writeAreaIds, instructions }}
             onModeChange={(next) => {
               setMode(next);
               setApproval("always");

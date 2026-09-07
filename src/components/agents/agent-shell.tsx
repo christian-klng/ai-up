@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import { MessageSquarePlus, Trash2 } from "lucide-react";
+import { MessageSquarePlus, PanelLeft, Trash2 } from "lucide-react";
 import { createThreadAction, deleteThreadAction } from "@/server/actions/agents";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -31,12 +31,18 @@ export function AgentShell({
   const now = useNow({ updateInterval: 60_000 });
   const [pending, start] = useTransition();
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // On phones only one pane fits. The conversation wins by default (that is where the work is);
+  // this toggles the list on top of it.
+  const [listOpen, setListOpen] = useState(false);
   const activeId = pathname.startsWith(`/agents/${slug}/`) ? pathname.split("/")[3] : null;
 
   const newThread = () =>
     start(async () => {
       const res = await createThreadAction(slug);
-      if (res.ok) router.push(`/agents/${slug}/${res.threadId}`);
+      if (res.ok) {
+        setListOpen(false);
+        router.push(`/agents/${slug}/${res.threadId}`);
+      }
     });
 
   const remove = (id: string) =>
@@ -70,6 +76,7 @@ export function AgentShell({
               <li key={th.id} className="group relative">
                 <Link
                   href={`/agents/${slug}/${th.id}`}
+                  onClick={() => setListOpen(false)}
                   className={cn("flex flex-col gap-0.5 rounded-md px-2.5 py-2 pr-9 transition-colors", active ? "bg-accent text-accent-foreground" : "hover:bg-accent/60")}
                   aria-current={active ? "page" : undefined}
                 >
@@ -105,8 +112,15 @@ export function AgentShell({
 
   return (
     <div className="-mx-4 -my-6 flex h-[calc(100svh-3.5rem)] sm:-mx-6 lg:-mx-8">
-      <aside className={cn("w-full shrink-0 border-r md:block md:w-72", activeId && "hidden")}>{list}</aside>
-      <section className={cn("min-w-0 flex-1", !activeId && "hidden md:flex md:items-center md:justify-center")}>{children}</section>
+      <aside className={cn("w-full shrink-0 border-r md:block md:w-72", !listOpen && "hidden")}>{list}</aside>
+      <section className={cn("flex min-w-0 flex-1 flex-col", listOpen && "hidden md:flex")}>
+        <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1.5 md:hidden">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setListOpen(true)}>
+            <PanelLeft className="size-4" /> {t("threads")}
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1">{children}</div>
+      </section>
     </div>
   );
 }

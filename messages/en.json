@@ -736,8 +736,6 @@
     "untitled": "Untitled",
     "deleteThread": "Delete conversation",
     "confirmDelete": "Really delete?",
-    "selectThread": "Pick a conversation.",
-    "selectThreadHint": "Or start a new one on the left.",
     "emptyThread": "What can I help with?",
     "emptyThreadHint": "On the right you choose which collections I may read and which entries guide me.",
     "placeholder": "Write a message … (Enter to send, Shift+Enter for a new line)",
@@ -773,7 +771,17 @@
     "quotaUsed": "{percent}% used",
     "quotaHint": "Resets every Monday.",
     "quotaExceededHint": "Used up – it continues on Monday.",
-    "quotaReached": "Your weekly quota is used up. It continues on Monday."
+    "quotaReached": "Your weekly quota is used up. It continues on Monday.",
+    "threads": "Conversations",
+    "startTitle": "What can {name} help with?",
+    "startHint": "Ask a question or describe what you are up to.",
+    "startPlaceholder": "Write a message … (Enter to send, Shift+Enter for a new line)",
+    "configTitle": "Configuration",
+    "configStartHint": "Applies to this conversation. You can change it later at any time.",
+    "configSaved": "Saved",
+    "summaryAllCollections": "all collections",
+    "summaryCollections": "{count, plural, one {# collection} other {# collections}}",
+    "summaryInstructions": "{count, plural, one {# instruction} other {# instructions}}"
   },
   "contacts": {
     "request": "Send contact request",

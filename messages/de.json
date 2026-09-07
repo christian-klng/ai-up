@@ -736,8 +736,6 @@
     "untitled": "Ohne Titel",
     "deleteThread": "Unterhaltung löschen",
     "confirmDelete": "Wirklich löschen?",
-    "selectThread": "Wähle eine Unterhaltung aus.",
-    "selectThreadHint": "Oder starte links eine neue.",
     "emptyThread": "Womit kann ich helfen?",
     "emptyThreadHint": "Rechts legst du fest, welche Sammlungen ich lesen darf und welche Einträge mich anleiten.",
     "placeholder": "Nachricht schreiben … (Enter senden, Shift+Enter neue Zeile)",
@@ -773,7 +771,17 @@
     "quotaUsed": "{percent} % verbraucht",
     "quotaHint": "Setzt sich jeden Montag zurück.",
     "quotaExceededHint": "Aufgebraucht – ab Montag geht es weiter.",
-    "quotaReached": "Dein Wochenkontingent ist aufgebraucht. Ab Montag geht es weiter."
+    "quotaReached": "Dein Wochenkontingent ist aufgebraucht. Ab Montag geht es weiter.",
+    "threads": "Unterhaltungen",
+    "startTitle": "Womit kann {name} helfen?",
+    "startHint": "Stell eine Frage oder beschreibe, was du vorhast.",
+    "startPlaceholder": "Nachricht schreiben … (Enter senden, Shift+Enter neue Zeile)",
+    "configTitle": "Konfiguration",
+    "configStartHint": "Gilt für diese Unterhaltung. Du kannst es später jederzeit ändern.",
+    "configSaved": "Gespeichert",
+    "summaryAllCollections": "alle Sammlungen",
+    "summaryCollections": "{count, plural, one {# Sammlung} other {# Sammlungen}}",
+    "summaryInstructions": "{count, plural, one {# Anleitung} other {# Anleitungen}}"
   },
   "contacts": {
     "request": "Kontaktanfrage senden",
