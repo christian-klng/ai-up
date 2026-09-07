@@ -151,6 +151,11 @@ Warum gewichtet: Ausgabe-Tokens kosten je nach Modell das Drei- bis Fünffache d
 verbrauch = promptTokens + (completionTokens × faktor)     # faktor konfigurierbar, Vorschlag 4
 ```
 
+Damit die Zahlen überhaupt ankommen, verlangt der Client `stream_options.include_usage` von
+**jedem** Provider und fällt nur zurück, wenn ein Gateway das Feld ablehnt – ohne die Option
+streamen die meisten OpenAI-kompatiblen Endpunkte gar keine Usage, und das Kontingent bliebe still
+auf null (in der Produktion am 07.09.2026 genau so aufgetreten).
+
 `prompt_tokens` und `completion_tokens` liegen roh in `agent_messages.usage`, der Faktor in
 `ai_agents` bzw. den App-Einstellungen. Nutzer sehen nur „x % des Wochenkontingents verbraucht“ –
 keine Beträge. Kosten (OpenRouter liefert `usage.cost` mit) werden mitgeschrieben, aber nur im

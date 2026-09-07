@@ -308,28 +308,40 @@ export async function streamChatCompletion(
   signal?.addEventListener("abort", abort);
   const timer = setTimeout(abort, req.timeoutMs ?? 300_000);
   try {
-    const body = buildChatBody(cfg.kind, req);
-    body.stream = true;
-    // Usage on the final chunk. Unknown fields make strict self-hosted gateways reject the
-    // request, so only ask providers we know support it.
-    if (cfg.kind !== "generic") body.stream_options = { include_usage: true };
+    const open = (includeUsage: boolean) => {
+      const body = buildChatBody(cfg.kind, req);
+      body.stream = true;
+      // Without this most OpenAI-compatible providers stream no usage at all, and everything that
+      // counts tokens (the weekly quota) silently stays at zero.
+      if (includeUsage) body.stream_options = { include_usage: true };
+      return fetch(joinUrl(cfg.baseUrl, "chat/completions"), {
+        method: "POST",
+        headers: { ...headers(cfg), accept: "text/event-stream" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    };
 
-    const res = await fetch(joinUrl(cfg.baseUrl, "chat/completions"), {
-      method: "POST",
-      headers: { ...headers(cfg), accept: "text/event-stream" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
+    let res = await open(true);
+    let errorBody = "";
+    if (!res.ok) {
+      errorBody = await res.text().catch(() => "");
+      // A few gateways reject unknown request fields. Losing the usage numbers is better than
+      // losing the answer, so drop the option and try once more.
+      if (res.status === 400 && /stream_options|include_usage|unknown|unrecognized|extra|not allowed|not permitted/i.test(errorBody)) {
+        res = await open(false);
+        errorBody = res.ok ? "" : await res.text().catch(() => "");
+      }
+    }
     if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => "");
       let data: unknown = null;
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(errorBody);
       } catch {
         /* non-JSON error body */
       }
-      const msg = (data as { error?: { message?: string } } | null)?.error?.message ?? text.slice(0, 300);
-      throw new LlmError(`LLM stream failed (${res.status}): ${msg}`, res.status, data ?? text);
+      const msg = (data as { error?: { message?: string } } | null)?.error?.message ?? errorBody.slice(0, 300);
+      throw new LlmError(`LLM stream failed (${res.status}): ${msg}`, res.status, data ?? errorBody);
     }
 
     const state = createStreamState();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyStreamChunk,
   buildChatBody,
@@ -6,6 +6,7 @@ import {
   finishStreamState,
   parseToolCalls,
   splitSseFrames,
+  streamChatCompletion,
   type ChatStreamEvent,
 } from "./client";
 
@@ -152,5 +153,68 @@ describe("reasoning deltas", () => {
     );
     expect(state.reasoning).toBe("denke …");
     expect(state.text).toBe("Antwort");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// streamChatCompletion: the request path around the parser
+// ---------------------------------------------------------------------------
+
+function sseResponse(body: string, init?: ResponseInit): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(body));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" }, ...init });
+}
+
+const ANSWER =
+  'data: {"choices":[{"delta":{"content":"Hallo"}}]}\n\n' +
+  'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+  'data: {"usage":{"prompt_tokens":40,"completion_tokens":7,"total_tokens":47}}\n\n' +
+  "data: [DONE]\n\n";
+
+const cfg = { kind: "generic" as const, baseUrl: "https://example.test/v1", apiKey: "k" };
+const req = { model: "m", messages: [{ role: "user" as const, content: "hi" }] };
+
+describe("streamChatCompletion", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("asks every provider for usage – otherwise the token count stays at zero", async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      bodies.push(String(init.body));
+      return sseResponse(ANSWER);
+    });
+    const res = await streamChatCompletion(cfg, req, () => {});
+    expect(JSON.parse(bodies[0]).stream_options).toEqual({ include_usage: true });
+    expect(res.usage).toMatchObject({ promptTokens: 40, completionTokens: 7, totalTokens: 47 });
+  });
+
+  it("retries without the option when the gateway rejects it, and still returns the answer", async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      bodies.push(String(init.body));
+      if (bodies.length === 1) return new Response(JSON.stringify({ error: { message: "unknown field: stream_options" } }), { status: 400 });
+      return sseResponse(ANSWER);
+    });
+    const res = await streamChatCompletion(cfg, req, () => {});
+    expect(bodies).toHaveLength(2);
+    expect(JSON.parse(bodies[1]).stream_options).toBeUndefined();
+    expect(res.text).toBe("Hallo");
+  });
+
+  it("does not retry an unrelated error and reports the provider's message", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      return new Response(JSON.stringify({ error: { message: "model not found" } }), { status: 404 });
+    });
+    await expect(streamChatCompletion(cfg, req, () => {})).rejects.toThrow(/model not found/);
+    expect(calls).toBe(1);
   });
 });
