@@ -190,8 +190,8 @@ A und B sind der Kern; C bringt den eigentlichen Nutzen (der Thinking-Level funk
    das nicht: `normalizeReasoningLevel` verwirft eine ungültige Stufe schon zur Laufzeit (seit Phase A),
    die Auswahl im Editor kann nur mehr anbieten als wirkt. Nachziehen, sobald das Feldsystem des
    Workflow-Editors dynamische Optionen trägt.
-3. **Veraltung anzeigen?** Noch offen. `checked_at` steht in der Lese-Ansicht, aber nichts warnt, wenn ein
-   Eintrag alt ist. Vorschlag, falls gewünscht: `list_model_capabilities` markiert Zeilen ab 90 Tagen als
-   „prüfen", die Admin-Ansicht färbt das Datum.
+3. ~~Veraltung anzeigen?~~ **Umgesetzt (08.09.2026):** Einträge älter als `CAPABILITY_STALE_DAYS` (90)
+   gelten als veraltet – `list_model_capabilities` markiert sie samt Hinweis, die Admin-Ansicht zeigt ein
+   Abzeichen und färbt das Prüfdatum.
 4. **Kein Seed** – die Tabelle startet leer, bis du sie einmal füllst. Einverstanden, oder willst du einen
    Startbestand für Scaleway im Repo (mit dem Nachteil, dass er dort veraltet)?

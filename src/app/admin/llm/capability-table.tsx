@@ -1,7 +1,7 @@
 import { getFormatter, getTranslations } from "next-intl/server";
 import { AlertTriangle, Check, Minus } from "lucide-react";
 import { getCapabilityMap, listProviders } from "@/server/llm/providers";
-import { statedReasoningLevels, statedToolSupport } from "@/server/llm/capabilities";
+import { CAPABILITY_STALE_DAYS, isCapabilityStale, statedReasoningLevels, statedToolSupport } from "@/server/llm/capabilities";
 import { Badge } from "@/components/ui/badge";
 import type { LlmModelInfo, ReasoningLevel } from "@/server/db/schema";
 
@@ -60,6 +60,7 @@ export async function CapabilityTable() {
         <ul className="divide-y rounded-lg border bg-card">
           {rows.map(([modelId, entry]) => {
             const row = caps.get(modelId);
+            const stale = row ? isCapabilityStale(row.checkedAt) : false;
             const context = row?.contextLength ?? entry.info?.contextLength ?? null;
             return (
               <li key={modelId} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -67,10 +68,17 @@ export async function CapabilityTable() {
                   <div className="flex flex-wrap items-center gap-2">
                     <code className="text-sm">{modelId}</code>
                     {!row && <Badge variant="secondary">{t("capGuessed")}</Badge>}
+                    {stale && <Badge variant="secondary" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400">{t("capStale", { days: CAPABILITY_STALE_DAYS })}</Badge>}
                   </div>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {entry.providers.join(", ")}
-                    {row ? ` · ${t("capChecked", { date: format.dateTime(row.checkedAt, { dateStyle: "medium" }) })} · ${row.source}` : ""}
+                    {row && (
+                      <>
+                        {" · "}
+                        <span className={stale ? "text-amber-700 dark:text-amber-400" : undefined}>{t("capChecked", { date: format.dateTime(row.checkedAt, { dateStyle: "medium" }) })}</span>
+                        {` · ${row.source}`}
+                      </>
+                    )}
                   </p>
                 </div>
                 <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs sm:justify-end">

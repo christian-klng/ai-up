@@ -4,7 +4,7 @@ import type { ApiAuth } from "@/server/domain/api-keys";
 import { hasScope, type ApiScope } from "@/server/domain/api-keys";
 import { getQuestionWithResponses, listQuestions } from "@/server/domain/questions";
 import { deleteCapabilityRow, getCapabilityMap, listCapabilityRows, listProviders, upsertCapabilities } from "@/server/llm/providers";
-import { mergeCapabilities } from "@/server/llm/capabilities";
+import { CAPABILITY_STALE_DAYS, isCapabilityStale, mergeCapabilities } from "@/server/llm/capabilities";
 import { getEditorCatalog } from "@/server/workflows/catalog";
 import { validateDefinition } from "@/server/workflows/definitions";
 import { startRun } from "@/server/workflows/dispatch";
@@ -379,7 +379,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     {
       title: "LLM - List model capabilities",
       description:
-        "The admin-maintained capability table (tools, reasoning levels, structured outputs, context) plus the enabled models that still have no entry. Read resource aiup://docs/model-capabilities for the format and rules.",
+        "The admin-maintained capability table (tools, reasoning levels, structured outputs, context), the enabled models that still have no entry, and which entries are stale. Read resource aiup://docs/model-capabilities for the format and rules.",
       inputSchema: { providerId: z.string().optional().describe("restrict the missing list to one provider; omit for all") },
     },
     async ({ providerId }) => {
@@ -391,6 +391,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       for (const p of scoped) {
         for (const id of p.enabledModels) if (!known.has(id) && !missing.some((m) => m.modelId === id)) missing.push({ modelId: id, provider: p.name });
       }
+      const stale = rows.filter((r) => isCapabilityStale(r.checkedAt));
       return text({
         rows: rows.map((r) => ({
           modelId: r.modelId,
@@ -402,9 +403,16 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
           notes: r.notes,
           source: r.source,
           checkedAt: r.checkedAt,
+          stale: isCapabilityStale(r.checkedAt),
         })),
         missing,
-        hint: missing.length ? "These enabled models have no entry yet – the app is guessing for them." : "Every enabled model has an entry.",
+        staleAfterDays: CAPABILITY_STALE_DAYS,
+        hint: [
+          missing.length ? `${missing.length} enabled model(s) have no entry yet – the app is guessing for them.` : "Every enabled model has an entry.",
+          stale.length ? `${stale.length} entry/entries are older than ${CAPABILITY_STALE_DAYS} days and should be re-checked against the vendor's documentation: ${stale.map((r) => r.modelId).join(", ")}.` : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
     },
   );

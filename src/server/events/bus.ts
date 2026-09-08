@@ -38,6 +38,8 @@ export type DomainEventMap = {
   "content.created": ContentEventPayload;
   "content.updated": ContentEventPayload;
   "content.deleted": { contentId: string; areaId: string; actorId: string };
+  /** An LLM call failed – lets an admin build an alerting workflow (see llm/errors.ts) */
+  "llm.error": LlmErrorPayload;
   "member.registered": MemberEventPayload;
   "member.approved": MemberEventPayload;
   "notification.created": { userId: string; notificationId: string };
@@ -46,6 +48,20 @@ export type DomainEventMap = {
   "meeting.started": { meeting: MeetingEventMeeting; actorId: string | null; origin: EventOrigin };
   "meeting.ended": { meeting: MeetingEventMeeting; actorId: string | null; origin: EventOrigin };
   "meeting.recording.available": { meeting: MeetingEventMeeting; mediaId: string; recordingUrl: string; durationSeconds: number | null; actorId: string | null; origin: EventOrigin };
+};
+
+export type LlmErrorPayload = {
+  provider: { id: string; name: string; kind: string };
+  model: string;
+  /** HTTP status when the provider answered, else null (timeout, DNS, …) */
+  status: number | null;
+  message: string;
+  /** which part of the app was calling */
+  source: "workflow" | "evaluation" | "agent" | "transcribe";
+  sourceId: string | null;
+  href: string | null;
+  actorId: string | null;
+  origin: EventOrigin;
 };
 
 export type MeetingEventMeeting = { id: string; title: string; kind: string; status: string; spaceId: string; spaceSlug: string; spaceName: string; hostId: string | null; href: string };

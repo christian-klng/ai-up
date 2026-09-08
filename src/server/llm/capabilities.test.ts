@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, normalizeReasoningLevel, statedReasoningLevels, statedToolSupport, type CapabilityFields } from "./capabilities";
+import { CAPABILITY_STALE_DAYS, capabilityFingerprint, isCapabilityStale, mergeCapabilities, mergeCapabilityInput, normalizeReasoningLevel, statedReasoningLevels, statedToolSupport, type CapabilityFields } from "./capabilities";
 import type { LlmModelCapabilityRow, LlmModelInfo } from "@/server/db/schema";
 
 function row(part: Partial<LlmModelCapabilityRow>): LlmModelCapabilityRow {
@@ -157,5 +157,23 @@ describe("stated capabilities (tri-state for the pickers)", () => {
   it("stays unknown when the row leaves the field open", () => {
     expect(statedToolSupport(row({ reasoningLevels: [] }), undefined)).toBeUndefined();
     expect(statedReasoningLevels(row({ tools: true }), undefined)).toBeUndefined();
+  });
+});
+
+describe("isCapabilityStale", () => {
+  const now = new Date("2026-09-08T12:00:00Z");
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60_000);
+
+  it("keeps a fresh entry", () => {
+    expect(isCapabilityStale(daysAgo(1), now)).toBe(false);
+    expect(isCapabilityStale(daysAgo(CAPABILITY_STALE_DAYS - 1), now)).toBe(false);
+  });
+
+  it("flags an entry older than the window", () => {
+    expect(isCapabilityStale(daysAgo(CAPABILITY_STALE_DAYS + 1), now)).toBe(true);
+  });
+
+  it("does not flag one exactly at the boundary", () => {
+    expect(isCapabilityStale(daysAgo(CAPABILITY_STALE_DAYS), now)).toBe(false);
   });
 });

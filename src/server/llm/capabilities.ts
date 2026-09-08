@@ -9,6 +9,16 @@ export type CapabilityFields = Pick<LlmModelCapabilityRow, "tools" | "structured
  * so the resolution order can be unit tested.
  */
 
+/**
+ * After this long an entry counts as stale. Model catalogues change fast – a two-year-old note that
+ * a model has no tools is worse than none, because nothing marks it as a guess.
+ */
+export const CAPABILITY_STALE_DAYS = 90;
+
+export function isCapabilityStale(checkedAt: Date, now: Date = new Date()): boolean {
+  return now.getTime() - checkedAt.getTime() > CAPABILITY_STALE_DAYS * 24 * 60 * 60_000;
+}
+
 /** What OpenAI-style providers accept when they only tell us "this model reasons". */
 export const DEFAULT_REASONING_LEVELS: ReasoningLevel[] = ["none", "low", "medium", "high"];
 

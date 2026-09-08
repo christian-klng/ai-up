@@ -8,6 +8,7 @@ import { publishToUser } from "@/server/realtime/publish";
 import { LlmError, streamChatCompletion, type ChatUsage } from "@/server/llm/client";
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
 import { normalizeReasoningLevel } from "@/server/llm/capabilities";
+import { reportLlmError } from "@/server/llm/errors";
 import { buildSystemPrompt } from "./context";
 import { getBudgetStatus, weighUsage } from "./usage";
 import { buildHistory, toDto } from "./history";
@@ -168,6 +169,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
           return finish({ status: "cancelled", error: null });
         }
         const message = explainLlmError(err);
+        await reportLlmError(err, { provider, model, source: "agent", sourceId: threadId, actorId: userId, origin: { kind: "agent", threadId, agentId: agent.id, userId } });
         const saved = await updateMessage(assistant.id, { status: "error", error: message });
         if (saved) await publishToUser(userId, "agent.message.saved", { threadId, message: toDto(saved) });
         logger.warn({ err, threadId, agentId: agent.id }, "agent turn failed");

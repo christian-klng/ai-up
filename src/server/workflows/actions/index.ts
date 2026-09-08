@@ -16,6 +16,7 @@ import { extractJson } from "@/lib/extract-json";
 import { chatCompletion } from "@/server/llm/client";
 import { clientConfigFor, getDefaultProvider, getProvider, resolveModel } from "@/server/llm/providers";
 import { normalizeReasoningLevel } from "@/server/llm/capabilities";
+import { reportLlmError } from "@/server/llm/errors";
 import { transcribeAudio, transcriptToMarkdown } from "@/server/llm/stt";
 
 // ---------------------------------------------------------------------------
@@ -87,20 +88,34 @@ registerAction<LlmActionConfig>({
     if (system) messages.push({ role: "system", content: system });
     messages.push({ role: "user", content: config.prompt });
 
-    const call = () =>
-      chatCompletion(cfg, {
-        model,
-        messages,
-        temperature: caps.temperature ? config.temperature : undefined,
-        topP: caps.topP ? config.topP : undefined,
-        maxTokens: caps.maxTokens ? config.maxTokens : undefined,
-        stopSequences: caps.stop ? config.stopSequences : undefined,
-        seed: caps.seed ? config.seed : undefined,
-        reasoningEffort: normalizeReasoningLevel(config.reasoningEffort, caps),
-        jsonSchema: useNativeSchema ? config.outputSchema : undefined,
-        jsonMode: !useNativeSchema && wantsJson && caps.structuredOutputs ? true : undefined,
-        timeoutMs: 170_000,
-      });
+    const call = async () => {
+      try {
+        return await chatCompletion(cfg, {
+          model,
+          messages,
+          temperature: caps.temperature ? config.temperature : undefined,
+          topP: caps.topP ? config.topP : undefined,
+          maxTokens: caps.maxTokens ? config.maxTokens : undefined,
+          stopSequences: caps.stop ? config.stopSequences : undefined,
+          seed: caps.seed ? config.seed : undefined,
+          reasoningEffort: normalizeReasoningLevel(config.reasoningEffort, caps),
+          jsonSchema: useNativeSchema ? config.outputSchema : undefined,
+          jsonMode: !useNativeSchema && wantsJson && caps.structuredOutputs ? true : undefined,
+          timeoutMs: 170_000,
+        });
+      } catch (err) {
+        await reportLlmError(err, {
+          provider,
+          model,
+          source: "workflow",
+          sourceId: ctx.runId,
+          href: `/workflows/${ctx.workflowId}`,
+          actorId: ctx.triggeredBy,
+          origin: { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth },
+        });
+        throw err;
+      }
+    };
 
     let res = await call();
     let json: unknown = undefined;
@@ -198,15 +213,29 @@ registerAction<z.infer<typeof transcribeConfig>>({
     if (!provider) throw new Error("No LLM provider configured. Add one under Admin → LLM.");
     const buffer = await readFile(absolutePath(media.storagePath));
     ctx.log("transcribing", { mediaId: media.id, size: media.size, provider: provider.name, model: config.model });
-    const result = await transcribeAudio(await clientConfigFor(provider), {
-      model: config.model,
-      buffer,
-      filename: media.originalName,
-      mime: media.mime,
-      language: config.language,
-      prompt: config.prompt,
-      timeoutMs: 590_000,
-    });
+    let result;
+    try {
+      result = await transcribeAudio(await clientConfigFor(provider), {
+        model: config.model,
+        buffer,
+        filename: media.originalName,
+        mime: media.mime,
+        language: config.language,
+        prompt: config.prompt,
+        timeoutMs: 590_000,
+      });
+    } catch (err) {
+      await reportLlmError(err, {
+        provider,
+        model: config.model,
+        source: "transcribe",
+        sourceId: ctx.runId,
+        href: `/workflows/${ctx.workflowId}`,
+        actorId: ctx.triggeredBy,
+        origin: { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth },
+      });
+      throw err;
+    }
     return {
       output: {
         text: result.text,

@@ -28,7 +28,9 @@ export async function dispatchEvent(event: DomainEvent): Promise<void> {
     if (trigger.matches && !trigger.matches(cfg.data as Record<string, unknown>, payload)) continue;
     // Loop guard: a workflow never re-triggers itself through its own side effects
     if (parent && parent.workflowId === wf.id) continue;
-    await startRun(wf, payload, { triggeredBy: (payload.actorId as string | null) ?? null, parentRunId: parent?.runId ?? null, depth: parent ? parent.depth : 0 });
+    // …and a chain of *different* workflows is bounded by MAX_DEPTH – which only works if the
+    // depth actually grows. A → B → A would otherwise ping-pong forever at depth 0.
+    await startRun(wf, payload, { triggeredBy: (payload.actorId as string | null) ?? null, parentRunId: parent?.runId ?? null, depth: parent ? parent.depth + 1 : 0 });
   }
 }
 

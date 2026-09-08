@@ -408,7 +408,8 @@
       "capUnknown": "unbekannt",
       "capNoReasoning": "keins",
       "capGuessed": "geraten",
-      "capChecked": "geprüft {date}"
+      "capChecked": "geprüft {date}",
+      "capStale": "veraltet (> {days} Tage)"
     },
     "workflows": {
       "title": "Workflows",

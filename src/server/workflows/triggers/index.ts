@@ -160,6 +160,59 @@ registerTrigger<z.infer<typeof questionAnsweredConfig>>({
 });
 
 // ---------------------------------------------------------------------------
+// LLM
+// ---------------------------------------------------------------------------
+const llmErrorConfig = z.object({
+  /** only this provider; empty = any */
+  providerId: z.string().trim().default(""),
+  /** optional substring the error message must contain (case-insensitive) */
+  contains: z.string().trim().default(""),
+});
+
+registerTrigger<z.infer<typeof llmErrorConfig>>({
+  type: "llm.error",
+  labels: {
+    name: { de: "LLM-Fehler", en: "LLM error" },
+    description: {
+      de: "Startet, wenn ein Aufruf an ein Sprachmodell fehlschlägt – z. B. um Admins bei einem Ausfall zu benachrichtigen.",
+      en: "Fires when a call to a language model fails – e.g. to notify admins about an outage.",
+    },
+  },
+  doc: "Fires when an LLM call fails, in a workflow step, an entry evaluation, an agent turn or a transcription. Throttled: at most one event per provider+model every 10 minutes, so an outage does not start dozens of runs. Beware of loops – a workflow reacting to this should not itself call an LLM on the same provider.",
+  configSchema: llmErrorConfig,
+  fields: [
+    { key: "providerId", type: "llm-provider", label: { de: "Provider", en: "Provider" }, help: { de: "Leer = jeder Provider.", en: "Empty = any provider." } },
+    { key: "contains", type: "text", label: { de: "Meldung enthält (optional)", en: "Message contains (optional)" }, help: { de: "Nur auslösen, wenn die Fehlermeldung diesen Text enthält.", en: "Only fire when the error message contains this text." } },
+  ],
+  payloadDoc: {
+    "provider.id": "provider id",
+    "provider.name": "provider name",
+    model: "model id the call used",
+    status: "HTTP status when the provider answered, else null (timeout, network)",
+    message: "error message",
+    source: "workflow | evaluation | agent | transcribe",
+    sourceId: "run id, entry id resp. thread id (may be null)",
+    href: "app-relative link to the failing item (may be null)",
+  },
+  samplePayload: {
+    provider: { id: "00000000-0000-0000-0000-000000000000", name: "Scaleway", kind: "generic" },
+    model: "glm-5.2",
+    status: 429,
+    message: "LLM request failed (429): rate limit exceeded",
+    source: "agent",
+    sourceId: "00000000-0000-0000-0000-000000000000",
+    href: null,
+    origin: { kind: "system" },
+  },
+  matches: (config, payload) => {
+    const provider = payload.provider as { id?: string } | undefined;
+    if (config.providerId && provider?.id !== config.providerId) return false;
+    return !config.contains || String(payload.message ?? "").toLowerCase().includes(config.contains.toLowerCase());
+  },
+  eventTypes: ["llm.error"],
+});
+
+// ---------------------------------------------------------------------------
 // Members
 // ---------------------------------------------------------------------------
 const memberTriggerConfig = z.object({});

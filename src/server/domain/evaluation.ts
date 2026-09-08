@@ -4,6 +4,7 @@ import { contentEvaluations, contentVersions, contents, type ContentEvaluation, 
 import { getTemplateById } from "@/server/domain/templates";
 import { chatCompletion } from "@/server/llm/client";
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
+import { reportLlmError } from "@/server/llm/errors";
 import { extractJson } from "@/lib/extract-json";
 import { publishBroadcast } from "@/server/realtime/publish";
 import { logger } from "@/server/logger";
@@ -97,9 +98,12 @@ function userPrompt(criterion: EvaluationCriterion, title: string, body: string)
 }
 
 /** Runs one criterion; provider/model errors become an "error" verdict instead of failing the batch. */
-async function judge(criterion: EvaluationCriterion, title: string, body: string, evaluation: TemplateEvaluation): Promise<CriterionVerdict> {
+async function judge(criterion: EvaluationCriterion, title: string, body: string, evaluation: TemplateEvaluation, contentId: string): Promise<CriterionVerdict> {
+  // Kept outside the try so a provider failure can still be reported with provider and model.
+  let resolved: { provider: Awaited<ReturnType<typeof resolveModel>>["provider"]; model: string } | undefined;
   try {
     const { provider, model, caps } = await resolveModel(evaluation.providerId, evaluation.model);
+    resolved = { provider, model };
     const cfg = await clientConfigFor(provider);
     const res = await chatCompletion(cfg, {
       model,
@@ -119,6 +123,7 @@ async function judge(criterion: EvaluationCriterion, title: string, body: string
     const reason = typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 1000) : null;
     return { status: parsed.passed ? "pass" : "fail", reason, usage: res.usage };
   } catch (err) {
+    if (resolved) await reportLlmError(err, { provider: resolved.provider, model: resolved.model, source: "evaluation", sourceId: contentId });
     return { status: "error", reason: (err as Error).message.slice(0, 1000) };
   }
 }
@@ -156,7 +161,7 @@ export async function evaluateContentVersion(contentId: string, versionId: strin
   }
 
   const body = (version.bodyMarkdown ?? "").slice(0, MAX_ENTRY_CHARS);
-  const verdicts = await runPooled(criteria, CONCURRENCY, (c) => judge(c, version.title, body, template.evaluation));
+  const verdicts = await runPooled(criteria, CONCURRENCY, (c) => judge(c, version.title, body, template.evaluation, contentId));
   const providerId = template.evaluation.providerId !== "default" ? template.evaluation.providerId : null;
 
   await db.transaction(async (tx) => {
