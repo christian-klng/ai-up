@@ -1,11 +1,11 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { auditLog, llmModelCapabilities, llmProviders, type LlmModelCapabilityRow, type LlmModelInfo, type LlmProvider } from "@/server/db/schema";
+import { auditLog, llmModelCapabilities, llmProviders, type LlmModelCapabilityRow, type LlmModelInfo, type LlmProvider, type ReasoningLevel } from "@/server/db/schema";
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto";
 import { env } from "@/server/env";
 import { loadAppSettings } from "@/server/domain/settings";
 import { chatCompletion, listModels, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
-import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, type CapabilityInput, type ResolvedCapabilities } from "./capabilities";
+import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, statedReasoningLevels, statedToolSupport, type CapabilityInput, type ResolvedCapabilities } from "./capabilities";
 
 export const PROVIDER_PRESETS: Record<ProviderKind, { label: string; baseUrl: string; hint: string }> = {
   openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", hint: "Router with hundreds of models; model list includes capabilities and pricing." },
@@ -224,7 +224,15 @@ export async function runChat(providerId: string | undefined | null, req: ChatRe
  * nothing – the agent picker warns about those instead of hiding them.
  */
 export async function listProviderOptions(): Promise<
-  { id: string; name: string; kind: ProviderKind; isDefault: boolean; defaultModel: string | null; models: { id: string; name?: string; supportsTools?: boolean }[] }[]
+  {
+    id: string;
+    name: string;
+    kind: ProviderKind;
+    isDefault: boolean;
+    defaultModel: string | null;
+    /** `supportsTools` / `reasoningLevels` undefined = nobody stated it (maintain via MCP) */
+    models: { id: string; name?: string; supportsTools?: boolean; reasoningLevels?: ReasoningLevel[] }[];
+  }[]
 > {
   const [providers, caps] = await Promise.all([listProviders(), getCapabilityMap()]);
   return providers.map((p) => ({
@@ -237,8 +245,7 @@ export async function listProviderOptions(): Promise<
       .filter((m) => p.enabledModels.includes(m.id))
       .map((m) => {
         const row = caps.get(m.id);
-        const stated = row?.tools ?? (m.supportedParameters ? m.supportedParameters.includes("tools") : undefined);
-        return { id: m.id, name: m.name, supportsTools: stated };
+        return { id: m.id, name: m.name, supportsTools: statedToolSupport(row, m), reasoningLevels: statedReasoningLevels(row, m) };
       }),
   }));
 }

@@ -460,7 +460,10 @@
       "usageTitle": "Consumption this week",
       "usageSince": "Since {date}",
       "usageEmpty": "No agent was used this week yet.",
-      "usageBreakdown": "{input} input · {output} output"
+      "usageBreakdown": "{input} input · {output} output",
+      "reasoningMax": "Maximum",
+      "reasoningUnknown": "No reasoning levels recorded for this model – hence only “off”. Record them via MCP (see docs/modell-faehigkeiten.md).",
+      "reasoningNone": "This model has no reasoning setting."
     },
     "questions": {
       "title": "Questions & surveys",

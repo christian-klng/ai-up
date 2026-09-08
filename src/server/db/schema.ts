@@ -541,7 +541,7 @@ export const aiAgents = pgTable(
     systemPrompt: text("system_prompt").notNull().default(""),
     temperature: text("temperature"),
     maxTokens: integer("max_tokens"),
-    reasoningEffort: text("reasoning_effort").$type<"none" | "low" | "medium" | "high">(),
+    reasoningEffort: text("reasoning_effort").$type<ReasoningLevel>(),
     /** hard stop for the agentic loop: tool rounds per turn */
     maxSteps: integer("max_steps").notNull().default(12),
     /** hard stop for the agentic loop: total tokens per turn */

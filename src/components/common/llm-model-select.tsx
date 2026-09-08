@@ -3,13 +3,15 @@
 import { useTranslations } from "next-intl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+import type { ReasoningLevel } from "@/server/db/schema";
+
 export type LlmProviderOption = {
   id: string;
   name: string;
   isDefault: boolean;
   defaultModel: string | null;
-  /** `supportsTools` undefined = the provider reports no capabilities (generic endpoints). */
-  models: { id: string; name?: string; supportsTools?: boolean }[];
+  /** undefined = nobody stated it; maintain the capability table via MCP (docs/modell-faehigkeiten.md). */
+  models: { id: string; name?: string; supportsTools?: boolean; reasoningLevels?: ReasoningLevel[] }[];
 };
 
 /** Provider + model pair used by the workflow editor, the template evaluation and the agents. */

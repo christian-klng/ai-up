@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, normalizeReasoningLevel, type CapabilityFields } from "./capabilities";
+import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, normalizeReasoningLevel, statedReasoningLevels, statedToolSupport, type CapabilityFields } from "./capabilities";
 import type { LlmModelCapabilityRow, LlmModelInfo } from "@/server/db/schema";
 
 function row(part: Partial<LlmModelCapabilityRow>): LlmModelCapabilityRow {
@@ -130,5 +130,32 @@ describe("capabilityFingerprint", () => {
   it("notices a changed value and a changed source", () => {
     expect(capabilityFingerprint(fields, "url")).not.toBe(capabilityFingerprint({ ...fields, tools: false }, "url"));
     expect(capabilityFingerprint(fields, "url")).not.toBe(capabilityFingerprint(fields, "other-url"));
+  });
+});
+
+describe("stated capabilities (tri-state for the pickers)", () => {
+  it("says nothing when neither the table nor the provider does", () => {
+    expect(statedToolSupport(undefined, undefined)).toBeUndefined();
+    expect(statedReasoningLevels(undefined, undefined)).toBeUndefined();
+  });
+
+  it("reads the provider's own metadata", () => {
+    expect(statedToolSupport(undefined, openrouterInfo)).toBe(true);
+    expect(statedReasoningLevels(undefined, openrouterInfo)).toEqual(["none", "low", "medium", "high"]);
+  });
+
+  it("reports a model without reasoning as an empty list, not as unknown", () => {
+    // The picker must be able to say "this model has no reasoning setting" instead of guessing.
+    expect(statedReasoningLevels(undefined, { id: "m", supportedParameters: ["tools"] })).toEqual([]);
+  });
+
+  it("lets the table win, including an explicit false", () => {
+    expect(statedToolSupport(row({ tools: false }), openrouterInfo)).toBe(false);
+    expect(statedReasoningLevels(row({ reasoningLevels: ["none", "high", "max"] }), openrouterInfo)).toEqual(["none", "high", "max"]);
+  });
+
+  it("stays unknown when the row leaves the field open", () => {
+    expect(statedToolSupport(row({ reasoningLevels: [] }), undefined)).toBeUndefined();
+    expect(statedReasoningLevels(row({ tools: true }), undefined)).toBeUndefined();
   });
 });

@@ -8,6 +8,7 @@ import { Dices, Upload } from "lucide-react";
 import { useActionFeedback } from "@/hooks/use-action-feedback";
 import { rerollAgentAvatarAction, saveAgentAction, uploadAgentAvatarAction, type AdminFormState } from "@/server/actions/admin-agents";
 import { LlmModelSelect, type LlmProviderOption } from "@/components/common/llm-model-select";
+import type { ReasoningLevel } from "@/server/db/schema";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+const REASONING_LABELS = { none: "reasoningOff", low: "reasoningLow", medium: "reasoningMedium", high: "reasoningHigh", max: "reasoningMax" } as const;
 
 type Agent = {
   id: string;
@@ -24,7 +27,7 @@ type Agent = {
   providerId: string;
   model: string;
   systemPrompt: string;
-  reasoningEffort: "none" | "low" | "medium" | "high";
+  reasoningEffort: ReasoningLevel;
   maxSteps: number;
   maxTokensPerTurn: number;
 };
@@ -37,6 +40,15 @@ export function AgentForm({ agent, providers, defaultSystemPrompt }: { agent: Ag
   const [rerolling, startReroll] = useTransition();
   const [name, setName] = useState(agent.name);
   const [llm, setLlm] = useState({ providerId: agent.providerId, model: agent.model });
+  const [reasoning, setReasoning] = useState<ReasoningLevel>(agent.reasoningEffort);
+
+  // Which levels a model accepts differs (glm-5.2: none|high|max, gpt-oss-120b has no "none").
+  // Offering a fixed set would show options that silently do nothing – see docs/modell-faehigkeiten.md.
+  const provider = providers.find((p) => p.id === llm.providerId) ?? providers.find((p) => p.isDefault) ?? providers[0];
+  const modelId = llm.model !== "default" ? llm.model : provider?.defaultModel;
+  const levels = provider?.models.find((m) => m.id === modelId)?.reasoningLevels;
+  // "Aus" is always available: it means "send no reasoning parameter", not "the model cannot reason".
+  const options: ReasoningLevel[] = levels ? ["none", ...levels.filter((l) => l !== "none")] : ["none"];
 
   const [avatarState, avatarAction, avatarPending] = useActionState<AdminFormState, FormData>(uploadAgentAvatarAction.bind(null, agent.id), { status: "idle" });
   const [state, action, pending] = useActionState<AdminFormState, FormData>(saveAgentAction.bind(null, agent.id), { status: "idle" });
@@ -128,20 +140,25 @@ export function AgentForm({ agent, providers, defaultSystemPrompt }: { agent: Ag
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="reasoningEffort">{t("reasoningEffort")}</Label>
-                <Select name="reasoningEffort" defaultValue={agent.reasoningEffort}>
+                <Select name="reasoningEffort" value={options.includes(reasoning) ? reasoning : "none"} onValueChange={(v) => setReasoning(v as ReasoningLevel)}>
                   <SelectTrigger id="reasoningEffort">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">{t("reasoningOff")}</SelectItem>
-                    <SelectItem value="low">{t("reasoningLow")}</SelectItem>
-                    <SelectItem value="medium">{t("reasoningMedium")}</SelectItem>
-                    <SelectItem value="high">{t("reasoningHigh")}</SelectItem>
+                    {options.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {t(REASONING_LABELS[level])}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">{t("limitsHint")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("limitsHint")}
+              {levels === undefined && <span className="block text-amber-600 dark:text-amber-500">{t("reasoningUnknown")}</span>}
+              {levels?.length === 0 && <span className="block">{t("reasoningNone")}</span>}
+            </p>
 
             <div>
               <Button type="submit" disabled={pending}>

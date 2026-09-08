@@ -5,6 +5,9 @@ import { z } from "zod";
 import { assertAdmin } from "@/server/auth/session";
 import { getAgentById, updateAgent } from "@/server/domain/agents";
 import { updateAppSettings } from "@/server/domain/settings";
+import { getCapabilityRow } from "@/server/llm/providers";
+import { statedReasoningLevels } from "@/server/llm/capabilities";
+import { REASONING_LEVELS } from "@/server/db/schema";
 import { ensureBotUser } from "@/server/domain/bot";
 import { generateRandomAvatar } from "@/server/media/avatars";
 import { IMAGE_MIMES, processAndStoreImage } from "@/server/media/images";
@@ -23,7 +26,7 @@ const agentSchema = z.object({
   systemPrompt: z.string().trim().max(20_000),
   maxSteps: z.coerce.number().int().min(1).max(50),
   maxTokensPerTurn: z.coerce.number().int().min(1000).max(1_000_000),
-  reasoningEffort: z.enum(["none", "low", "medium", "high"]),
+  reasoningEffort: z.enum(REASONING_LEVELS),
 });
 
 export async function saveAgentAction(agentId: string, _prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
@@ -42,6 +45,14 @@ export async function saveAgentAction(agentId: string, _prev: AdminFormState, fo
   const agent = await getAgentById(agentId);
   if (!agent) return { status: "error", message: "not found" };
   const d = parsed.data;
+
+  // A level the model does not accept would be dropped at runtime – say so instead of saving a lie.
+  if (d.reasoningEffort !== "none" && d.model !== "default") {
+    const levels = statedReasoningLevels(await getCapabilityRow(d.model), undefined);
+    if (levels && !levels.includes(d.reasoningEffort)) {
+      return { status: "error", message: levels.length ? `Model "${d.model}" accepts these reasoning levels: ${levels.join(", ")}.` : `Model "${d.model}" has no reasoning setting.` };
+    }
+  }
 
   await updateAgent(
     agentId,

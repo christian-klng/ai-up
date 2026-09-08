@@ -460,7 +460,10 @@
       "usageTitle": "Verbrauch diese Woche",
       "usageSince": "Seit {date}",
       "usageEmpty": "Diese Woche wurde noch kein Agent genutzt.",
-      "usageBreakdown": "{input} Eingabe · {output} Ausgabe"
+      "usageBreakdown": "{input} Eingabe · {output} Ausgabe",
+      "reasoningMax": "Maximal",
+      "reasoningUnknown": "Für dieses Modell sind keine Reasoning-Stufen hinterlegt – deshalb nur „Aus\". Stufen per MCP eintragen (siehe docs/modell-faehigkeiten.md).",
+      "reasoningNone": "Dieses Modell hat keine Reasoning-Einstellung."
     },
     "questions": {
       "title": "Fragen & Umfragen",

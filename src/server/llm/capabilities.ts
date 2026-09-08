@@ -54,6 +54,22 @@ export function mergeCapabilities(row: LlmModelCapabilityRow | undefined, info: 
   };
 }
 
+/**
+ * What is *stated* about a model, as a tri-state – `undefined` means nobody said anything.
+ * Different from `mergeCapabilities`, which always answers with a fallback: pickers must be able to
+ * tell "unknown" from "no", so they can warn instead of silently offering something that does nothing.
+ */
+export function statedToolSupport(row: Pick<LlmModelCapabilityRow, "tools"> | undefined, info: LlmModelInfo | undefined): boolean | undefined {
+  if (row?.tools !== undefined && row?.tools !== null) return row.tools;
+  return info?.supportedParameters ? info.supportedParameters.includes("tools") : undefined;
+}
+
+export function statedReasoningLevels(row: Pick<LlmModelCapabilityRow, "reasoningLevels"> | undefined, info: LlmModelInfo | undefined): ReasoningLevel[] | undefined {
+  if (row?.reasoningLevels) return row.reasoningLevels;
+  if (!info?.supportedParameters) return undefined;
+  return modelCapabilities(info).reasoning ? DEFAULT_REASONING_LEVELS : [];
+}
+
 /** Keeps a configured level usable: unknown or unsupported levels fall back to off. */
 export function normalizeReasoningLevel(level: string | null | undefined, caps: ResolvedCapabilities): ReasoningLevel | undefined {
   if (!level || level === "none") return undefined;
