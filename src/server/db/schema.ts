@@ -458,6 +458,10 @@ export type LlmModelInfo = {
   pricing?: { prompt?: string; completion?: string } | null;
 };
 
+/** Reasoning levels a model may accept. Which ones are valid differs per model, hence a list. */
+export const REASONING_LEVELS = ["none", "low", "medium", "high", "max"] as const;
+export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
+
 export const llmProviders = pgTable(
   "llm_providers",
   {
@@ -476,6 +480,38 @@ export const llmProviders = pgTable(
     lastError: text("last_error"),
     ...timestamps,
   },
+);
+
+/**
+ * What a model can do, maintained by the admin (see docs/modell-faehigkeiten.md).
+ *
+ * Most OpenAI-compatible providers do not report capabilities – `supported_parameters` is an
+ * OpenRouter extension. Without this table the app has to guess, which silently disables reasoning
+ * and cannot filter models that lack tool calling. Rows are keyed by model id alone: the same model
+ * behaves the same across gateways.
+ *
+ * Every column is nullable on purpose: null means "not stated", which is not the same as "cannot",
+ * and falls back to whatever the provider reports resp. the heuristic (see llm/capabilities.ts).
+ */
+export const llmModelCapabilities = pgTable(
+  "llm_model_capabilities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    modelId: text("model_id").notNull(),
+    tools: boolean("tools"),
+    structuredOutputs: boolean("structured_outputs"),
+    vision: boolean("vision"),
+    /** null = unknown; [] = the model has no reasoning knob; else the accepted levels */
+    reasoningLevels: jsonb("reasoning_levels").$type<ReasoningLevel[]>(),
+    contextLength: integer("context_length"),
+    notes: text("notes"),
+    /** where the entry comes from, usually the vendor's documentation URL */
+    source: text("source").notNull(),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("llm_model_capabilities_model_idx").on(t.modelId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -1140,6 +1176,7 @@ export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type RunStatus = WorkflowRun["status"];
 export type LlmProvider = typeof llmProviders.$inferSelect;
+export type LlmModelCapabilityRow = typeof llmModelCapabilities.$inferSelect;
 export type AiAgent = typeof aiAgents.$inferSelect;
 export type AgentThread = typeof agentThreads.$inferSelect;
 export type AgentThreadMode = AgentThread["mode"];

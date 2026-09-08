@@ -5,8 +5,9 @@ import { enqueueEvaluation } from "@/server/workflows/queue";
 import { logger } from "@/server/logger";
 import { getRedis } from "@/server/redis";
 import { publishToUser } from "@/server/realtime/publish";
-import { LlmError, modelCapabilities, streamChatCompletion, type ChatUsage } from "@/server/llm/client";
+import { LlmError, streamChatCompletion, type ChatUsage } from "@/server/llm/client";
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
+import { normalizeReasoningLevel } from "@/server/llm/capabilities";
 import { buildSystemPrompt } from "./context";
 import { getBudgetStatus, weighUsage } from "./usage";
 import { buildHistory, toDto } from "./history";
@@ -99,8 +100,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
       written: new Set<string>(),
     };
 
-    const { provider, model, info } = await resolveModel(agent.providerId, agent.model);
-    const caps = modelCapabilities(info, provider.kind);
+    const { provider, model, caps } = await resolveModel(agent.providerId, agent.model);
     const cfg = await clientConfigFor(provider);
 
     const stored = await listMessages(threadId);
@@ -149,7 +149,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
             tools: toolDefinitions(tools),
             temperature: caps.temperature && agent.temperature ? Number(agent.temperature) : undefined,
             maxTokens: caps.maxTokens ? agent.maxTokens ?? undefined : undefined,
-            reasoningEffort: caps.reasoning ? agent.reasoningEffort ?? undefined : undefined,
+            reasoningEffort: normalizeReasoningLevel(agent.reasoningEffort, caps),
           },
           (ev) => {
             if (ev.type !== "text") return;

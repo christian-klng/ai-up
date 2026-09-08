@@ -2,7 +2,7 @@ import { and, eq, notInArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { contentEvaluations, contentVersions, contents, type ContentEvaluation, type EvaluationStatus } from "@/server/db/schema";
 import { getTemplateById } from "@/server/domain/templates";
-import { chatCompletion, modelCapabilities } from "@/server/llm/client";
+import { chatCompletion } from "@/server/llm/client";
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
 import { extractJson } from "@/lib/extract-json";
 import { publishBroadcast } from "@/server/realtime/publish";
@@ -99,8 +99,7 @@ function userPrompt(criterion: EvaluationCriterion, title: string, body: string)
 /** Runs one criterion; provider/model errors become an "error" verdict instead of failing the batch. */
 async function judge(criterion: EvaluationCriterion, title: string, body: string, evaluation: TemplateEvaluation): Promise<CriterionVerdict> {
   try {
-    const { provider, model, info } = await resolveModel(evaluation.providerId, evaluation.model);
-    const caps = modelCapabilities(info, provider.kind);
+    const { provider, model, caps } = await resolveModel(evaluation.providerId, evaluation.model);
     const cfg = await clientConfigFor(provider);
     const res = await chatCompletion(cfg, {
       model,

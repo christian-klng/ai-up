@@ -13,9 +13,9 @@ import { getSpaceById, setMeetingTranscript } from "@/server/domain/meetings";
 import { absolutePath } from "@/server/media/storage";
 import { readWebpage } from "@/server/webreader/read-webpage";
 import { extractJson } from "@/lib/extract-json";
-import { modelCapabilities } from "@/server/llm/client";
 import { chatCompletion } from "@/server/llm/client";
 import { clientConfigFor, getDefaultProvider, getProvider, resolveModel } from "@/server/llm/providers";
+import { normalizeReasoningLevel } from "@/server/llm/capabilities";
 import { transcribeAudio, transcriptToMarkdown } from "@/server/llm/stt";
 
 // ---------------------------------------------------------------------------
@@ -75,8 +75,7 @@ registerAction<LlmActionConfig>({
   outputDoc: { text: "raw model answer", json: "parsed JSON when outputSchema/jsonMode was set", model: "model id used", finishReason: "provider finish reason", usage: "{promptTokens, completionTokens, totalTokens, cost}" },
   timeoutMs: 180_000,
   async run(config, ctx) {
-    const { provider, model, info } = await resolveModel(config.providerId, config.model);
-    const caps = modelCapabilities(info, provider.kind);
+    const { provider, model, caps } = await resolveModel(config.providerId, config.model);
     const cfg = await clientConfigFor(provider);
     const messages: { role: "system" | "user"; content: string }[] = [];
     let system = config.systemPrompt?.trim() ?? "";
@@ -97,7 +96,7 @@ registerAction<LlmActionConfig>({
         maxTokens: caps.maxTokens ? config.maxTokens : undefined,
         stopSequences: caps.stop ? config.stopSequences : undefined,
         seed: caps.seed ? config.seed : undefined,
-        reasoningEffort: caps.reasoning ? config.reasoningEffort : undefined,
+        reasoningEffort: normalizeReasoningLevel(config.reasoningEffort, caps),
         jsonSchema: useNativeSchema ? config.outputSchema : undefined,
         jsonMode: !useNativeSchema && wantsJson && caps.structuredOutputs ? true : undefined,
         timeoutMs: 170_000,

@@ -1,4 +1,4 @@
-import type { LlmModelInfo } from "@/server/db/schema";
+import type { LlmModelInfo, ReasoningLevel } from "@/server/db/schema";
 
 /**
  * Minimal OpenAI-compatible chat client (fetch based). Works with OpenRouter, Cortecs.ai, OpenAI,
@@ -36,7 +36,8 @@ export type ChatRequest = {
   maxTokens?: number;
   stopSequences?: string[];
   seed?: number;
-  reasoningEffort?: "none" | "low" | "medium" | "high";
+  /** Which levels a model accepts differs – resolve it against the capabilities first. */
+  reasoningEffort?: ReasoningLevel;
   /** Tools the model may call (agentic loop); omit for a plain completion. */
   tools?: ToolDefinition[];
   toolChoice?: "auto" | "none" | "required";
@@ -421,14 +422,4 @@ export function modelCapabilities(model?: LlmModelInfo | null, kind?: ProviderKi
     stop: has("stop"),
     tools: has("tools"),
   };
-}
-
-/**
- * Tool support as a tri-state: `undefined` when the provider reports no parameter list at all
- * (generic endpoints). Agents need this distinction – a known-false model is unusable, an
- * unknown one is worth a try with a warning.
- */
-export function modelToolSupport(model?: LlmModelInfo | null): boolean | undefined {
-  const sp = model?.supportedParameters;
-  return sp ? sp.includes("tools") : undefined;
 }

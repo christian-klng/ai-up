@@ -3,8 +3,8 @@ import { z } from "zod";
 import type { ApiAuth } from "@/server/domain/api-keys";
 import { hasScope, type ApiScope } from "@/server/domain/api-keys";
 import { getQuestionWithResponses, listQuestions } from "@/server/domain/questions";
-import { listProviders } from "@/server/llm/providers";
-import { modelCapabilities } from "@/server/llm/client";
+import { getCapabilityMap, listProviders } from "@/server/llm/providers";
+import { mergeCapabilities } from "@/server/llm/capabilities";
 import { getEditorCatalog } from "@/server/workflows/catalog";
 import { validateDefinition } from "@/server/workflows/definitions";
 import { startRun } from "@/server/workflows/dispatch";
@@ -293,12 +293,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       if (!a) return fail(`unknown action "${type}"`);
       const base = { type: a.type, doc: a.doc, fields: a.fields.map(fieldDoc), output: a.outputDoc, timeoutMs: a.timeoutMs, templateKeys: a.templateKeys };
       if (type === "llm") {
-        const providers = await listProviders();
+        const [providers, capsMap] = await Promise.all([listProviders(), getCapabilityMap()]);
         const p = providerId && providerId !== "default" ? providers.find((x) => x.id === providerId) : (providers.find((x) => x.isDefault) ?? providers[0]);
         if (!p) return text({ ...base, note: "No LLM provider configured yet (Admin → LLM)." });
         const m = model && model !== "default" ? model : p.defaultModel;
         const info = p.availableModels.find((x) => x.id === m);
-        return text({ ...base, provider: { id: p.id, name: p.name, kind: p.kind, defaultModel: p.defaultModel, enabledModels: p.enabledModels }, model: m, capabilities: modelCapabilities(info, p.kind), modelInfo: info ?? null });
+        const caps = mergeCapabilities(m ? capsMap.get(m) : undefined, info, p.kind);
+        return text({ ...base, provider: { id: p.id, name: p.name, kind: p.kind, defaultModel: p.defaultModel, enabledModels: p.enabledModels }, model: m, capabilities: caps, modelInfo: info ?? null });
       }
       return text(base);
     },
@@ -320,7 +321,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     const providers = await listProviders();
     const p = providerId && providerId !== "default" ? providers.find((x) => x.id === providerId) : (providers.find((x) => x.isDefault) ?? providers[0]);
     if (!p) return fail("provider not found");
-    const models = p.availableModels.filter((m) => !onlyEnabled || p.enabledModels.includes(m.id)).map((m) => ({ ...m, enabled: p.enabledModels.includes(m.id), capabilities: modelCapabilities(m, p.kind) }));
+    const capsMap = await getCapabilityMap();
+    const models = p.availableModels
+      .filter((m) => !onlyEnabled || p.enabledModels.includes(m.id))
+      .map((m) => ({ ...m, enabled: p.enabledModels.includes(m.id), capabilities: mergeCapabilities(capsMap.get(m.id), m, p.kind) }));
     return text({ provider: p.name, defaultModel: p.defaultModel, models });
   });
 

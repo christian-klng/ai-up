@@ -1,10 +1,11 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { auditLog, llmProviders, type LlmModelInfo, type LlmProvider } from "@/server/db/schema";
+import { auditLog, llmModelCapabilities, llmProviders, type LlmModelCapabilityRow, type LlmModelInfo, type LlmProvider } from "@/server/db/schema";
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto";
 import { env } from "@/server/env";
 import { loadAppSettings } from "@/server/domain/settings";
-import { chatCompletion, listModels, modelToolSupport, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
+import { chatCompletion, listModels, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
+import { mergeCapabilities, type ResolvedCapabilities } from "./capabilities";
 
 export const PROVIDER_PRESETS: Record<ProviderKind, { label: string; baseUrl: string; hint: string }> = {
   openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", hint: "Router with hundreds of models; model list includes capabilities and pricing." },
@@ -143,13 +144,35 @@ export async function syncProviderModels(id: string): Promise<{ ok: true; count:
 }
 
 /** Resolves provider + model for a workflow step ("default" provider / model allowed). */
-export async function resolveModel(providerId: string | undefined | null, model: string | undefined | null): Promise<{ provider: LlmProvider; model: string; info: LlmModelInfo | undefined }> {
+// ---------------------------------------------------------------------------
+// Model capabilities (admin-maintained, see docs/modell-faehigkeiten.md)
+// ---------------------------------------------------------------------------
+
+export async function getCapabilityRow(modelId: string): Promise<LlmModelCapabilityRow | undefined> {
+  return db.query.llmModelCapabilities.findFirst({ where: eq(llmModelCapabilities.modelId, modelId) });
+}
+
+/** All rows at once – for lists that would otherwise query per model. */
+export async function getCapabilityMap(): Promise<Map<string, LlmModelCapabilityRow>> {
+  const rows = await db.query.llmModelCapabilities.findMany();
+  return new Map(rows.map((r) => [r.modelId, r]));
+}
+
+export async function resolveModelCapabilities(modelId: string, info: LlmModelInfo | undefined, kind: ProviderKind | undefined): Promise<ResolvedCapabilities> {
+  return mergeCapabilities(await getCapabilityRow(modelId), info, kind);
+}
+
+export async function resolveModel(
+  providerId: string | undefined | null,
+  model: string | undefined | null,
+): Promise<{ provider: LlmProvider; model: string; info: LlmModelInfo | undefined; caps: ResolvedCapabilities }> {
   const provider = providerId && providerId !== "default" ? await getProvider(providerId) : await getDefaultProvider();
   if (!provider) throw new Error("No LLM provider configured. Add one under Admin → LLM.");
   const chosen = model && model !== "default" ? model : provider.defaultModel ?? provider.enabledModels[0];
   if (!chosen) throw new Error(`Provider "${provider.name}" has no enabled models.`);
   if (provider.enabledModels.length && !provider.enabledModels.includes(chosen)) throw new Error(`Model "${chosen}" is not enabled for provider "${provider.name}".`);
-  return { provider, model: chosen, info: provider.availableModels.find((m) => m.id === chosen) };
+  const info = provider.availableModels.find((m) => m.id === chosen);
+  return { provider, model: chosen, info, caps: await resolveModelCapabilities(chosen, info, provider.kind) };
 }
 
 export async function runChat(providerId: string | undefined | null, req: ChatRequest) {
@@ -159,19 +182,25 @@ export async function runChat(providerId: string | undefined | null, req: ChatRe
 
 /**
  * Provider + enabled-model list for the pickers (workflow editor, template evaluation, agents).
- * `supportsTools` is tri-state: undefined when the provider reports no parameter list, which is
- * the normal case for generic endpoints – the agent picker warns instead of hiding those.
+ * `supportsTools` is tri-state: undefined while nobody has stated it and the provider reports
+ * nothing – the agent picker warns about those instead of hiding them.
  */
 export async function listProviderOptions(): Promise<
   { id: string; name: string; kind: ProviderKind; isDefault: boolean; defaultModel: string | null; models: { id: string; name?: string; supportsTools?: boolean }[] }[]
 > {
-  const providers = await listProviders();
+  const [providers, caps] = await Promise.all([listProviders(), getCapabilityMap()]);
   return providers.map((p) => ({
     id: p.id,
     name: p.name,
     kind: p.kind,
     isDefault: p.isDefault,
     defaultModel: p.defaultModel,
-    models: p.availableModels.filter((m) => p.enabledModels.includes(m.id)).map((m) => ({ id: m.id, name: m.name, supportsTools: modelToolSupport(m) })),
+    models: p.availableModels
+      .filter((m) => p.enabledModels.includes(m.id))
+      .map((m) => {
+        const row = caps.get(m.id);
+        const stated = row?.tools ?? (m.supportedParameters ? m.supportedParameters.includes("tools") : undefined);
+        return { id: m.id, name: m.name, supportsTools: stated };
+      }),
   }));
 }
