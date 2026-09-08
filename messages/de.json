@@ -247,7 +247,8 @@
         "grid": "Raster (Standard)",
         "compact": "Kompaktes Raster",
         "list": "Liste",
-        "blog": "Blog-Feed"
+        "blog": "Blog-Feed",
+        "folder": "Ordner"
       },
       "sort": "Sortierung",
       "sortHint": "Reihenfolge der Einträge. Angeheftete Einträge stehen immer oben.",

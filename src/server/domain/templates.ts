@@ -34,6 +34,16 @@ export async function listTemplates(): Promise<TemplateListItem[]> {
   return rows.map((r) => ({ ...r.template, assignmentCount: r.assignmentCount }));
 }
 
+/** Icon + name + system key for the given templates – lean lookup for the folder layout. */
+export async function getTemplateBadges(ids: string[]): Promise<Map<string, { name: string; icon: string; systemKey: string | null }>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: contentTemplates.id, name: contentTemplates.name, icon: contentTemplates.icon, systemKey: contentTemplates.systemKey })
+    .from(contentTemplates)
+    .where(inArray(contentTemplates.id, ids));
+  return new Map(rows.map((r) => [r.id, { name: r.name, icon: r.icon, systemKey: r.systemKey }]));
+}
+
 export async function listTemplateVersions(templateId: string): Promise<ContentTemplateVersion[]> {
   return db.query.contentTemplateVersions.findMany({
     where: eq(contentTemplateVersions.templateId, templateId),

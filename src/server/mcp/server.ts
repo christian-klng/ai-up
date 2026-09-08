@@ -121,8 +121,8 @@ stores a full snapshot of its template definition, so template changes never bre
 
 ## Layouts
 
-Each collection has a member-view layout: "grid" (default), "compact" (smaller grid), "list" or
-"blog" (single-column feed), and a sort mode for its entries: "updated" (default, last edited
+Each collection has a member-view layout: "grid" (default), "compact" (smaller grid), "list",
+"blog" (single-column feed) or "folder" (desktop-style icon grid), and a sort mode for its entries: "updated" (default, last edited
 first), "newest", "oldest" or "title" (pinned entries always come first). list_collections
 reports both read-only – admins set them in the app under Admin → Collections; there is
 deliberately no MCP tool to create or modify collections.

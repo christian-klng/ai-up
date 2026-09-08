@@ -4,7 +4,7 @@
  * tools. Framework-neutral (no React/Next imports); the DB schema
  * type-imports CollectionLayout/CollectionSort.
  */
-export const COLLECTION_LAYOUTS = ["grid", "compact", "list", "blog"] as const;
+export const COLLECTION_LAYOUTS = ["grid", "compact", "list", "blog", "folder"] as const;
 export type CollectionLayout = (typeof COLLECTION_LAYOUTS)[number];
 
 export function isCollectionLayout(value: unknown): value is CollectionLayout {

@@ -4,16 +4,20 @@ import { getFormatter, getTranslations } from "next-intl/server";
 import { FileText, Image as ImageIcon, Link2, ListChecks, Plus, Search, Video } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { countContentsByType, getAreaBySlug, listContents } from "@/server/domain/knowledge";
+import { getTemplateBadges } from "@/server/domain/templates";
 import type { ContentType } from "@/server/db/schema";
 import { PageHeader } from "@/components/common/page-header";
 import { AreaIcon } from "@/components/knowledge/area-icon";
-import { EntryBlogPost, EntryCard, EntryListItem, type EntryViewItem } from "@/components/knowledge/entry-views";
+import { EntryBlogPost, EntryCard, EntryFolderItem, EntryListItem, type EntryViewItem } from "@/components/knowledge/entry-views";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { fileFormatFor } from "@/lib/file-formats";
 
 const TYPE_ICONS = { markdown: FileText, image: ImageIcon, video: Video, link: Link2, structured: ListChecks } as const;
 const TYPES: ContentType[] = ["markdown", "image", "video", "link", "structured"];
+/** Folder-layout glyph for entries without a template (legacy types, deleted template). */
+const TYPE_TEMPLATE_ICONS: Record<ContentType, string> = { markdown: "file-text", image: "image", video: "video", link: "link-2", structured: "list-checks" };
 
 export default async function AreaPage({ params, searchParams }: PageProps<"/knowledge/[slug]">) {
   await requireUser();
@@ -35,7 +39,7 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
 
   const filterHref = (tp?: ContentType) => `/knowledge/${area.slug}${tp ? `?type=${tp}` : ""}${q ? `${tp ? "&" : "?"}q=${encodeURIComponent(q)}` : ""}`;
 
-  const viewItems: { id: string; item: EntryViewItem }[] = items.map((c) => {
+  const viewItems: { id: string; type: ContentType; templateId: string | null; item: EntryViewItem }[] = items.map((c) => {
     const v = c.version;
     // Entry images and legacy image entries both live on version.mediaId.
     const imageMedia = c.media?.kind === "image" ? c.media : null;
@@ -51,6 +55,8 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
     const excerpt = c.type === "link" ? (v?.meta.preview?.description ?? v?.url ?? undefined) : v?.bodyMarkdown?.replace(/[#*_`>\[\]()!-]/g, " ").replace(/\s+/g, " ").trim();
     return {
       id: c.id,
+      type: c.type,
+      templateId: v?.meta.structure?.structureId ?? null,
       item: {
         href: `/knowledge/${area.slug}/${c.id}`,
         title: c.title,
@@ -65,6 +71,8 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
     };
   });
   const hasAnyImage = viewItems.some(({ item }) => !!item.thumbSrc);
+  // Folder layout only: the entries carry their template id, the badge lookup adds name + icon.
+  const templateBadges = area.layout === "folder" ? await getTemplateBadges([...new Set(viewItems.map((v) => v.templateId).filter((id): id is string => !!id))]) : null;
 
   return (
     <div>
@@ -115,6 +123,23 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
               <EntryListItem item={item} />
             </li>
           ))}
+        </ul>
+      ) : area.layout === "folder" ? (
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-1">
+          {viewItems.map(({ id, type: entryType, templateId, item }) => {
+            const badge = templateId ? templateBadges?.get(templateId) : undefined;
+            return (
+              <li key={id}>
+                <EntryFolderItem
+                  item={item}
+                  format={fileFormatFor({ templateId, systemKey: badge?.systemKey, name: badge?.name, fallbackType: entryType })}
+                  icon={badge?.icon ?? TYPE_TEMPLATE_ICONS[entryType]}
+                  formatName={badge?.name ?? t(`types.${entryType}`)}
+                  pinnedLabel={t("view.pinned")}
+                />
+              </li>
+            );
+          })}
         </ul>
       ) : area.layout === "blog" ? (
         <div className="mx-auto grid max-w-2xl gap-10">

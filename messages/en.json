@@ -247,7 +247,8 @@
         "grid": "Grid (default)",
         "compact": "Compact grid",
         "list": "List",
-        "blog": "Blog feed"
+        "blog": "Blog feed",
+        "folder": "Folder"
       },
       "sort": "Sorting",
       "sortHint": "Order of the entries. Pinned entries always come first.",

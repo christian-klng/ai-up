@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { Pin } from "lucide-react";
 import { AreaIcon } from "@/components/knowledge/area-icon";
+import { FileIcon } from "@/components/knowledge/file-icon";
 import { Markdown } from "@/components/content/markdown";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { FileFormat } from "@/lib/file-formats";
 
 /**
  * Presentational entry renderings for the collection layouts (grid, compact,
- * list, blog). Server components; labels come in as props so the page owns i18n.
+ * list, blog, folder). Server components; labels come in as props so the page owns i18n.
  */
 export type EntryViewItem = {
   href: string;
@@ -133,5 +135,32 @@ export function EntryBlogPost({ item, pinnedLabel, readMoreLabel }: { item: Entr
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * Desktop-style tile for the "folder" layout: file icon, centred label, one
+ * click opens the entry. The label clamps to two lines and unfolds on hover,
+ * the way a selected desktop icon shows its full name; format, author and date
+ * ride along in the tooltip.
+ */
+export function EntryFolderItem({ item, format, icon, formatName, pinnedLabel }: { item: EntryViewItem; format: FileFormat; icon: string; formatName?: string; pinnedLabel: string }) {
+  const tooltip = [item.title, formatName, item.author?.name, item.dateLabel].filter(Boolean).join(" · ");
+  return (
+    <Link
+      href={item.href}
+      title={tooltip}
+      className="group flex flex-col items-center gap-1.5 rounded-lg px-2 py-3 text-center transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span className="relative block">
+        <FileIcon format={format} icon={icon} />
+        {item.pinned && (
+          <span className="absolute -right-1 bottom-0 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm" title={pinnedLabel}>
+            <Pin className="size-3" />
+          </span>
+        )}
+      </span>
+      <span className="line-clamp-2 text-xs leading-snug break-words group-hover:line-clamp-none group-focus-visible:line-clamp-none">{item.title}</span>
+    </Link>
   );
 }
