@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ApiAuth } from "@/server/domain/api-keys";
 import { hasScope, type ApiScope } from "@/server/domain/api-keys";
 import { getQuestionWithResponses, listQuestions } from "@/server/domain/questions";
-import { getCapabilityMap, listProviders } from "@/server/llm/providers";
+import { deleteCapabilityRow, getCapabilityMap, listCapabilityRows, listProviders, upsertCapabilities } from "@/server/llm/providers";
 import { mergeCapabilities } from "@/server/llm/capabilities";
 import { getEditorCatalog } from "@/server/workflows/catalog";
 import { validateDefinition } from "@/server/workflows/definitions";
@@ -25,6 +25,7 @@ import { enqueueEvaluation } from "@/server/workflows/queue";
 import { criterionKeyFromTitle, validateEvaluation, MAX_CRITERIA, MAX_CRITERION_INSTRUCTION, MAX_CRITERION_TITLE, type EvaluationCriterion } from "@/lib/structures/evaluation";
 import { isSystemTemplateKey } from "@/lib/structures/defaults";
 import { validateStructure } from "@/lib/structures/validate";
+import { REASONING_LEVELS } from "@/server/db/schema";
 import type { ContentTemplate, KnowledgeArea } from "@/server/db/schema";
 
 /**
@@ -41,6 +42,44 @@ function require(auth: ApiAuth, scope: ApiScope) {
 async function audit(auth: ApiAuth, action: string, targetId: string | null, details: Record<string, unknown> = {}, targetType = "workflow") {
   await db.insert(auditLog).values({ actorId: auth.user.id, action, targetType, targetId, details: { ...details, via: "mcp", apiKeyId: auth.key.id } }).catch(() => {});
 }
+
+const MODEL_CAPABILITIES_DOC = `# Model capabilities
+
+What each model can do. Most OpenAI-compatible providers report nothing about themselves
+(\`supported_parameters\` is an OpenRouter extension), so without this table the app has to guess:
+reasoning stays off and models that cannot call tools cannot be filtered out.
+
+Rows are keyed by **model id alone** and apply to every provider offering that id.
+
+## Fields
+
+| field | meaning |
+|---|---|
+| \`modelId\` | exactly as the provider lists it, e.g. \`glm-5.2\` |
+| \`tools\` | supports function/tool calling |
+| \`structuredOutputs\` | supports \`response_format\` / JSON schema |
+| \`vision\` | accepts images |
+| \`reasoningLevels\` | accepted levels, in order: ${REASONING_LEVELS.map((l) => `\`${l}\``).join(", ")} |
+| \`contextLength\` | context window in tokens |
+| \`notes\` | anything a maintainer should know |
+
+## Rules
+
+1. **Leave a field out rather than guess it.** Omitted keeps whatever is stored; \`null\` clears it back
+   to "not stated". Not stated is *not* the same as "cannot" – the app then falls back to the provider's
+   own metadata and finally to a heuristic. A wrong \`true\` breaks every run with that model.
+2. **\`reasoningLevels\` is a list, not a switch.** The accepted levels differ per model: some take
+   \`none, high, max\`, others \`none, low, medium, high\`, and a few cannot turn reasoning off at all.
+   An empty list \`[]\` means the model has no reasoning knob. Never invent a level that is not documented.
+3. **\`source\` is required and should be the vendor's documentation URL.** It is stored with the row and
+   shown to the admin, together with \`checkedAt\`.
+4. Call \`list_model_capabilities\` first: it also reports which enabled models still have no row.
+
+## Typical maintenance
+
+Read the vendor's model table, then send one \`set_model_capabilities\` call with all models and the
+documentation URL as \`source\`. The reply says which rows were created, updated or were already correct.
+`;
 
 const WORKFLOW_SCHEMA_DOC = `# AI-Up workflow definition
 
@@ -254,7 +293,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry.",
     },
   );
 
@@ -267,6 +306,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "aiup://docs/pages",
     { title: "Site pages format & design rules", description: "Section schema, design rules and the current app context (name, purpose, theme) for the public pages: landing, imprint, privacy.", mimeType: "text/markdown" },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${PAGES_SCHEMA_DOC}\n${await pagesContext()}` }] }),
+  );
+
+  server.registerResource(
+    "model-capabilities",
+    "aiup://docs/model-capabilities",
+    { title: "Model capabilities format", description: "How to record what each LLM model can do (tools, reasoning levels, context) and the rules for maintaining it.", mimeType: "text/markdown" },
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: MODEL_CAPABILITIES_DOC }] }),
   );
 
   server.registerResource(
@@ -327,6 +373,84 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       .map((m) => ({ ...m, enabled: p.enabledModels.includes(m.id), capabilities: mergeCapabilities(capsMap.get(m.id), m, p.kind) }));
     return text({ provider: p.name, defaultModel: p.defaultModel, models });
   });
+
+  server.registerTool(
+    "list_model_capabilities",
+    {
+      title: "LLM - List model capabilities",
+      description:
+        "The admin-maintained capability table (tools, reasoning levels, structured outputs, context) plus the enabled models that still have no entry. Read resource aiup://docs/model-capabilities for the format and rules.",
+      inputSchema: { providerId: z.string().optional().describe("restrict the missing list to one provider; omit for all") },
+    },
+    async ({ providerId }) => {
+      require(auth, "llm:read");
+      const [rows, providers] = await Promise.all([listCapabilityRows(), listProviders()]);
+      const known = new Set(rows.map((r) => r.modelId));
+      const scoped = providerId && providerId !== "default" ? providers.filter((p) => p.id === providerId) : providers;
+      const missing: { modelId: string; provider: string }[] = [];
+      for (const p of scoped) {
+        for (const id of p.enabledModels) if (!known.has(id) && !missing.some((m) => m.modelId === id)) missing.push({ modelId: id, provider: p.name });
+      }
+      return text({
+        rows: rows.map((r) => ({
+          modelId: r.modelId,
+          tools: r.tools,
+          structuredOutputs: r.structuredOutputs,
+          vision: r.vision,
+          reasoningLevels: r.reasoningLevels,
+          contextLength: r.contextLength,
+          notes: r.notes,
+          source: r.source,
+          checkedAt: r.checkedAt,
+        })),
+        missing,
+        hint: missing.length ? "These enabled models have no entry yet – the app is guessing for them." : "Every enabled model has an entry.",
+      });
+    },
+  );
+
+  const capabilityModel = z.object({
+    modelId: z.string().trim().min(1).describe("exactly as the provider lists it"),
+    tools: z.boolean().nullable().optional().describe("omit to keep the stored value, null to clear it"),
+    structuredOutputs: z.boolean().nullable().optional(),
+    vision: z.boolean().nullable().optional(),
+    reasoningLevels: z.array(z.enum(REASONING_LEVELS)).nullable().optional().describe("accepted levels; [] = the model has no reasoning knob"),
+    contextLength: z.number().int().positive().nullable().optional(),
+    notes: z.string().max(500).nullable().optional(),
+  });
+
+  server.registerTool(
+    "set_model_capabilities",
+    {
+      title: "LLM - Set model capabilities",
+      description:
+        "Records what models can do. Merge semantics: an omitted field keeps the stored value, null clears it. `source` must be the documentation the entries come from. Never guess a capability – a wrong `true` breaks every run with that model. Read resource aiup://docs/model-capabilities first.",
+      inputSchema: {
+        source: z.string().trim().min(3).max(500).describe("where the information comes from, usually the vendor's documentation URL"),
+        models: z.array(capabilityModel).min(1).max(100),
+      },
+    },
+    async ({ source, models }) => {
+      require(auth, "llm:write");
+      const results = await upsertCapabilities(models, source, auth.user.id);
+      const counts = { created: 0, updated: 0, unchanged: 0 };
+      for (const r of results) counts[r.result]++;
+      await audit(auth, "llm.capabilities.updated", null, { source, counts, models: models.map((m) => m.modelId) }, "llm_model_capabilities");
+      return text({ ...counts, results });
+    },
+  );
+
+  server.registerTool(
+    "delete_model_capabilities",
+    { title: "LLM - Delete model capabilities", description: "Removes one model's entry (e.g. the model was discontinued). The app falls back to guessing for it again; re-adding is the only undo.", inputSchema: { modelId: z.string().trim().min(1) } },
+    async ({ modelId }) => {
+      require(auth, "llm:write");
+      const removed = await deleteCapabilityRow(modelId);
+      if (!removed) return fail(`no entry for model "${modelId}"`);
+      await audit(auth, "llm.capabilities.deleted", null, { modelId }, "llm_model_capabilities");
+      return text({ modelId, deleted: true });
+    },
+  );
 
   // ---- workflows ------------------------------------------------------------
   server.registerTool("list_workflows", { title: "Workflows - List workflows", description: "All workflows with status, trigger, step count and run stats.", inputSchema: { status: z.enum(["draft", "active", "paused"]).optional() } }, async ({ status }) => {

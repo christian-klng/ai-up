@@ -1,6 +1,8 @@
 import { modelCapabilities, type ProviderKind } from "./client";
 import type { LlmModelCapabilityRow, LlmModelInfo, ReasoningLevel } from "@/server/db/schema";
 
+export type CapabilityFields = Pick<LlmModelCapabilityRow, "tools" | "structuredOutputs" | "vision" | "reasoningLevels" | "contextLength" | "notes">;
+
 /**
  * Effective model capabilities: the admin's table wins, then whatever the provider reports, then a
  * heuristic (see docs/modell-faehigkeiten.md). Pure – the database access lives in providers.ts,
@@ -57,4 +59,28 @@ export function normalizeReasoningLevel(level: string | null | undefined, caps: 
   if (!level || level === "none") return undefined;
   if (!caps.reasoning) return undefined;
   return caps.reasoningLevels.includes(level as ReasoningLevel) ? (level as ReasoningLevel) : undefined;
+}
+
+/** One model's stated capabilities. `undefined` keeps the stored value, `null` clears it. */
+export type CapabilityInput = { modelId: string } & Partial<CapabilityFields>;
+
+/**
+ * Applies an input over the stored row. Merge, not replace: a partial correction must not silently
+ * wipe fields the caller did not mention – but `null` explicitly resets one to "not stated".
+ */
+export function mergeCapabilityInput(existing: CapabilityFields | undefined, input: CapabilityInput): CapabilityFields {
+  const pick = <K extends keyof CapabilityFields>(key: K): CapabilityFields[K] => (input[key] === undefined ? (existing?.[key] ?? null) : (input[key] as CapabilityFields[K]));
+  return {
+    tools: pick("tools"),
+    structuredOutputs: pick("structuredOutputs"),
+    vision: pick("vision"),
+    reasoningLevels: pick("reasoningLevels"),
+    contextLength: pick("contextLength"),
+    notes: pick("notes"),
+  };
+}
+
+/** Whether a write actually changes anything – refreshing `checkedAt` alone is not a change. */
+export function capabilityFingerprint(fields: CapabilityFields, source: string): string {
+  return JSON.stringify([fields.tools, fields.structuredOutputs, fields.vision, fields.reasoningLevels, fields.contextLength, fields.notes, source]);
 }

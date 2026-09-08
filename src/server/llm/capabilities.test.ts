@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeCapabilities, normalizeReasoningLevel } from "./capabilities";
+import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, normalizeReasoningLevel, type CapabilityFields } from "./capabilities";
 import type { LlmModelCapabilityRow, LlmModelInfo } from "@/server/db/schema";
 
 function row(part: Partial<LlmModelCapabilityRow>): LlmModelCapabilityRow {
@@ -86,5 +86,49 @@ describe("normalizeReasoningLevel", () => {
   it("stays off for a model without reasoning", () => {
     const plain = mergeCapabilities(row({ reasoningLevels: [] }), undefined, "generic");
     expect(normalizeReasoningLevel("high", plain)).toBeUndefined();
+  });
+});
+
+describe("mergeCapabilityInput", () => {
+  const stored: CapabilityFields = { tools: true, structuredOutputs: true, vision: false, reasoningLevels: ["none", "high"], contextLength: 128000, notes: "aus der Doku" };
+
+  it("creates a row from nothing, leaving unmentioned fields unstated", () => {
+    expect(mergeCapabilityInput(undefined, { modelId: "m", tools: true })).toEqual({
+      tools: true,
+      structuredOutputs: null,
+      vision: null,
+      reasoningLevels: null,
+      contextLength: null,
+      notes: null,
+    });
+  });
+
+  it("keeps stored fields the caller did not mention", () => {
+    // A partial correction must not wipe the rest – that is what merge semantics buy us.
+    expect(mergeCapabilityInput(stored, { modelId: "m", tools: false })).toEqual({ ...stored, tools: false });
+  });
+
+  it("clears a field only when null is sent explicitly", () => {
+    expect(mergeCapabilityInput(stored, { modelId: "m", notes: null }).notes).toBeNull();
+    expect(mergeCapabilityInput(stored, { modelId: "m" }).notes).toBe("aus der Doku");
+  });
+
+  it("distinguishes an empty reasoning list from clearing it", () => {
+    // [] states "this model has no reasoning knob"; null states "we do not know".
+    expect(mergeCapabilityInput(stored, { modelId: "m", reasoningLevels: [] }).reasoningLevels).toEqual([]);
+    expect(mergeCapabilityInput(stored, { modelId: "m", reasoningLevels: null }).reasoningLevels).toBeNull();
+  });
+});
+
+describe("capabilityFingerprint", () => {
+  const fields: CapabilityFields = { tools: true, structuredOutputs: null, vision: null, reasoningLevels: ["none", "high"], contextLength: null, notes: null };
+
+  it("ignores a re-confirmation that changes nothing", () => {
+    expect(capabilityFingerprint(fields, "url")).toBe(capabilityFingerprint({ ...fields }, "url"));
+  });
+
+  it("notices a changed value and a changed source", () => {
+    expect(capabilityFingerprint(fields, "url")).not.toBe(capabilityFingerprint({ ...fields, tools: false }, "url"));
+    expect(capabilityFingerprint(fields, "url")).not.toBe(capabilityFingerprint(fields, "other-url"));
   });
 });

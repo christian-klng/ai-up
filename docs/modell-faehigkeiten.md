@@ -3,7 +3,7 @@
 Eine vom Admin gepflegte Tabelle, welche Fähigkeiten jedes LLM-Modell hat – Werkzeuge, Reasoning-Stufen,
 strukturierte Ausgabe, Kontextgröße –, pflegbar über MCP.
 
-Stand: **Phase A umgesetzt** (08.09.2026), Phasen B–E offen.
+Stand: **Phasen A und B umgesetzt** (08.09.2026), Phasen C–E offen.
 
 ---
 
@@ -172,7 +172,7 @@ Arbeitsliste im Read-Tool sind genau auf diesen Ablauf zugeschnitten.
 | Phase | Inhalt | Abnahme |
 |---|---|---|
 | **A** Fundament ✅ *(08.09.2026)* | Tabelle, `mergeCapabilities` (+ Tests), `resolveModel` liefert `caps`, drei Aufrufer und MCP-Anzeige umgestellt, `normalizeReasoningLevel` verwirft ungültige Stufen | Verhalten unverändert, Fähigkeiten kommen aus einer Quelle |
-| **B** MCP | Scope `llm:write`, drei Tools, Resource | Ein Satz in Claude pflegt Scaleway vollständig |
+| **B** MCP ✅ *(08.09.2026)* | Scope `llm:write`, drei Tools, Resource `aiup://docs/model-capabilities`, Merge-Semantik als reine Funktion getestet | Ein Satz in Claude pflegt Scaleway vollständig |
 | **C** Reasoning | `max` ergänzt, Stufen je Modell im Agenten-Formular, Validierung | Thinking-Level wirkt und bietet nur Gültiges an |
 | **D** Sichtbarkeit | Lese-Ansicht im Admin, Werkzeug-Filter aus der Auflösung | Admin sieht, was die App über jedes Modell weiß |
 | **E** Weitere Anbieter | nichts zu bauen – nur pflegen | OpenRouter bleibt selbstbeschreibend, andere werden eingetragen |

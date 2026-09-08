@@ -5,7 +5,7 @@ import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto";
 import { env } from "@/server/env";
 import { loadAppSettings } from "@/server/domain/settings";
 import { chatCompletion, listModels, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
-import { mergeCapabilities, type ResolvedCapabilities } from "./capabilities";
+import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, type CapabilityInput, type ResolvedCapabilities } from "./capabilities";
 
 export const PROVIDER_PRESETS: Record<ProviderKind, { label: string; baseUrl: string; hint: string }> = {
   openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", hint: "Router with hundreds of models; model list includes capabilities and pricing." },
@@ -156,6 +156,44 @@ export async function getCapabilityRow(modelId: string): Promise<LlmModelCapabil
 export async function getCapabilityMap(): Promise<Map<string, LlmModelCapabilityRow>> {
   const rows = await db.query.llmModelCapabilities.findMany();
   return new Map(rows.map((r) => [r.modelId, r]));
+}
+
+export async function listCapabilityRows(): Promise<LlmModelCapabilityRow[]> {
+  return db.query.llmModelCapabilities.findMany({ orderBy: [asc(llmModelCapabilities.modelId)] });
+}
+
+export type { CapabilityInput };
+
+export type CapabilityUpsertResult = { modelId: string; result: "created" | "updated" | "unchanged" };
+
+/**
+ * Upserts capability rows by model id. Merge semantics: an omitted field keeps whatever is stored,
+ * so a partial correction cannot silently wipe the rest. `checkedAt` is refreshed either way –
+ * re-confirming an unchanged row is worth recording.
+ */
+export async function upsertCapabilities(models: CapabilityInput[], source: string, actorId: string): Promise<CapabilityUpsertResult[]> {
+  const results: CapabilityUpsertResult[] = [];
+  for (const input of models) {
+    const existing = await getCapabilityRow(input.modelId);
+    const fields = mergeCapabilityInput(existing, input);
+    if (!existing) {
+      await db.insert(llmModelCapabilities).values({ ...fields, modelId: input.modelId, source, checkedAt: new Date(), updatedBy: actorId });
+      results.push({ modelId: input.modelId, result: "created" });
+      continue;
+    }
+    const changed = capabilityFingerprint(existing, existing.source) !== capabilityFingerprint(fields, source);
+    await db
+      .update(llmModelCapabilities)
+      .set({ ...fields, source, checkedAt: new Date(), updatedBy: actorId })
+      .where(eq(llmModelCapabilities.modelId, input.modelId));
+    results.push({ modelId: input.modelId, result: changed ? "updated" : "unchanged" });
+  }
+  return results;
+}
+
+export async function deleteCapabilityRow(modelId: string): Promise<boolean> {
+  const rows = await db.delete(llmModelCapabilities).where(eq(llmModelCapabilities.modelId, modelId)).returning({ id: llmModelCapabilities.id });
+  return rows.length > 0;
 }
 
 export async function resolveModelCapabilities(modelId: string, info: LlmModelInfo | undefined, kind: ProviderKind | undefined): Promise<ResolvedCapabilities> {
