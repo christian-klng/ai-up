@@ -3,7 +3,7 @@
 Eine vom Admin gepflegte Tabelle, welche Fähigkeiten jedes LLM-Modell hat – Werkzeuge, Reasoning-Stufen,
 strukturierte Ausgabe, Kontextgröße –, pflegbar über MCP.
 
-Stand: **Phasen A–C umgesetzt** (08.09.2026), Phasen D und E offen.
+Stand: **Phasen A–D umgesetzt** (08.09.2026), Phase E ist reine Pflege.
 
 ---
 
@@ -174,7 +174,7 @@ Arbeitsliste im Read-Tool sind genau auf diesen Ablauf zugeschnitten.
 | **A** Fundament ✅ *(08.09.2026)* | Tabelle, `mergeCapabilities` (+ Tests), `resolveModel` liefert `caps`, drei Aufrufer und MCP-Anzeige umgestellt, `normalizeReasoningLevel` verwirft ungültige Stufen | Verhalten unverändert, Fähigkeiten kommen aus einer Quelle |
 | **B** MCP ✅ *(08.09.2026)* | Scope `llm:write`, drei Tools, Resource `aiup://docs/model-capabilities`, Merge-Semantik als reine Funktion getestet | Ein Satz in Claude pflegt Scaleway vollständig |
 | **C** Reasoning ✅ *(08.09.2026)* | `max` ergänzt, Stufen je Modell im Agenten-Formular, serverseitige Validierung, Hinweis statt Schein-Auswahl bei unbekanntem Modell | Thinking-Level wirkt und bietet nur Gültiges an |
-| **D** Sichtbarkeit | Lese-Ansicht im Admin, Werkzeug-Filter aus der Auflösung | Admin sieht, was die App über jedes Modell weiß |
+| **D** Sichtbarkeit ✅ *(08.09.2026)* | Lese-Ansicht unter *Verwaltung → LLM* (je Modell Werkzeuge / Reasoning-Stufen / Kontext, mit Stand und Quelle, „geraten"-Kennzeichnung); Werkzeug-Filter zog schon Phase A nach | Admin sieht, was die App über jedes Modell weiß |
 | **E** Weitere Anbieter | nichts zu bauen – nur pflegen | OpenRouter bleibt selbstbeschreibend, andere werden eingetragen |
 
 A und B sind der Kern; C bringt den eigentlichen Nutzen (der Thinking-Level funktioniert dann).
@@ -190,7 +190,8 @@ A und B sind der Kern; C bringt den eigentlichen Nutzen (der Thinking-Level funk
    das nicht: `normalizeReasoningLevel` verwirft eine ungültige Stufe schon zur Laufzeit (seit Phase A),
    die Auswahl im Editor kann nur mehr anbieten als wirkt. Nachziehen, sobald das Feldsystem des
    Workflow-Editors dynamische Optionen trägt.
-3. **Veraltung anzeigen?** Soll `list_model_capabilities` Zeilen ab einem Alter (z. B. 90 Tage) als
-   „prüfen" markieren?
+3. **Veraltung anzeigen?** Noch offen. `checked_at` steht in der Lese-Ansicht, aber nichts warnt, wenn ein
+   Eintrag alt ist. Vorschlag, falls gewünscht: `list_model_capabilities` markiert Zeilen ab 90 Tagen als
+   „prüfen", die Admin-Ansicht färbt das Datum.
 4. **Kein Seed** – die Tabelle startet leer, bis du sie einmal füllst. Einverstanden, oder willst du einen
    Startbestand für Scaleway im Repo (mit dem Nachteil, dass er dort veraltet)?

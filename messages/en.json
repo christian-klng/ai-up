@@ -396,7 +396,19 @@
       "addModels": "Add",
       "test": "Test call",
       "testPlaceholder": "Say hello in one sentence.",
-      "runTest": "Test with {model}"
+      "runTest": "Test with {model}",
+      "capabilitiesTitle": "Model capabilities",
+      "capabilitiesIntro": "What the app knows about the enabled models. Most providers do not report their capabilities – without an entry the app guesses. The table is maintained over MCP (see docs/modell-faehigkeiten.md) and applies per model id across providers.",
+      "capabilitiesEmpty": "No models enabled yet.",
+      "capTools": "Tools",
+      "capReasoning": "Reasoning",
+      "capContext": "Context",
+      "capYes": "yes",
+      "capNo": "no",
+      "capUnknown": "unknown",
+      "capNoReasoning": "none",
+      "capGuessed": "guessed",
+      "capChecked": "checked {date}"
     },
     "workflows": {
       "title": "Workflows",

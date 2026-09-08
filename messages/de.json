@@ -396,7 +396,19 @@
       "addModels": "Hinzufügen",
       "test": "Testaufruf",
       "testPlaceholder": "Sag Hallo in einem Satz.",
-      "runTest": "Testen mit {model}"
+      "runTest": "Testen mit {model}",
+      "capabilitiesTitle": "Modell-Fähigkeiten",
+      "capabilitiesIntro": "Was die App über die freigeschalteten Modelle weiß. Die meisten Anbieter melden ihre Fähigkeiten nicht – ohne Eintrag rät die App. Gepflegt wird die Tabelle über MCP (siehe docs/modell-faehigkeiten.md), sie gilt providerübergreifend je Modell-Id.",
+      "capabilitiesEmpty": "Noch keine Modelle freigeschaltet.",
+      "capTools": "Werkzeuge",
+      "capReasoning": "Reasoning",
+      "capContext": "Kontext",
+      "capYes": "ja",
+      "capNo": "nein",
+      "capUnknown": "unbekannt",
+      "capNoReasoning": "keins",
+      "capGuessed": "geraten",
+      "capChecked": "geprüft {date}"
     },
     "workflows": {
       "title": "Workflows",

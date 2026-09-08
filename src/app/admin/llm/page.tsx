@@ -4,6 +4,7 @@ import { listProviders, PROVIDER_PRESETS } from "@/server/llm/providers";
 import { PageHeader } from "@/components/common/page-header";
 import { ProviderDialog } from "./provider-dialog";
 import { ProviderCard } from "./provider-card";
+import { CapabilityTable } from "./capability-table";
 
 export default async function AdminLlmPage() {
   await requireAdmin();
@@ -39,6 +40,7 @@ export default async function AdminLlmPage() {
           ))}
         </div>
       )}
+      {providers.length > 0 && <CapabilityTable />}
     </div>
   );
 }
