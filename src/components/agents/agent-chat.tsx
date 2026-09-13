@@ -143,11 +143,15 @@ export function AgentChat({
     });
   };
 
-  const toggleApproval = () => {
-    const next = approval === "always" ? "never" : "always";
-    setApproval(next);
-    void setThreadModeAction(threadId, mode, next);
+  // Permissions are shared by the header toggle and the configuration panel: one place updates both
+  // and persists straight away, because they decide which tools exist and whether writes pause.
+  const setPermissions = (next: { mode: "assist" | "curate"; writeApproval: "always" | "never" }) => {
+    setMode(next.mode);
+    setApproval(next.writeApproval);
+    void setThreadModeAction(threadId, next.mode, next.writeApproval);
   };
+
+  const toggleApproval = () => setPermissions({ mode, writeApproval: approval === "always" ? "never" : "always" });
 
   return (
     <div className="flex h-full min-w-0 flex-1">
@@ -294,11 +298,10 @@ export function AgentChat({
           <ThreadConfigPanel
             threadId={threadId}
             areas={areas}
-            initialValue={{ mode, readAreaIds, writeAreaIds, instructions }}
-            onModeChange={(next) => {
-              setMode(next);
-              setApproval("always");
-            }}
+            initialValue={{ readAreaIds, writeAreaIds, instructions }}
+            mode={mode}
+            writeApproval={approval}
+            onPermissionsChange={setPermissions}
           />
         </aside>
       )}

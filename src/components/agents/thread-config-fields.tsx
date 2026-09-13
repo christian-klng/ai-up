@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { BookOpen, FileText, Loader2, Pencil, Search, X } from "lucide-react";
 import { searchEntriesAction } from "@/server/actions/agents";
 import { AreaIcon } from "@/components/knowledge/area-icon";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 export type AreaOption = { id: string; name: string; icon: string; purpose: string };
 export type EntryOption = { id: string; title: string; areaId: string; areaName: string };
 
 export type ThreadConfigValue = {
+  /** assist = read only, curate = may also write (shown as the "Write" permission) */
   mode: "assist" | "curate";
+  /** always = every write waits for the member's confirmation; only meaningful with write permission */
+  writeApproval: "always" | "never";
   readAreaIds: string[];
   writeAreaIds: string[];
   instructions: EntryOption[];
@@ -28,6 +33,7 @@ export type ThreadConfigValue = {
  */
 export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadConfigValue; onChange: (next: ThreadConfigValue) => void; areas: AreaOption[] }) {
   const t = useTranslations("agents");
+  const idPrefix = useId();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<EntryOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -71,22 +77,56 @@ export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadCo
   return (
     <>
       <section className="grid gap-2">
-        <h3 className="text-sm font-medium">{t("mode")}</h3>
-        <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
-          {(["assist", "curate"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={value.mode === m}
-              // Leaving curate mode drops the write permissions – nothing may be written in assist.
-              onClick={() => m !== value.mode && patch({ mode: m, writeAreaIds: m === "curate" ? value.writeAreaIds : [] })}
-              className={cn("rounded px-2 py-1.5 text-xs font-medium transition-colors", value.mode === m ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
-            >
-              {t(m === "assist" ? "modeAssist" : "modeCurate")}
-            </button>
-          ))}
+        <h3 className="text-sm font-medium">{t("rights")}</h3>
+        <div className="grid gap-2.5">
+          {/* Reading is what every agent does – shown for transparency, not as a choice. */}
+          <div className="flex items-start gap-2.5">
+            <Checkbox id={`${idPrefix}-read`} checked disabled className="mt-0.5" />
+            <div className="grid gap-0.5">
+              <Label htmlFor={`${idPrefix}-read`} className="text-sm font-normal">
+                {t("rightRead")}
+              </Label>
+              <p className="text-xs text-muted-foreground">{t("rightReadHint")}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <Checkbox
+              id={`${idPrefix}-write`}
+              checked={value.mode === "curate"}
+              onCheckedChange={(checked) => {
+                const write = checked === true;
+                // Taking write permission away drops the collections allowed for writing with it.
+                patch({ mode: write ? "curate" : "assist", writeAreaIds: write || value.writeAreaIds.length === 0 ? value.writeAreaIds : [] });
+              }}
+              className="mt-0.5"
+            />
+            <div className="grid gap-0.5">
+              <Label htmlFor={`${idPrefix}-write`} className="text-sm font-normal">
+                {t("rightWrite")}
+              </Label>
+              <p className="text-xs text-muted-foreground">{t("rightWriteHint")}</p>
+            </div>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">{t(value.mode === "assist" ? "modeAssistHint" : "modeCurateHint")}</p>
+      </section>
+
+      <section className="grid gap-2">
+        <h3 className="text-sm font-medium">{t("askFirst")}</h3>
+        <div className="flex items-start gap-2.5">
+          <Checkbox
+            id={`${idPrefix}-ask`}
+            checked={value.writeApproval === "always"}
+            disabled={value.mode !== "curate"}
+            onCheckedChange={(checked) => patch({ writeApproval: checked === true ? "always" : "never" })}
+            className="mt-0.5"
+          />
+          <div className="grid gap-0.5">
+            <Label htmlFor={`${idPrefix}-ask`} className="text-sm font-normal">
+              {t("askFirstLabel")}
+            </Label>
+            <p className="text-xs text-muted-foreground">{t(value.mode === "curate" ? "askFirstHint" : "askFirstNeedsWrite")}</p>
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-2">

@@ -24,7 +24,7 @@ export function AgentStart({ slug, agent, areas }: { slug: string; agent: { name
   const [configOpen, setConfigOpen] = useState(true);
   const [sending, startSend] = useTransition();
   const [budget, setBudget] = useState<{ budget: number; percent: number; exceeded: boolean } | null>(null);
-  const [config, setConfig] = useState<ThreadConfigValue>({ mode: "assist", readAreaIds: [], writeAreaIds: [], instructions: [] });
+  const [config, setConfig] = useState<ThreadConfigValue>({ mode: "assist", writeApproval: "always", readAreaIds: [], writeAreaIds: [], instructions: [] });
 
   useEffect(() => {
     void getBudgetStatusAction().then(setBudget);
@@ -36,6 +36,7 @@ export function AgentStart({ slug, agent, areas }: { slug: string; agent: { name
     startSend(async () => {
       const res = await startThreadAction(slug, body, {
         mode: config.mode,
+        writeApproval: config.writeApproval,
         readAreaIds: config.readAreaIds,
         writeAreaIds: config.writeAreaIds,
         instructionContentIds: config.instructions.map((i) => i.id),
@@ -46,7 +47,8 @@ export function AgentStart({ slug, agent, areas }: { slug: string; agent: { name
   };
 
   const summary = [
-    config.mode === "curate" ? t("modeCurate") : t("modeAssist"),
+    config.mode === "curate" ? t("summaryReadWrite") : t("summaryRead"),
+    ...(config.mode === "curate" && config.writeApproval === "never" ? [t("summaryNoQuestions")] : []),
     config.readAreaIds.length === 0 ? t("summaryAllCollections") : t("summaryCollections", { count: config.readAreaIds.length }),
     ...(config.instructions.length ? [t("summaryInstructions", { count: config.instructions.length })] : []),
   ].join(" · ");

@@ -239,12 +239,14 @@ stehen.
 
 Die von dir gewünschte Trennung wird ein **Arbeitsmodus je Thread**:
 
-| Modus | „Sammlungen pflegen“ (`curate`) | „Arbeiten“ (`assist`) |
+| Modus | „Schreiben“ (`curate`) | „Nur lesen“ (`assist`) |
 |---|---|---|
 | Werkzeuge | lesen **und** schreiben | nur lesen |
 | Ziel | Einträge anlegen/überarbeiten | Antwort, Text, Dokument im Chat |
 | Schreiben | Freigabe je Vorgang (abschaltbar) | – |
 | Ergebnis | Versionen in der Sammlung | Chat-Ausgabe, später Export |
+
+In der Oberfläche (seit 13.09.2026): Abschnitt **„Rechte“** mit den Checkboxen „Lesen“ (fest an) und „Schreiben“ statt eines Moduswechsels, dazu **„Rückfragen stellen“** als eigene Checkbox (Standard an) – derselbe Zustand wie der Icon-Umschalter im Chat-Kopf.
 
 ### Sammlungen als Konfiguration
 

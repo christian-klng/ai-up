@@ -47,6 +47,7 @@ export async function createThreadAction(agentSlug: string): Promise<{ ok: true;
 
 const configSchema = z.object({
   mode: z.enum(["assist", "curate"]),
+  writeApproval: z.enum(["always", "never"]),
   readAreaIds: z.array(z.string().uuid()).max(50),
   writeAreaIds: z.array(z.string().uuid()).max(50),
   instructionContentIds: z.array(z.string().uuid()).max(20),
@@ -60,7 +61,7 @@ const configSchema = z.object({
 export async function startThreadAction(
   agentSlug: string,
   body: string,
-  config: { mode: "assist" | "curate"; readAreaIds: string[]; writeAreaIds: string[]; instructionContentIds: string[] },
+  config: { mode: "assist" | "curate"; writeApproval: "always" | "never"; readAreaIds: string[]; writeAreaIds: string[]; instructionContentIds: string[] },
 ): Promise<{ ok: true; threadId: string } | { ok: false; reason: "invalid" | "quota" }> {
   const me = await assertUser();
   const agent = await getAgentBySlug(agentSlug);
@@ -76,7 +77,8 @@ export async function startThreadAction(
     await setThreadCollections(thread.id, cfg.readAreaIds, cfg.mode === "curate" ? cfg.writeAreaIds.filter((id) => cfg.readAreaIds.includes(id)) : []);
   }
   if (cfg.instructionContentIds.length) await setThreadInstructions(thread.id, cfg.instructionContentIds);
-  if (cfg.mode !== "assist") await setThreadMode(thread.id, cfg.mode, "always");
+  // Threads default to assist + always – only write when the member chose otherwise.
+  if (cfg.mode !== "assist" || cfg.writeApproval !== "always") await setThreadMode(thread.id, cfg.mode, cfg.writeApproval);
 
   const message = await addMessage({ threadId: thread.id, role: "user", content: parsedBody.data, status: "complete" });
   await publishToUser(me.id, "agent.message.saved", { threadId: thread.id, message: toDto(message) });
