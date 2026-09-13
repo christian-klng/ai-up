@@ -10,7 +10,9 @@ import { cancelAgentTurnAction, resolveToolCallAction, saveThreadConfigAction, s
 import { Markdown } from "@/components/content/markdown";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { ThreadConfigPanel } from "./thread-config-panel";
 import type { AreaOption, EntryOption, ThreadConfigValue } from "./thread-config-fields";
 import type { AgentMessageDto } from "@/lib/realtime-events";
@@ -56,6 +58,8 @@ export function AgentChat({
   const [running, setRunning] = useState(initialRunning);
   const [text, setText] = useState("");
   const [panelOpen, setPanelOpen] = useState(false);
+  // Below lg the panel has no room next to the chat – the same toggle then opens it as a sheet.
+  const wide = useMediaQuery("(min-width: 1024px)");
   const [mode, setMode] = useState(initialMode);
   const [approval, setApproval] = useState(initialApproval);
   const [selection, setSelection] = useState<Selection>({ readAreaIds, writeAreaIds, instructions });
@@ -245,7 +249,12 @@ export function AgentChat({
           {visible.length === 0 && (
             <div className="mx-auto max-w-md py-10 text-center text-sm text-muted-foreground">
               <p>{t("emptyThread")}</p>
-              <p className="mt-1">{t("emptyThreadHint")}</p>
+              <p className="mt-1">
+                {t("emptyThreadHint")}{" "}
+                <button type="button" onClick={() => setPanelOpen(true)} className="underline underline-offset-2 hover:text-foreground">
+                  {t("emptyThreadOpenConfig")}
+                </button>
+              </p>
             </div>
           )}
           <ol className="mx-auto grid max-w-3xl gap-4">
@@ -352,11 +361,17 @@ export function AgentChat({
         </form>
       </div>
 
-      {panelOpen && (
-        <aside className="hidden w-80 shrink-0 border-l lg:block">
+      {panelOpen && wide && (
+        <aside className="w-80 shrink-0 border-l">
           <ThreadConfigPanel threadId={threadId} areas={areas} value={{ ...selection, mode, writeApproval: approval }} onChange={changeConfig} saveState={saveState} />
         </aside>
       )}
+      <Sheet open={panelOpen && !wide} onOpenChange={setPanelOpen}>
+        <SheetContent side="right" className="w-full max-w-sm p-0 sm:max-w-sm">
+          <SheetTitle className="sr-only">{t("configTitle")}</SheetTitle>
+          <ThreadConfigPanel threadId={threadId} areas={areas} value={{ ...selection, mode, writeApproval: approval }} onChange={changeConfig} saveState={saveState} />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

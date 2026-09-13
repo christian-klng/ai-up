@@ -251,7 +251,12 @@ In der Oberfläche (seit 13.09.2026): Abschnitt **„Rechte“** mit den Checkbo
 ### Sammlungen als Konfiguration
 
 Zwei getrennte Einstellungen im rechten Panel – das ist der Kern deiner Idee und verdient die
-Unterscheidung:
+Unterscheidung. *Seit 13.09.2026 heißen sie in der Oberfläche **„Handlungsradius"** (a) und
+**„Anweisungen"** (b); beide nutzen dasselbe Baum-Bauteil `collection-tree.tsx` (Sammlungen als
+aufklappbare Ordner, Einträge werden beim Aufklappen nachgeladen, höchstens 200 je Sammlung). Im
+Handlungsradius sind Ordner wählbar (Haken = Lesen, „Bearbeiten" = Schreiben), Einträge nur sichtbar;
+bei den Anweisungen sind Einträge wählbar, Ordner gruppieren nur, die Suche filtert den Baum.
+Eintrags-genaue Freigabe im Handlungsradius ist ein späterer Schritt (Schema + Werkzeug-Filter).*
 
 **a) Zugriff (auf Sammlungsebene).** Je ausgewählte Sammlung `read` oder `write`. Bestimmt, was die
 Werkzeuge sehen und anfassen dürfen. `write` nur im Curate-Modus.
@@ -266,7 +271,11 @@ denen genau einer die Anweisung ist. Für den Nutzer wird das ein Auswahldialog 
 `listContents({ query })`, gruppiert nach Sammlung – die vorhandene ILIKE-Suche reicht dafür.
 
 Budget: Instruktionen zusammen auf 40.000 Zeichen gedeckelt, Reihenfolge frei sortierbar. Wird der
-Deckel überschritten, zeigt das Panel es an, statt still zu kürzen.
+Deckel überschritten, zeigt das Panel es an, statt still zu kürzen. *Seit 13.09.2026:* Das Panel zeigt
+je Eintrag die Zeichenzahl und einen Balken für die Summe (rot bei Überschreitung); das Maß liegt in
+`src/lib/agent-instructions.ts` und ist dasselbe, das `buildSystemPrompt` im Worker anlegt. Unterhalb
+von 1024 px öffnet der Konfigurations-Knopf das Panel als Sheet; „Schreiben" ohne freigegebene
+Sammlung zeigt einen Hinweis, weil der Haken sonst wirkungslos wäre.
 
 **Ohne Auswahl** greift ein mitgelieferter Standard-Systemprompt (siehe Abschnitt 7), damit ein frischer
 Thread sofort brauchbar ist.

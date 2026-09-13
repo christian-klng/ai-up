@@ -8,6 +8,7 @@ import { toDto } from "@/server/agents/history";
 import { getOwnedThread, getThreadConfig, hasRunningTurn, listMessages } from "@/server/agents/threads";
 import { loadInstructionDocs } from "@/server/agents/context";
 import { AgentChat } from "@/components/agents/agent-chat";
+import { instructionBlockChars } from "@/lib/agent-instructions";
 
 export default async function AgentThreadPage({ params }: PageProps<"/agents/[slug]/[threadId]">) {
   const me = await requireUser();
@@ -32,12 +33,12 @@ export default async function AgentThreadPage({ params }: PageProps<"/agents/[sl
       me={{ name: me.name, avatarMediaId: me.avatarMediaId }}
       initialMessages={messages.map(toDto)}
       initialRunning={running}
-      areas={areas.map((a) => ({ id: a.id, name: a.name, icon: a.icon, purpose: a.purpose }))}
+      areas={areas.map((a) => ({ id: a.id, name: a.name, icon: a.icon, purpose: a.purpose, entryCount: a.contentCount }))}
       readAreaIds={config.readAreaIds}
       writeAreaIds={config.writeAreaIds}
       mode={thread.mode}
       writeApproval={thread.writeApproval}
-      instructions={docs.map((d) => ({ id: d.id, title: d.title, areaId: d.areaId, areaName: areaNames.get(d.areaId) ?? "" }))}
+      instructions={docs.map((d) => ({ id: d.id, title: d.title, areaId: d.areaId, areaName: areaNames.get(d.areaId) ?? "", chars: instructionBlockChars(d.title, d.body) }))}
       toolLabels={Object.fromEntries(listTools("write").map((tool) => [tool.name, tool.labels[locale as "de" | "en"] ?? tool.labels.en]))}
     />
   );

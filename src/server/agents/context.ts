@@ -4,6 +4,7 @@ import { contentVersions, contents } from "@/server/db/schema";
 import { DEFAULT_AGENT_SYSTEM_PROMPT } from "@/server/domain/agents";
 import { loadAppSettings } from "@/server/domain/settings";
 import type { AiAgent } from "@/server/db/schema";
+import { MAX_INSTRUCTION_CHARS, instructionBlockChars } from "@/lib/agent-instructions";
 
 /**
  * Builds the system prompt of a turn: the agent's base prompt (or the shipped default) plus the
@@ -13,7 +14,7 @@ import type { AiAgent } from "@/server/db/schema";
  */
 
 /** All instruction entries together. Beyond this the prompt starts crowding out the conversation. */
-export const MAX_INSTRUCTION_CHARS = 40_000;
+export { MAX_INSTRUCTION_CHARS };
 
 export type InstructionDoc = { id: string; title: string; body: string; areaId: string };
 
@@ -50,12 +51,14 @@ export async function buildSystemPrompt(agent: AiAgent, instructionContentIds: s
   const used: InstructionDoc[] = [];
   for (const doc of docs) {
     const block = `### ${doc.title}\n\n${doc.body}`;
-    if (block.length > budget) {
+    // Same measure as the panel shows (src/lib/agent-instructions.ts) – the two must not drift apart.
+    const size = instructionBlockChars(doc.title, doc.body);
+    if (size > budget) {
       truncated = true;
       // A half-cut instruction is worse than a missing one – skip it and say so in the prompt.
       continue;
     }
-    budget -= block.length;
+    budget -= size;
     used.push(doc);
     parts.push(block, "");
   }

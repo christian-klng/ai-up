@@ -14,7 +14,7 @@ export default async function AgentStartPage({ params }: PageProps<"/agents/[slu
     <AgentStart
       slug={agent.slug}
       agent={{ name: agent.name, avatarMediaId: agent.avatarMediaId, description: agent.description }}
-      areas={areas.map((a) => ({ id: a.id, name: a.name, icon: a.icon, purpose: a.purpose }))}
+      areas={areas.map((a) => ({ id: a.id, name: a.name, icon: a.icon, purpose: a.purpose, entryCount: a.contentCount }))}
     />
   );
 }

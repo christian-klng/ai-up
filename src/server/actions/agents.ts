@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertUser } from "@/server/auth/session";
 import { getAgentBySlug } from "@/server/domain/agents";
-import { listAreas, listContents } from "@/server/domain/knowledge";
+import { getAreaById, listAreas, listContents } from "@/server/domain/knowledge";
 import { requestCancel, resolveToolCall } from "@/server/agents/loop";
 import { getBudgetStatus } from "@/server/agents/usage";
 import { toDto } from "@/server/agents/history";
@@ -25,6 +25,8 @@ import { enqueueAgentTurn } from "@/server/workflows/queue";
 import { publishToUser } from "@/server/realtime/publish";
 import { logger } from "@/server/logger";
 import type { AgentMessageDto } from "@/lib/realtime-events";
+import { instructionBlockChars } from "@/lib/agent-instructions";
+import { TREE_ENTRY_LIMIT } from "@/lib/agents";
 
 const sendSchema = z.string().trim().min(1).max(20_000);
 
@@ -197,11 +199,21 @@ export async function getThreadConfigAction(threadId: string) {
   return getThreadConfig(owned.thread.id);
 }
 
+/** Configuration tree: the entries of one collection, loaded when the member unfolds it. */
+export async function listCollectionEntriesAction(areaId: string): Promise<{ id: string; title: string; areaId: string; areaName: string; chars: number }[]> {
+  await assertUser();
+  const id = z.string().uuid().parse(areaId);
+  const [area, items] = await Promise.all([getAreaById(id), listContents({ areaId: id, limit: TREE_ENTRY_LIMIT })]);
+  if (!area) return [];
+  return items.map((c) => ({ id: c.id, title: c.title, areaId: c.areaId, areaName: area.name, chars: instructionBlockChars(c.title, c.version?.bodyMarkdown ?? "") }));
+}
+
 /** Entry picker in the configuration panel: search across the collections, grouped by the caller. */
-export async function searchEntriesAction(query: string): Promise<{ id: string; title: string; areaId: string; areaName: string }[]> {
+export async function searchEntriesAction(query: string): Promise<{ id: string; title: string; areaId: string; areaName: string; chars: number }[]> {
   await assertUser();
   const q = z.string().trim().max(200).parse(query);
   const [areas, items] = await Promise.all([listAreas(), listContents({ query: q || undefined, limit: 40 })]);
   const names = new Map(areas.map((a) => [a.id, a.name]));
-  return items.map((c) => ({ id: c.id, title: c.title, areaId: c.areaId, areaName: names.get(c.areaId) ?? "" }));
+  // `chars` is what the entry costs in the instruction budget – the panel sums it up before anything is sent.
+  return items.map((c) => ({ id: c.id, title: c.title, areaId: c.areaId, areaName: names.get(c.areaId) ?? "", chars: instructionBlockChars(c.title, c.version?.bodyMarkdown ?? "") }));
 }

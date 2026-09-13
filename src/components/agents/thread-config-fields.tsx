@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { BookOpen, FileText, Loader2, Pencil, Search, X } from "lucide-react";
-import { searchEntriesAction } from "@/server/actions/agents";
-import { AreaIcon } from "@/components/knowledge/area-icon";
+import { AlertTriangle, BookOpen, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { instructionBudget } from "@/lib/agent-instructions";
 import { cn } from "@/lib/utils";
+import { CollectionTree, type AreaOption, type EntryOption } from "./collection-tree";
 
-export type AreaOption = { id: string; name: string; icon: string; purpose: string };
-export type EntryOption = { id: string; title: string; areaId: string; areaName: string };
+export type { AreaOption, EntryOption };
 
 export type ThreadConfigValue = {
   /** assist = read only, curate = may also write (shown as the "Write" permission) */
@@ -24,43 +22,25 @@ export type ThreadConfigValue = {
 };
 
 /**
- * What the agent may read and which entries steer it – fully controlled, so the same fields serve
- * an existing thread (saved through the panel) and a conversation that does not exist yet
- * (the start screen keeps the value until the first message creates the thread).
+ * Permissions, scope and instructions of a thread – fully controlled, so the same fields serve an
+ * existing thread (saved through the panel) and a conversation that does not exist yet (the start
+ * screen keeps the value until the first message creates the thread).
  *
- * Access is chosen per collection, instructions per entry: a collection quickly holds fifty
- * entries of which exactly one is the instruction (see docs/ki-agenten.md, section 2).
+ * Scope ("Handlungsradius") is chosen per collection: it decides what the tools may touch, the
+ * agent reads there on demand. Instructions are chosen per entry: their markdown sits in the
+ * system prompt of every turn (see docs/ki-agenten.md, section 2). Both use the same tree.
  */
 export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadConfigValue; onChange: (next: ThreadConfigValue) => void; areas: AreaOption[] }) {
   const t = useTranslations("agents");
   const idPrefix = useId();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<EntryOption[]>([]);
-  const [searching, setSearching] = useState(false);
 
-  const term = query.trim();
-  // Results are only rendered while the term is long enough, so nothing has to be cleared here.
-  const showResults = term.length >= 2;
-
-  useEffect(() => {
-    if (term.length < 2) return;
-    // Debounced so typing does not fire a query per keystroke.
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        setResults(await searchEntriesAction(term));
-      } finally {
-        setSearching(false);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [term]);
-
-  const chosen = useMemo(() => new Set(value.instructions.map((i) => i.id)), [value.instructions]);
+  const budget = useMemo(() => instructionBudget(value.instructions.map((i) => i.chars)), [value.instructions]);
+  // Writing needs an explicit per-collection grant – "write" without one is a switch that does nothing.
+  const writeWithoutTarget = value.mode === "curate" && value.writeAreaIds.length === 0;
 
   const patch = (p: Partial<ThreadConfigValue>) => onChange({ ...value, ...p });
 
-  const toggleArea = (id: string) => {
+  const toggleRead = (id: string) => {
     const on = value.readAreaIds.includes(id);
     patch({
       readAreaIds: on ? value.readAreaIds.filter((x) => x !== id) : [...value.readAreaIds, id],
@@ -69,10 +49,8 @@ export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadCo
     });
   };
   const toggleWrite = (id: string) => patch({ writeAreaIds: value.writeAreaIds.includes(id) ? value.writeAreaIds.filter((x) => x !== id) : [...value.writeAreaIds, id] });
-  const addInstruction = (entry: EntryOption) => {
-    if (!value.instructions.some((i) => i.id === entry.id)) patch({ instructions: [...value.instructions, entry] });
-    setQuery("");
-  };
+  const toggleEntry = (entry: EntryOption) =>
+    patch({ instructions: value.instructions.some((i) => i.id === entry.id) ? value.instructions.filter((i) => i.id !== entry.id) : [...value.instructions, entry] });
 
   return (
     <>
@@ -131,35 +109,18 @@ export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadCo
 
       <section className="grid gap-2">
         <h3 className="flex items-center gap-2 text-sm font-medium">
-          <BookOpen className="size-4 opacity-70" /> {t("collections")}
+          <BookOpen className="size-4 opacity-70" /> {t("scope")}
         </h3>
-        <p className="text-xs text-muted-foreground">{value.readAreaIds.length === 0 ? t("collectionsAllHint") : t("collectionsHint")}</p>
-        <ul className="grid gap-1">
-          {areas.map((a) => {
-            const on = value.readAreaIds.includes(a.id);
-            const writable = value.writeAreaIds.includes(a.id);
-            return (
-              <li key={a.id} className={cn("flex items-center gap-1 rounded-md border transition-colors", on ? "border-primary/40 bg-primary/5" : "border-transparent")}>
-                <button type="button" onClick={() => toggleArea(a.id)} aria-pressed={on} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-accent/40">
-                  <AreaIcon icon={a.icon} className={cn("size-4 shrink-0", on ? "text-primary" : "opacity-60")} aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                </button>
-                {value.mode === "curate" && on && (
-                  <button
-                    type="button"
-                    onClick={() => toggleWrite(a.id)}
-                    aria-pressed={writable}
-                    title={t("mayEdit")}
-                    className={cn("mr-1 flex items-center gap-1 rounded px-1.5 py-1 text-[11px] transition-colors", writable ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent")}
-                  >
-                    <Pencil className="size-3" aria-hidden /> {t("mayEdit")}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-          {areas.length === 0 && <li className="text-xs text-muted-foreground">{t("noCollections")}</li>}
-        </ul>
+        <p className="text-xs text-muted-foreground">
+          {t("scopeHint")} {value.readAreaIds.length === 0 ? t("scopeAllHint") : t("scopeSelectedHint")}
+        </p>
+        {writeWithoutTarget && (
+          <p role="status" className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>{t(value.readAreaIds.length === 0 ? "writeNeedsSelection" : "writeNeedsGrant")}</span>
+          </p>
+        )}
+        <CollectionTree mode="scope" areas={areas} readAreaIds={value.readAreaIds} writeAreaIds={value.writeAreaIds} canWrite={value.mode === "curate"} onToggleRead={toggleRead} onToggleWrite={toggleWrite} />
       </section>
 
       <section className="grid gap-2">
@@ -167,42 +128,17 @@ export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadCo
           <FileText className="size-4 opacity-70" /> {t("instructions")}
         </h3>
         <p className="text-xs text-muted-foreground">{t("instructionsHint")}</p>
+        <CollectionTree mode="instructions" areas={areas} selected={value.instructions} onToggleEntry={toggleEntry} />
         {value.instructions.length > 0 && (
-          <ul className="grid gap-1">
-            {value.instructions.map((i) => (
-              <li key={i.id} className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-sm">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{i.title}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">{i.areaName}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => patch({ instructions: value.instructions.filter((x) => x.id !== i.id) })}
-                  aria-label={t("removeInstruction")}
-                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("searchEntries")} className="pl-8" />
-          {searching && <Loader2 className="absolute right-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-hidden />}
-        </div>
-        {showResults && results.length > 0 && (
-          <ul className="grid max-h-56 gap-0.5 overflow-y-auto rounded-md border p-1">
-            {results.map((r) => (
-              <li key={r.id}>
-                <button type="button" disabled={chosen.has(r.id)} onClick={() => addInstruction(r)} className="flex w-full flex-col rounded px-2 py-1.5 text-left text-sm hover:bg-accent/60 disabled:opacity-40">
-                  <span className="truncate">{r.title}</span>
-                  <span className="truncate text-[11px] text-muted-foreground">{r.areaName}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="grid gap-1">
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={budget.percent} aria-valuemin={0} aria-valuemax={100} aria-label={t("instructionBudget")}>
+              <div className={cn("h-full rounded-full transition-all", budget.exceeded ? "bg-destructive" : budget.percent >= 80 ? "bg-amber-500" : "bg-primary")} style={{ width: `${budget.percent}%` }} />
+            </div>
+            <p className={cn("text-[11px] tabular-nums", budget.exceeded ? "text-destructive" : "text-muted-foreground")}>
+              {t("instructionBudgetUsed", { used: budget.used, max: budget.max })}
+              {budget.exceeded && ` – ${t("instructionBudgetExceeded")}`}
+            </p>
+          </div>
         )}
       </section>
     </>
