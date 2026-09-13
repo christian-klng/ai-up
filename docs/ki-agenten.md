@@ -206,7 +206,7 @@ für alle sichtbar (immerhin versioniert und wiederherstellbar).
 
 **Entscheidung (06.09.2026):** Statt eines Draft-Zustands (großer Eingriff ins Datenmodell) eine
 **Freigabe vor dem Schreiben** im Chat – wie die Berechtigungsabfrage in Claude Code, umschaltbar über
-die Checkbox „Rückfragen stellen“ in der Konfiguration (Abschnitt 7, Punkt 2). Der Loop hält an, schreibt den geplanten Tool-Call als
+die Voreinstellung „Arbeitsweise“ in der Konfiguration (Abschnitt 7, Punkt 2; „Autopilot“ schaltet die Rückfrage ab). Der Loop hält an, schreibt den geplanten Tool-Call als
 Nachricht mit Status `awaiting_approval` in den Thread, der Turn endet; die Zustimmung reiht einen
 Folge-Job ein. Das vermeidet blockierende Worker-Jobs und ist konzeptionell nah am bestehenden
 `ask_user`/`questions`.
@@ -246,7 +246,7 @@ Die von dir gewünschte Trennung wird ein **Arbeitsmodus je Thread**:
 | Schreiben | Freigabe je Vorgang (abschaltbar) | – |
 | Ergebnis | Versionen in der Sammlung | Chat-Ausgabe, später Export |
 
-In der Oberfläche (seit 13.09.2026): Abschnitt **„Rechte“** mit den Checkboxen „Lesen“ (fest an) und „Schreiben“ statt eines Moduswechsels, dazu **„Rückfragen stellen“** als eigene Checkbox (Standard an) – jede Änderung speichert sofort, einen Speichern-Knopf und das frühere Icon im Chat-Kopf gibt es nicht mehr.
+In der Oberfläche (seit 13.09.2026): Abschnitt **„Arbeitsweise“** mit drei Voreinstellungen statt Einzel-Checkboxen – **„Fragen & Recherche“** (`assist`), **„Einträge pflegen“** (`curate`, Rückfrage vor jedem Schreibvorgang, Standard für Schreiben) und **„Autopilot“** (`curate` ohne Rückfragen, mit Warnhinweis auf `MAX_WRITES_PER_TURN`). Die drei decken alle sinnvollen Kombinationen von `mode` und `write_approval` ab (`assist` fragt nie). Jede Änderung speichert sofort, einen Speichern-Knopf und das frühere Icon im Chat-Kopf gibt es nicht mehr.
 
 ### Sammlungen als Konfiguration
 
@@ -437,7 +437,7 @@ echten Betrieb lässt sich kein sinnvoller Deckel wählen.
 1. **Messenger-Bot wird empfangsseitig.** Kein Senden an den Bot mehr, Unterhaltungen mit Mitgliedern
    unverändert. Trigger `bot.message.received` entfällt (keine Workflows in Produktion betroffen).
    Details in 1.1.
-2. **Freigabe beim Schreiben: Icon-Umschalter im Thread.** *(Am 13.09.2026 ersetzt durch die Checkbox „Rückfragen stellen“ in der Konfiguration; das Icon im Chat-Kopf ist entfallen.)* `agent_threads.write_approval` bleibt
+2. **Freigabe beim Schreiben: Icon-Umschalter im Thread.** *(Am 13.09.2026 ersetzt durch die Voreinstellungen „Arbeitsweise“ in der Konfiguration – „Autopilot“ = ohne Rückfragen; das Icon im Chat-Kopf ist entfallen.)* `agent_threads.write_approval` bleibt
    Standard `always`; umgeschaltet wird nicht im rechten Panel, sondern über ein kleines Icon im
    Chat-Kopf – zwei Zustände, sichtbar ohne Klick:
    - `ShieldCheck` „Immer nachfragen“ (Standard)

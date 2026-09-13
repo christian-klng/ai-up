@@ -4,3 +4,5 @@ export const SYSTEM_AGENT_ID = "b0000000-0000-4000-8000-000000000001";
 export const SYSTEM_AGENT_SLUG = "assistent";
 /** Entries the configuration tree loads per collection; beyond that the search is the way in. */
 export const TREE_ENTRY_LIMIT = 200;
+/** Writes per answer. A single chat sentence must not be able to rewrite a whole collection. */
+export const MAX_WRITES_PER_TURN = 10;

@@ -9,7 +9,7 @@ import { getBudgetStatusAction, startThreadAction } from "@/server/actions/agent
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { QuotaBar, ThreadConfigFields, type AreaOption, type ThreadConfigValue } from "./thread-config-fields";
+import { QuotaBar, ThreadConfigFields, presetOf, type AreaOption, type ThreadConfigValue } from "./thread-config-fields";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,8 +47,7 @@ export function AgentStart({ slug, agent, areas }: { slug: string; agent: { name
   };
 
   const summary = [
-    config.mode === "curate" ? t("summaryReadWrite") : t("summaryRead"),
-    ...(config.mode === "curate" && config.writeApproval === "never" ? [t("summaryNoQuestions")] : []),
+    t(`preset_${presetOf(config)}`),
     config.readAreaIds.length === 0 ? t("summaryAllCollections") : t("summaryCollections", { count: config.readAreaIds.length }),
     ...(config.instructions.length ? [t("summaryInstructions", { count: config.instructions.length })] : []),
   ].join(" · ");

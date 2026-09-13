@@ -5,6 +5,7 @@ import { buildStructuredVersionInput } from "@/server/domain/structured-entries"
 import { describeStructure } from "./describe";
 import type { EventOrigin } from "@/server/events/bus";
 import type { ToolDefinition } from "@/server/llm/client";
+import { MAX_WRITES_PER_TURN } from "@/lib/agents";
 
 /**
  * Tools the agent may call. Same shape as the workflow actions registry: zod schema, English
@@ -31,8 +32,7 @@ export type AgentToolContext = {
   written: Set<string>;
 };
 
-/** Writes per turn. A single chat sentence must not be able to rewrite a whole collection. */
-export const MAX_WRITES_PER_TURN = 10;
+export { MAX_WRITES_PER_TURN };
 
 export function agentOrigin(ctx: AgentToolContext): EventOrigin {
   return { kind: "agent", threadId: ctx.threadId, agentId: ctx.agentId, userId: ctx.userId };

@@ -161,7 +161,7 @@ export function CollectionTree(props: Props) {
                 {chevron}
                 {props.mode === "scope" ? (
                   <>
-                    <Checkbox id={`${idPrefix}-${area.id}`} checked={read} onCheckedChange={() => props.onToggleRead(area.id)} aria-label={t("rightRead")} />
+                    <Checkbox id={`${idPrefix}-${area.id}`} checked={read} onCheckedChange={() => props.onToggleRead(area.id)} aria-label={t("readAccess")} />
                     <label htmlFor={`${idPrefix}-${area.id}`} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-1.5 pl-1 text-sm">
                       {label}
                     </label>

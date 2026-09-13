@@ -1,15 +1,33 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, BookOpen, FileText } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { AlertTriangle, BookOpen, FileText, PencilLine, Search, Zap } from "lucide-react";
 import { instructionBudget } from "@/lib/agent-instructions";
+import { MAX_WRITES_PER_TURN } from "@/lib/agents";
 import { cn } from "@/lib/utils";
 import { CollectionTree, type AreaOption, type EntryOption } from "./collection-tree";
 
 export type { AreaOption, EntryOption };
+
+/**
+ * The three ways a thread can work. They cover every meaningful combination of `mode` and
+ * `writeApproval` (read-only never asks), so the panel offers them instead of separate checkboxes.
+ */
+export type ThreadPreset = "research" | "curate" | "autopilot";
+
+export const PRESETS: { id: ThreadPreset; mode: "assist" | "curate"; writeApproval: "always" | "never" }[] = [
+  { id: "research", mode: "assist", writeApproval: "always" },
+  { id: "curate", mode: "curate", writeApproval: "always" },
+  { id: "autopilot", mode: "curate", writeApproval: "never" },
+];
+
+const PRESET_ICONS: Record<ThreadPreset, typeof Search> = { research: Search, curate: PencilLine, autopilot: Zap };
+
+export function presetOf(value: Pick<ThreadConfigValue, "mode" | "writeApproval">): ThreadPreset {
+  if (value.mode !== "curate") return "research";
+  return value.writeApproval === "never" ? "autopilot" : "curate";
+}
 
 export type ThreadConfigValue = {
   /** assist = read only, curate = may also write (shown as the "Write" permission) */
@@ -22,7 +40,7 @@ export type ThreadConfigValue = {
 };
 
 /**
- * Permissions, scope and instructions of a thread – fully controlled, so the same fields serve an
+ * Preset (how the thread works), scope and instructions of a thread – fully controlled, so the same fields serve an
  * existing thread (saved through the panel) and a conversation that does not exist yet (the start
  * screen keeps the value until the first message creates the thread).
  *
@@ -32,13 +50,17 @@ export type ThreadConfigValue = {
  */
 export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadConfigValue; onChange: (next: ThreadConfigValue) => void; areas: AreaOption[] }) {
   const t = useTranslations("agents");
-  const idPrefix = useId();
+  const current = presetOf(value);
 
   const budget = useMemo(() => instructionBudget(value.instructions.map((i) => i.chars)), [value.instructions]);
   // Writing needs an explicit per-collection grant – "write" without one is a switch that does nothing.
   const writeWithoutTarget = value.mode === "curate" && value.writeAreaIds.length === 0;
 
   const patch = (p: Partial<ThreadConfigValue>) => onChange({ ...value, ...p });
+
+  // A preset is just mode + approval. Leaving "write" behind takes the per-collection grants with it.
+  const applyPreset = (preset: (typeof PRESETS)[number]) =>
+    patch({ mode: preset.mode, writeApproval: preset.writeApproval, writeAreaIds: preset.mode === "curate" ? value.writeAreaIds : [] });
 
   const toggleRead = (id: string) => {
     const on = value.readAreaIds.includes(id);
@@ -55,56 +77,38 @@ export function ThreadConfigFields({ value, onChange, areas }: { value: ThreadCo
   return (
     <>
       <section className="grid gap-2">
-        <h3 className="text-sm font-medium">{t("rights")}</h3>
-        <div className="grid gap-2.5">
-          {/* Reading is what every agent does – shown for transparency, not as a choice. */}
-          <div className="flex items-start gap-2.5">
-            <Checkbox id={`${idPrefix}-read`} checked disabled className="mt-0.5" />
-            <div className="grid gap-0.5">
-              <Label htmlFor={`${idPrefix}-read`} className="text-sm font-normal">
-                {t("rightRead")}
-              </Label>
-              <p className="text-xs text-muted-foreground">{t("rightReadHint")}</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <Checkbox
-              id={`${idPrefix}-write`}
-              checked={value.mode === "curate"}
-              onCheckedChange={(checked) => {
-                const write = checked === true;
-                // Taking write permission away drops the collections allowed for writing with it.
-                patch({ mode: write ? "curate" : "assist", writeAreaIds: write || value.writeAreaIds.length === 0 ? value.writeAreaIds : [] });
-              }}
-              className="mt-0.5"
-            />
-            <div className="grid gap-0.5">
-              <Label htmlFor={`${idPrefix}-write`} className="text-sm font-normal">
-                {t("rightWrite")}
-              </Label>
-              <p className="text-xs text-muted-foreground">{t("rightWriteHint")}</p>
-            </div>
-          </div>
+        <h3 className="text-sm font-medium">{t("presetTitle")}</h3>
+        <div role="radiogroup" aria-label={t("presetTitle")} className="grid gap-1.5">
+          {PRESETS.map((preset) => {
+            const Icon = PRESET_ICONS[preset.id];
+            const on = current === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => applyPreset(preset)}
+                className={cn(
+                  "flex items-start gap-2.5 rounded-md border px-3 py-2 text-left transition-colors",
+                  on ? "border-primary/50 bg-primary/5" : "border-border hover:bg-accent/40",
+                )}
+              >
+                <Icon className={cn("mt-0.5 size-4 shrink-0", on ? "text-primary" : "opacity-60")} aria-hidden />
+                <span className="grid min-w-0 gap-0.5">
+                  <span className="text-sm">{t(`preset_${preset.id}`)}</span>
+                  <span className="text-xs text-muted-foreground">{t(`preset_${preset.id}_hint`)}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </section>
-
-      <section className="grid gap-2">
-        <h3 className="text-sm font-medium">{t("askFirst")}</h3>
-        <div className="flex items-start gap-2.5">
-          <Checkbox
-            id={`${idPrefix}-ask`}
-            checked={value.writeApproval === "always"}
-            disabled={value.mode !== "curate"}
-            onCheckedChange={(checked) => patch({ writeApproval: checked === true ? "always" : "never" })}
-            className="mt-0.5"
-          />
-          <div className="grid gap-0.5">
-            <Label htmlFor={`${idPrefix}-ask`} className="text-sm font-normal">
-              {t("askFirstLabel")}
-            </Label>
-            <p className="text-xs text-muted-foreground">{t(value.mode === "curate" ? "askFirstHint" : "askFirstNeedsWrite")}</p>
-          </div>
-        </div>
+        {current === "autopilot" && (
+          <p role="status" className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>{t("autopilotWarning", { max: MAX_WRITES_PER_TURN })}</span>
+          </p>
+        )}
       </section>
 
       <section className="grid gap-2">
