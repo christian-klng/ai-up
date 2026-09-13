@@ -5,6 +5,7 @@ import type { TemplateEvaluation } from "@/lib/structures/evaluation";
 import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
 import {
   boolean,
+  type AnyPgColumn,
   index,
   integer,
   jsonb,
@@ -58,9 +59,13 @@ export const users = pgTable(
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     /** System bot (workflow messages); hidden from member lists, cannot log in */
     isBot: boolean("is_bot").notNull().default(false),
+    /** Meeting invite link this account was created through (null = regular registration) */
+    invitedViaId: uuid("invited_via_id").references((): AnyPgColumn => meetingInvites.id, { onDelete: "set null" }),
+    /** Set once the invited member has been taken to the meeting page (one-time redirect from /home) */
+    inviteLandedAt: timestamp("invite_landed_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("users_email_idx").on(t.email), index("users_status_idx").on(t.status)],
+  (t) => [uniqueIndex("users_email_idx").on(t.email), index("users_status_idx").on(t.status), index("users_invited_via_idx").on(t.invitedViaId)],
 );
 
 export const sessions = pgTable(
@@ -821,6 +826,31 @@ export const meetingRecordings = pgTable(
   (t) => [index("meeting_recordings_meeting_idx").on(t.meetingId, t.createdAt)],
 );
 
+/**
+ * Shareable invite links for a meeting (admins only). Anyone holding the link may register and is
+ * activated immediately – the admin vouches by creating the link. Several links per meeting allow
+ * tracking which channel a member came through (users.invitedViaId).
+ */
+export const meetingInvites = pgTable(
+  "meeting_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    /** URL-safe random secret; the public URL is /invite/<token> */
+    token: text("token").notNull(),
+    /** free label, e.g. the channel the link was sent through ("Newsletter", "LinkedIn") */
+    label: text("label").notNull(),
+    /** number of accounts created through this link */
+    useCount: integer("use_count").notNull().default(0),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("meeting_invites_token_idx").on(t.token), index("meeting_invites_meeting_idx").on(t.meetingId, t.createdAt)],
+);
+
 // ---------------------------------------------------------------------------
 // Integrations (LiveKit, later Nextcloud …): public config as JSON + encrypted secrets
 // ---------------------------------------------------------------------------
@@ -1095,6 +1125,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   notifications: many(notifications),
   avatar: one(mediaFiles, { fields: [users.avatarMediaId], references: [mediaFiles.id] }),
+  invitedVia: one(meetingInvites, { fields: [users.invitedViaId], references: [meetingInvites.id] }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -1140,6 +1171,7 @@ export const meetingsRelations = relations(meetings, ({ one, many }) => ({
   protocolVersions: many(meetingProtocolVersions),
   participants: many(meetingParticipants),
   recordings: many(meetingRecordings),
+  invites: many(meetingInvites),
 }));
 export const meetingRecordingsRelations = relations(meetingRecordings, ({ one }) => ({
   meeting: one(meetings, { fields: [meetingRecordings.meetingId], references: [meetings.id] }),
@@ -1151,6 +1183,11 @@ export const meetingProtocolVersionsRelations = relations(meetingProtocolVersion
 export const meetingParticipantsRelations = relations(meetingParticipants, ({ one }) => ({
   meeting: one(meetings, { fields: [meetingParticipants.meetingId], references: [meetings.id] }),
   user: one(users, { fields: [meetingParticipants.userId], references: [users.id] }),
+}));
+export const meetingInvitesRelations = relations(meetingInvites, ({ one, many }) => ({
+  meeting: one(meetings, { fields: [meetingInvites.meetingId], references: [meetings.id] }),
+  creator: one(users, { fields: [meetingInvites.createdBy], references: [users.id] }),
+  members: many(users),
 }));
 
 export const messagesRelations = relations(messages, ({ one }) => ({
@@ -1188,6 +1225,7 @@ export type QuestionResponse = typeof questionResponses.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type MeetingSpace = typeof meetingSpaces.$inferSelect;
 export type Meeting = typeof meetings.$inferSelect;
+export type MeetingInvite = typeof meetingInvites.$inferSelect;
 export type MeetingKind = Meeting["kind"];
 export type MeetingStatus = Meeting["status"];
 export type MeetingProtocolVersion = typeof meetingProtocolVersions.$inferSelect;

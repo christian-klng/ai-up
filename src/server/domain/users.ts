@@ -8,6 +8,7 @@ import { logger } from "@/server/logger";
 import { sendMail } from "@/server/mail/mailer";
 import { accountApprovedMail, pendingMemberAdminMail } from "@/server/mail/templates";
 import { generateRandomAvatar } from "@/server/media/avatars";
+import { countInviteUse } from "./invites";
 import { createNotifications } from "./notifications";
 import { getAppSettings } from "./settings";
 
@@ -27,28 +28,35 @@ export async function listAdmins(): Promise<User[]> {
   return db.query.users.findMany({ where: and(eq(users.role, "admin"), eq(users.status, "active")) });
 }
 
-function memberEventPayload(user: User, href: string, actorId: string | null): MemberEventPayload {
+function memberEventPayload(user: User, href: string, actorId: string | null, invite: MemberEventPayload["invite"] = null): MemberEventPayload {
   return {
     user: { id: user.id, name: user.name, email: user.email, locale: user.locale, registrationMessage: user.registrationMessage },
     href,
     actorId,
+    invite,
     origin: { kind: "user" },
   };
 }
 
-export type RegisterInput = { email: string; name: string; locale: Locale; message?: string | null };
-export type RegisterResult = { ok: true; status: User["status"] } | { ok: false; reason: "exists" };
+/** Meeting invite link the registration came through – the account is activated right away. */
+export type RegisterInvite = { id: string; label: string; createdBy: string | null; meetingId: string; meetingTitle: string; meetingHref: string };
+
+export type RegisterInput = { email: string; name: string; locale: Locale; message?: string | null; invite?: RegisterInvite | null };
+export type RegisterResult = { ok: true; status: User["status"]; user: User } | { ok: false; reason: "exists"; user: User };
 
 /**
  * Registration creates a `pending` user with a generated avatar and notifies admins.
  * If the e-mail already exists we report `exists` (the UI shows a neutral message).
+ * With `invite` the account is created `active` (the admin vouched by handing out the link),
+ * remembers the link, and fires member.approved in addition to member.registered.
  */
 export async function registerUser(input: RegisterInput): Promise<RegisterResult> {
   const email = input.email.toLowerCase().trim();
   const existing = await getUserByEmail(email);
-  if (existing) return { ok: false, reason: "exists" };
+  if (existing) return { ok: false, reason: "exists", user: existing };
 
   const id = crypto.randomUUID();
+  const invite = input.invite ?? null;
   const [user] = await db
     .insert(users)
     .values({
@@ -57,9 +65,12 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
       name: input.name.trim().slice(0, 120),
       emailVerified: false,
       role: "member",
-      status: "pending",
+      status: invite ? "active" : "pending",
       locale: input.locale,
       registrationMessage: input.message?.trim().slice(0, 1000) || null,
+      invitedViaId: invite?.id ?? null,
+      approvedAt: invite ? new Date() : null,
+      approvedBy: invite?.createdBy ?? null,
     })
     .returning();
 
@@ -68,6 +79,15 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     await db.update(users).set({ avatarMediaId: avatar.id }).where(eq(users.id, id));
   } catch (err) {
     logger.error({ err, userId: id }, "avatar generation failed");
+  }
+
+  if (invite) {
+    await db.insert(auditLog).values({ actorId: id, action: "user.registered", targetType: "user", targetId: id, details: { inviteId: invite.id, meetingId: invite.meetingId } });
+    await countInviteUse(invite.id);
+    const eventInvite = { id: invite.id, label: invite.label, meetingId: invite.meetingId, meetingTitle: invite.meetingTitle, meetingHref: invite.meetingHref };
+    emitDomainEvent("member.registered", memberEventPayload(user, `/members/${user.id}`, id, eventInvite));
+    emitDomainEvent("member.approved", memberEventPayload(user, `/members/${user.id}`, invite.createdBy, eventInvite));
+    return { ok: true, status: user.status, user };
   }
 
   await db.insert(auditLog).values({ actorId: id, action: "user.registered", targetType: "user", targetId: id });
@@ -94,7 +114,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     logger.error({ err }, "admin notification for registration failed");
   }
 
-  return { ok: true, status: user.status };
+  return { ok: true, status: user.status, user };
 }
 
 export async function approveUser(userId: string, actorId: string, sendLink: (email: string) => Promise<void>): Promise<User | undefined> {

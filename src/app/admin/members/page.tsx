@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { requireAdmin } from "@/server/auth/session";
+import { inviteSourcesForUsers } from "@/server/domain/invites";
 import { countUsersByStatus, listUsers } from "@/server/domain/users";
 import { PageHeader } from "@/components/common/page-header";
 import { UserAvatar } from "@/components/shell/user-avatar";
@@ -22,6 +23,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
     countUsersByStatus(),
     listUsers({ status }),
   ]);
+  const inviteSources = await inviteSourcesForUsers(members.filter((m) => m.invitedViaId).map((m) => m.id));
 
   const tabLabel: Record<Status, string> = { pending: t("tabPending"), active: t("tabActive"), suspended: t("tabSuspended") };
 
@@ -60,7 +62,18 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
                   {m.id === admin.id && <Badge variant="outline">you</Badge>}
                 </div>
                 <div className="text-sm text-muted-foreground">{m.email}</div>
-                <div className="text-xs text-muted-foreground">{t("registeredAt", { date: format.dateTime(m.createdAt, { dateStyle: "medium", timeStyle: "short" }) })}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("registeredAt", { date: format.dateTime(m.createdAt, { dateStyle: "medium", timeStyle: "short" }) })}
+                  {inviteSources.has(m.id) && (
+                    <>
+                      {" · "}
+                      {t("invitedVia", { label: inviteSources.get(m.id)!.label })}{" "}
+                      <Link href={inviteSources.get(m.id)!.href} className="underline-offset-4 hover:underline">
+                        {inviteSources.get(m.id)!.meetingTitle}
+                      </Link>
+                    </>
+                  )}
+                </div>
                 {status === "pending" && (
                   <p className="mt-1 text-sm">
                     <span className="text-muted-foreground">{t("registrationMessage")}: </span>

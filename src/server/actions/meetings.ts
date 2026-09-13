@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertUser } from "@/server/auth/session";
+import { INVITE_LABEL_MAX, createInvite, getInvite, inviteUrl, revokeInvite } from "@/server/domain/invites";
 import { canEditMeeting, createMeeting, getMeeting, getSpaceById, restoreProtocolVersion, saveProtocol, softDeleteMeeting, updateMeeting } from "@/server/domain/meetings";
 
 export type MeetingFormState = { status: "idle" } | { status: "saved"; meetingId: string; spaceSlug: string } | { status: "error"; code: "titleRequired" | "forbidden" | "unexpected" };
@@ -146,5 +147,39 @@ export async function stopRecordingAction(meetingId: string): Promise<{ ok: bool
   const { stopRecording } = await import("@/server/meetings/recording");
   await stopRecording(meeting);
   revalidatePath(`/meetings/${meeting.spaceSlug}/${meeting.id}`, "layout");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Invite links (admins only)
+// ---------------------------------------------------------------------------
+
+export type InviteActionResult = { ok: true; url: string } | { ok: false; code: "forbidden" | "notFound" | "unexpected" };
+
+export async function createInviteAction(input: { meetingId: string; label: string }): Promise<InviteActionResult> {
+  const user = await assertUser();
+  if (user.role !== "admin") return { ok: false, code: "forbidden" };
+  const parsed = z.object({ meetingId: z.string().uuid(), label: z.string().trim().min(1).max(INVITE_LABEL_MAX) }).safeParse(input);
+  if (!parsed.success) return { ok: false, code: "unexpected" };
+  const meeting = await getMeeting(parsed.data.meetingId);
+  if (!meeting) return { ok: false, code: "notFound" };
+  try {
+    const invite = await createInvite(meeting.id, parsed.data.label, user.id);
+    revalidatePath(`/meetings/${meeting.spaceSlug}/${meeting.id}`);
+    return { ok: true, url: inviteUrl(invite.token) };
+  } catch {
+    return { ok: false, code: "unexpected" };
+  }
+}
+
+export async function revokeInviteAction(inviteId: string): Promise<{ ok: true } | { ok: false; code: "forbidden" | "notFound" | "unexpected" }> {
+  const user = await assertUser();
+  if (user.role !== "admin") return { ok: false, code: "forbidden" };
+  if (!z.string().uuid().safeParse(inviteId).success) return { ok: false, code: "unexpected" };
+  const invite = await getInvite(inviteId);
+  if (!invite) return { ok: false, code: "notFound" };
+  await revokeInvite(invite.id, user.id);
+  const meeting = await getMeeting(invite.meetingId);
+  if (meeting) revalidatePath(`/meetings/${meeting.spaceSlug}/${meeting.id}`);
   return { ok: true };
 }

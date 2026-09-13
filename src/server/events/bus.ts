@@ -70,6 +70,8 @@ export type MemberEventPayload = {
   user: { id: string; name: string; email: string; locale: string; registrationMessage: string | null };
   /** app-relative link: pending list (registered) resp. member profile (approved) */
   href: string;
+  /** set when the account was created through a meeting invite link (activated immediately) */
+  invite: { id: string; label: string; meetingId: string; meetingTitle: string; meetingHref: string } | null;
   /** registering user (registered) resp. approving admin (approved) */
   actorId: string | null;
   origin: EventOrigin;

@@ -148,6 +148,13 @@
       "when": 1788875692706,
       "tag": "0020_typical_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789298854112,
+      "tag": "0021_charming_firelord",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { ArrowRight } from "lucide-react";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
+import { markInviteLanded, pendingInviteRedirect } from "@/server/domain/invites";
 import { getAppSettings } from "@/server/domain/settings";
 import { countUsersByStatus } from "@/server/domain/users";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,12 @@ import { PageHeader } from "@/components/common/page-header";
 
 export default async function HomePage() {
   const user = await requireUser();
+  // Members who registered through a meeting invite land on that meeting once.
+  const inviteHref = await pendingInviteRedirect(user);
+  if (inviteHref) {
+    await markInviteLanded(user.id);
+    redirect(inviteHref);
+  }
   const [t, settings] = await Promise.all([getTranslations("home"), getAppSettings()]);
   const counts = user.role === "admin" ? await countUsersByStatus() : null;
 

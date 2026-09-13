@@ -68,6 +68,16 @@
       "invalidEmail": "Please enter a valid e-mail address.",
       "nameRequired": "Please enter your name.",
       "tooManyRequests": "Too many attempts. Please wait a moment and try again."
+    },
+    "invite": {
+      "title": "Invitation to {app}",
+      "intro": "You have been invited to this meeting. Enter your name and e-mail address – your account is activated right away and you receive a sign-in link.",
+      "submit": "Join",
+      "sentTitle": "Check your inbox",
+      "sentBody": "We sent a sign-in link to {email} that takes you straight to the meeting. It is valid for 15 minutes.",
+      "invalidTitle": "This invitation is no longer valid",
+      "invalidBody": "The link has been revoked or the meeting no longer exists. Ask the person who invited you for a new link.",
+      "toLogin": "Go to sign-in"
     }
   },
   "nav": {
@@ -227,7 +237,8 @@
       "reactivated": "{name} has been reactivated.",
       "roleChanged": "Role of {name} changed.",
       "cannotChangeSelf": "You cannot change your own account here.",
-      "registeredAt": "Registered on {date}"
+      "registeredAt": "Registered on {date}",
+      "invitedVia": "Invited via “{label}” to"
     },
     "knowledge": {
       "title": "Collections",
@@ -1104,6 +1115,23 @@
       "restore": "Restore this version",
       "restored": "Version restored.",
       "restoreNote": "Restored from version {no}"
+    },
+    "invites": {
+      "menu": "Invite links",
+      "title": "Invite links",
+      "intro": "Anyone opening a link can register and is activated immediately. Several links, one per channel, show you where new members come from.",
+      "label": "Label",
+      "labelPlaceholder": "e.g. Newsletter, LinkedIn",
+      "create": "Create link",
+      "copy": "Copy",
+      "copied": "Link copied.",
+      "copyFailed": "Could not copy – select the link and copy it by hand.",
+      "revoke": "Revoke",
+      "confirmRevoke": "Revoke this link? It stops working; members who already registered stay.",
+      "revoked": "revoked",
+      "revokedToast": "Link revoked.",
+      "uses": "{count, plural, =0 {no registrations yet} =1 {# registration} other {# registrations}}",
+      "empty": "No links for this meeting yet."
     }
   }
 }

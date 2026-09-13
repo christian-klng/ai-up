@@ -68,6 +68,16 @@
       "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein.",
       "nameRequired": "Bitte gib deinen Namen ein.",
       "tooManyRequests": "Zu viele Versuche. Bitte warte kurz und versuche es erneut."
+    },
+    "invite": {
+      "title": "Einladung zu {app}",
+      "intro": "Du wurdest zu diesem Meeting eingeladen. Gib Namen und E-Mail-Adresse an – dein Konto wird sofort freigeschaltet und du bekommst einen Anmeldelink.",
+      "submit": "Teilnehmen",
+      "sentTitle": "Prüfe dein Postfach",
+      "sentBody": "Wir haben an {email} einen Anmeldelink geschickt, der dich direkt zum Meeting bringt. Er ist 15 Minuten gültig.",
+      "invalidTitle": "Diese Einladung ist nicht mehr gültig",
+      "invalidBody": "Der Link wurde zurückgezogen oder das Meeting existiert nicht mehr. Frag die Person, die dich eingeladen hat, nach einem neuen Link.",
+      "toLogin": "Zur Anmeldung"
     }
   },
   "nav": {
@@ -227,7 +237,8 @@
       "reactivated": "{name} wurde reaktiviert.",
       "roleChanged": "Rolle von {name} geändert.",
       "cannotChangeSelf": "Du kannst dein eigenes Konto hier nicht ändern.",
-      "registeredAt": "Registriert am {date}"
+      "registeredAt": "Registriert am {date}",
+      "invitedVia": "Eingeladen über „{label}“ zu"
     },
     "knowledge": {
       "title": "Sammlungen",
@@ -1104,6 +1115,23 @@
       "restore": "Diese Version wiederherstellen",
       "restored": "Version wiederhergestellt.",
       "restoreNote": "Wiederhergestellt aus Version {no}"
+    },
+    "invites": {
+      "menu": "Einladungslinks",
+      "title": "Einladungslinks",
+      "intro": "Wer einen Link öffnet, kann sich registrieren und wird sofort freigeschaltet. Mehrere Links je Kanal zeigen dir, woher neue Mitglieder kommen.",
+      "label": "Bezeichnung",
+      "labelPlaceholder": "z. B. Newsletter, LinkedIn",
+      "create": "Link erzeugen",
+      "copy": "Kopieren",
+      "copied": "Link kopiert.",
+      "copyFailed": "Kopieren nicht möglich – markiere den Link und kopiere ihn von Hand.",
+      "revoke": "Zurückziehen",
+      "confirmRevoke": "Diesen Link zurückziehen? Er führt dann ins Leere; bereits registrierte Mitglieder bleiben.",
+      "revoked": "zurückgezogen",
+      "revokedToast": "Link zurückgezogen.",
+      "uses": "{count, plural, =0 {noch keine Registrierung} =1 {# Registrierung} other {# Registrierungen}}",
+      "empty": "Noch keine Links für dieses Meeting."
     }
   }
 }

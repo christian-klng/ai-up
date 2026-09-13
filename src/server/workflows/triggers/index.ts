@@ -223,27 +223,28 @@ const memberPayloadDoc = {
   "user.locale": "de | en",
   "user.registrationMessage": "optional message entered at registration (may be null)",
   href: "app-relative link (pending list resp. member profile)",
+  invite: "null, or {id, label, meetingId, meetingTitle, meetingHref} when the account was created through a meeting invite link (then it is active right away)",
 };
 
 registerTrigger<z.infer<typeof memberTriggerConfig>>({
   type: "member.registered",
   labels: { name: { de: "Neue Registrierung", en: "New registration" }, description: { de: "Startet, wenn sich jemand registriert und auf Freigabe wartet – z. B. um Admins zu benachrichtigen.", en: "Fires when someone registers and awaits approval – e.g. to notify admins." } },
-  doc: "Fires when a new registration is created (user status pending, not yet approved). Typical use: notify_user or send_message to admins. The person cannot sign in yet – do not message them.",
+  doc: "Fires when a new registration is created. Without `invite` the user is pending (not yet approved) and cannot sign in yet – do not message them; with `invite` the account came through a meeting invite link and is active immediately (member.approved fires as well).",
   configSchema: memberTriggerConfig,
   fields: [],
   payloadDoc: memberPayloadDoc,
-  samplePayload: { user: { id: "00000000-0000-0000-0000-000000000000", name: "Jane Doe", email: "jane@example.com", locale: "de", registrationMessage: "Ich komme aus dem KI-Stammtisch München." }, href: "/admin/members?status=pending" },
+  samplePayload: { user: { id: "00000000-0000-0000-0000-000000000000", name: "Jane Doe", email: "jane@example.com", locale: "de", registrationMessage: "Ich komme aus dem KI-Stammtisch München." }, href: "/admin/members?status=pending", invite: null },
   eventTypes: ["member.registered"],
 });
 
 registerTrigger<z.infer<typeof memberTriggerConfig>>({
   type: "member.approved",
   labels: { name: { de: "Neues Mitglied", en: "New member" }, description: { de: "Startet, wenn ein Admin eine Registrierung freigeschaltet hat – z. B. um das neue Mitglied allen vorzustellen.", en: "Fires when an admin has approved a registration – e.g. to introduce the new member to everyone." } },
-  doc: "Fires when an admin approves a pending registration (user becomes active). Typical use: send_message or notify_user to everyone to welcome the new member. actorId in the run is the approving admin.",
+  doc: "Fires when an admin approves a pending registration (user becomes active), and likewise when someone registers through a meeting invite link (`invite` set, actorId = the admin who created the link). Typical use: send_message or notify_user to everyone to welcome the new member.",
   configSchema: memberTriggerConfig,
   fields: [],
   payloadDoc: memberPayloadDoc,
-  samplePayload: { user: { id: "00000000-0000-0000-0000-000000000000", name: "Jane Doe", email: "jane@example.com", locale: "de", registrationMessage: null }, href: "/members/00000000-0000-0000-0000-000000000000" },
+  samplePayload: { user: { id: "00000000-0000-0000-0000-000000000000", name: "Jane Doe", email: "jane@example.com", locale: "de", registrationMessage: null }, href: "/members/00000000-0000-0000-0000-000000000000", invite: null },
   eventTypes: ["member.approved"],
 });
 
