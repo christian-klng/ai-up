@@ -773,8 +773,6 @@
     "removeInstruction": "Eintrag entfernen",
     "searchEntries": "Eintrag suchen …",
     "mayEdit": "Bearbeiten",
-    "approvalAlways": "Immer nachfragen",
-    "approvalNever": "Automatisch ausführen",
     "approvalTitle": "Aktion bestätigen: {tool}",
     "approvalPending": "Bitte zuerst die Aktion bestätigen oder ablehnen.",
     "approve": "Ausführen",
@@ -805,7 +803,9 @@
     "askFirstNeedsWrite": "Gilt nur, wenn Schreiben erlaubt ist.",
     "summaryRead": "Lesen",
     "summaryReadWrite": "Lesen & Schreiben",
-    "summaryNoQuestions": "ohne Rückfragen"
+    "summaryNoQuestions": "ohne Rückfragen",
+    "configSaving": "Speichert …",
+    "configSaveFailed": "Speichern fehlgeschlagen."
   },
   "contacts": {
     "request": "Kontaktanfrage senden",

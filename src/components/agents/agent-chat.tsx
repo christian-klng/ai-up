@@ -4,17 +4,23 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Check, Loader2, PanelRightClose, PanelRightOpen, SendHorizontal, ShieldCheck, Square, Wrench, X, Zap } from "lucide-react";
+import { Check, Loader2, PanelRightClose, PanelRightOpen, SendHorizontal, Square, Wrench, X } from "lucide-react";
 import { useRealtimeEvent } from "@/components/realtime/realtime-provider";
-import { cancelAgentTurnAction, resolveToolCallAction, sendAgentMessageAction, setThreadModeAction } from "@/server/actions/agents";
+import { cancelAgentTurnAction, resolveToolCallAction, saveThreadConfigAction, sendAgentMessageAction, setThreadModeAction } from "@/server/actions/agents";
 import { Markdown } from "@/components/content/markdown";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ThreadConfigPanel } from "./thread-config-panel";
-import type { AreaOption, EntryOption } from "./thread-config-fields";
+import type { AreaOption, EntryOption, ThreadConfigValue } from "./thread-config-fields";
 import type { AgentMessageDto } from "@/lib/realtime-events";
 import { cn } from "@/lib/utils";
+
+type Selection = Pick<ThreadConfigValue, "readAreaIds" | "writeAreaIds" | "instructions">;
+export type SaveState = "idle" | "saving" | "saved" | "error";
+
+/** Quick clicks through several collections become one request with the final state. */
+const SAVE_DEBOUNCE_MS = 600;
 
 type Props = {
   threadId: string;
@@ -52,6 +58,8 @@ export function AgentChat({
   const [panelOpen, setPanelOpen] = useState(false);
   const [mode, setMode] = useState(initialMode);
   const [approval, setApproval] = useState(initialApproval);
+  const [selection, setSelection] = useState<Selection>({ readAreaIds, writeAreaIds, instructions });
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [resolving, setResolving] = useState<string | null>(null);
   const [sending, startSend] = useTransition();
   const router = useRouter();
@@ -67,6 +75,8 @@ export function AgentChat({
     setRunning(initialRunning);
     setMode(initialMode);
     setApproval(initialApproval);
+    setSelection({ readAreaIds, writeAreaIds, instructions });
+    setSaveState("idle");
     setText("");
   }
 
@@ -143,33 +153,82 @@ export function AgentChat({
     });
   };
 
-  // Permissions are shared by the header toggle and the configuration panel: one place updates both
-  // and persists straight away, because they decide which tools exist and whether writes pause.
+  // The configuration has no save button: every change is stored on its own. The pending save lives
+  // here and not in the panel, so closing the panel right after a click cannot drop it.
+  const pendingSave = useRef<{ threadId: string; selection: Selection; mode: "assist" | "curate" } | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentThread = useRef(threadId);
+  useEffect(() => {
+    currentThread.current = threadId;
+  }, [threadId]);
+
+  const reportSave = useCallback(
+    (ok: boolean, forThread: string) => {
+      // A newer change is already waiting, or the member moved on – that save reports for itself.
+      if (pendingSave.current || forThread !== currentThread.current) return;
+      setSaveState(ok ? "saved" : "error");
+      if (!ok) toast.error(t("configSaveFailed"));
+    },
+    [t],
+  );
+
+  const flushSave = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const job = pendingSave.current;
+    if (!job) return;
+    pendingSave.current = null;
+    let ok = false;
+    try {
+      const res = await saveThreadConfigAction(job.threadId, {
+        readAreaIds: job.selection.readAreaIds,
+        writeAreaIds: job.mode === "curate" ? job.selection.writeAreaIds.filter((id) => job.selection.readAreaIds.includes(id)) : [],
+        instructionContentIds: job.selection.instructions.map((i) => i.id),
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    reportSave(ok, job.threadId);
+  }, [reportSave]);
+
+  // Leaving the thread or the page stores what is still waiting instead of dropping it.
+  useEffect(() => () => void flushSave(), [threadId, flushSave]);
+
+  const scheduleSave = (next: Selection, nextMode: "assist" | "curate") => {
+    pendingSave.current = { threadId, selection: next, mode: nextMode };
+    setSaveState("saving");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
+  };
+
+  // Permissions decide which tools exist and whether writes pause – they are stored straight away.
   const setPermissions = (next: { mode: "assist" | "curate"; writeApproval: "always" | "never" }) => {
     setMode(next.mode);
     setApproval(next.writeApproval);
-    void setThreadModeAction(threadId, next.mode, next.writeApproval);
+    setSaveState("saving");
+    const forThread = threadId;
+    setThreadModeAction(forThread, next.mode, next.writeApproval).then(
+      (res) => reportSave(res.ok, forThread),
+      () => reportSave(false, forThread),
+    );
   };
 
-  const toggleApproval = () => setPermissions({ mode, writeApproval: approval === "always" ? "never" : "always" });
+  const changeConfig = (next: ThreadConfigValue) => {
+    if (next.mode !== mode || next.writeApproval !== approval) setPermissions({ mode: next.mode, writeApproval: next.writeApproval });
+    if (next.readAreaIds !== selection.readAreaIds || next.writeAreaIds !== selection.writeAreaIds || next.instructions !== selection.instructions) {
+      const nextSelection = { readAreaIds: next.readAreaIds, writeAreaIds: next.writeAreaIds, instructions: next.instructions };
+      setSelection(nextSelection);
+      scheduleSave(nextSelection, next.mode);
+    }
+  };
 
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-end gap-1 border-b px-3 py-2">
-          {mode === "curate" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={toggleApproval}
-              aria-pressed={approval === "never"}
-              title={t(approval === "always" ? "approvalAlways" : "approvalNever")}
-              aria-label={t(approval === "always" ? "approvalAlways" : "approvalNever")}
-            >
-              {approval === "always" ? <ShieldCheck className="size-5" /> : <Zap className="size-5 text-amber-500" />}
-            </Button>
-          )}
           <Button type="button" variant="ghost" size="icon" onClick={() => setPanelOpen((o) => !o)} aria-label={t("toggleConfig")} aria-expanded={panelOpen}>
             {panelOpen ? <PanelRightClose className="size-5" /> : <PanelRightOpen className="size-5" />}
           </Button>
@@ -295,14 +354,7 @@ export function AgentChat({
 
       {panelOpen && (
         <aside className="hidden w-80 shrink-0 border-l lg:block">
-          <ThreadConfigPanel
-            threadId={threadId}
-            areas={areas}
-            initialValue={{ readAreaIds, writeAreaIds, instructions }}
-            mode={mode}
-            writeApproval={approval}
-            onPermissionsChange={setPermissions}
-          />
+          <ThreadConfigPanel threadId={threadId} areas={areas} value={{ ...selection, mode, writeApproval: approval }} onChange={changeConfig} saveState={saveState} />
         </aside>
       )}
     </div>

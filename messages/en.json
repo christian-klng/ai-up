@@ -773,8 +773,6 @@
     "removeInstruction": "Remove entry",
     "searchEntries": "Search for an entry …",
     "mayEdit": "Edit",
-    "approvalAlways": "Always ask",
-    "approvalNever": "Run automatically",
     "approvalTitle": "Confirm action: {tool}",
     "approvalPending": "Confirm or decline the action first.",
     "approve": "Run",
@@ -805,7 +803,9 @@
     "askFirstNeedsWrite": "Only applies when writing is allowed.",
     "summaryRead": "Read",
     "summaryReadWrite": "Read & write",
-    "summaryNoQuestions": "without asking"
+    "summaryNoQuestions": "without asking",
+    "configSaving": "Saving …",
+    "configSaveFailed": "Saving failed."
   },
   "contacts": {
     "request": "Send contact request",
