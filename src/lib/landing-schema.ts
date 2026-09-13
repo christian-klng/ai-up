@@ -153,6 +153,29 @@ const featuresSection = z.object({
     .max(9),
 });
 
+/** Animated hub-and-spoke diagram: one central icon, satellites connected by data streams. */
+const hubSection = z.object({
+  type: z.literal("hub"),
+  title: z.string().trim().max(120).optional(),
+  intro: z.string().trim().max(400).optional(),
+  center: z.object({
+    icon: z.enum(LANDING_ICONS),
+    label: z.string().trim().min(1).max(40),
+  }),
+  /** Placed clockwise starting at the top; `flow` sets the direction of the animated stream. */
+  nodes: z
+    .array(
+      z.object({
+        icon: z.enum(LANDING_ICONS),
+        label: z.string().trim().min(1).max(40),
+        text: z.string().trim().max(80).optional(),
+        flow: z.enum(["in", "out", "both"]).default("in"),
+      }),
+    )
+    .min(3)
+    .max(8),
+});
+
 const markdownSection = z.object({
   type: z.literal("markdown"),
   title: z.string().trim().max(120).optional(),
@@ -187,6 +210,7 @@ const imageSection = z.object({
 export const landingSectionSchema = z.discriminatedUnion("type", [
   heroSection,
   featuresSection,
+  hubSection,
   markdownSection,
   ctaSection,
   faqSection,

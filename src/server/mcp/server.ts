@@ -128,6 +128,9 @@ come from the app theme automatically: write copy, don't style.
       "imageMediaId": "optional uuid" },
     { "type": "features", "title": "optional", "intro": "optional",
       "items": [ { "icon": "sparkles", "title": "…", "text": "…" } ] },
+    { "type": "hub", "title": "optional", "intro": "optional",
+      "center": { "icon": "bot", "label": "max 40" },
+      "nodes": [ { "icon": "message-square", "label": "max 40", "text": "optional, max 80", "flow": "in | out | both" } ] },
     { "type": "markdown", "title": "optional", "body": "GFM markdown, max 8000 chars; raw HTML is stripped" },
     { "type": "cta", "headline": "…", "text": "optional", "button": { "label": "…", "href": "/register" } },
     { "type": "faq", "title": "optional", "items": [ { "question": "…", "answer": "…" } ] },
@@ -140,7 +143,10 @@ Rules
 - 1–15 sections; landing typically: hero first, then features/markdown, a cta, faq, footer.
   Imprint/privacy pages are usually just markdown sections (plus a minimal footer).
 - hrefs: internal path ("/register", "/login", "/imprint", "/privacy") or https:// URL. No other protocols.
-- feature icons – allowed values: ${LANDING_ICONS.join(", ")}.
+- hub: animated diagram – a central icon with 3–8 satellite nodes (placed clockwise from the top), each
+  connected by a moving data stream; flow "in" streams toward the center (default), "out" away from it,
+  "both" in two lanes. Keep labels to 1–2 words and texts short (they sit around the diagram).
+- feature and hub icons – allowed values: ${LANDING_ICONS.join(", ")}.
 - images: mediaId must reference a media file with purpose "landing" – one shared pool for all pages
   (admin uploads them under Admin → Web pages, or use list_page_media). Other purposes are not public.
 - German sites typically need imprint + privacy pages; link them from the landing footer

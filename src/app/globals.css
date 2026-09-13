@@ -132,3 +132,13 @@
     @apply font-sans;
   }
 }
+
+/* Landing hub diagram: dots travel along each spoke (dash period 18 → offset -36 loops seamlessly). */
+@theme {
+  --animate-hub-flow: hub-flow 1.4s linear infinite;
+  @keyframes hub-flow {
+    to {
+      stroke-dashoffset: -36;
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
 import type { AppSettings } from "@/server/db/schema";
 import type { LandingSection } from "@/lib/landing-schema";
@@ -98,6 +99,8 @@ export function LandingSectionView({
           </div>
         </section>
       );
+    case "hub":
+      return <HubDiagram section={section} path={path} />;
     case "markdown":
       return (
         <section className="mx-auto max-w-3xl py-10">
