@@ -99,7 +99,9 @@
     "intro": "This is the home of your community. Collections, meetings and messages live in the menu on the left.",
     "adminHint": "As an admin you can manage name, logo, colors, purpose and members under “Admin”.",
     "pendingMembers": "{count, plural, =0 {No pending registrations} =1 {One pending registration} other {# pending registrations}}",
-    "openAdmin": "Open admin"
+    "openAdmin": "Open admin",
+    "upcomingTitle": "Upcoming meetings",
+    "allMeetings": "All meetings"
   },
   "landing": {
     "toApp": "Open app",

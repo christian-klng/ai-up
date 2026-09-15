@@ -99,7 +99,9 @@
     "intro": "Das ist der Startbereich deiner Community. Sammlungen, Meetings und Nachrichten findest du im Menü links.",
     "adminHint": "Als Admin kannst du unter „Verwaltung“ Name, Logo, Farben, Zweck und Mitglieder verwalten.",
     "pendingMembers": "{count, plural, =0 {Keine wartenden Registrierungen} =1 {Eine wartende Registrierung} other {# wartende Registrierungen}}",
-    "openAdmin": "Zur Verwaltung"
+    "openAdmin": "Zur Verwaltung",
+    "upcomingTitle": "Kommende Meetings",
+    "allMeetings": "Alle Meetings"
   },
   "landing": {
     "toApp": "Zur App",

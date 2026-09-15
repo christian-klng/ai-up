@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import {
   auditLog,
@@ -183,6 +183,23 @@ export async function listMeetings(opts: { spaceId?: string; status?: Meeting["s
     // live first, then upcoming soonest first, then past newest first
     .orderBy(sql`case ${meetings.status} when 'live' then 0 when 'scheduled' then 1 else 2 end`, sql`case when ${meetings.status} = 'ended' then null else coalesce(${meetings.startsAt}, ${meetings.createdAt}) end asc nulls last`, desc(sql`coalesce(${meetings.endedAt}, ${meetings.startsAt}, ${meetings.createdAt})`))
     .limit(opts.limit ?? 100);
+  return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName }));
+}
+
+/**
+ * Meetings for the home page teaser across all spaces: running now, or scheduled with a start in the
+ * future. Meetings without a date and anything already started but not live are left out.
+ */
+export async function listUpcomingMeetings(limit = 6): Promise<MeetingListItem[]> {
+  const rows = await db
+    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name })
+    .from(meetings)
+    .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
+    .leftJoin(users, eq(users.id, meetings.hostId))
+    .leftJoin(mediaFiles, eq(mediaFiles.id, meetings.recordingMediaId))
+    .where(and(isNull(meetings.deletedAt), or(eq(meetings.status, "live"), and(eq(meetings.status, "scheduled"), gte(meetings.startsAt, new Date())))))
+    .orderBy(sql`case ${meetings.status} when 'live' then 0 else 1 end`, asc(meetings.startsAt))
+    .limit(limit);
   return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName }));
 }
 
