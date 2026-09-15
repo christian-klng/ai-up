@@ -66,15 +66,15 @@ Erwartung für 30 × 720p: ≈ 75–100 Mbit/s Upload, CPU des `livekit`-Contain
 - Aufzeichnungen, Variante **gemeinsames Verzeichnis** (ein Host): S3-Felder leer lassen. `web` mountet `RECORDINGS_PATH` read-only nach `/data/recordings` (in `docker-compose.yml` vorbereitet), als Aufzeichnungs-Verzeichnis **`/data/recordings`** eintragen (Container-Pfad). Die Quelldatei wird nach erfolgreichem Import gelöscht.
 - Webhook-Endpunkt `/api/livekit/webhook` (signiert mit API-Key/-Secret): `room_started`, `participant_joined/left`, `room_finished` setzen Status/Teilnehmer (Live-Punkt); `egress_*` für Aufzeichnungen (4e). In `livekit.yaml` muss `webhook.urls` auf `https://<app-domain>/api/livekit/webhook` zeigen und `webhook.api_key` dem App-Key entsprechen.
 
-## 5a. Einladungslinks (Onboarding von außen)
+## 5a. Einladungslink (Onboarding von außen)
 
-Admins erzeugen im Meeting-Menü unter „Einladungslinks“ beliebig viele Links je Meeting, jeweils mit einer Bezeichnung (z. B. der Kanal, über den der Link verschickt wird). Die URL lautet `https://<app-domain>/invite/<token>` und ist öffentlich erreichbar.
+Jedes Meeting hat genau einen Einladungslink, den Admins im Meeting-Menü unter „Einladungslink“ ein- oder ausschalten (Standard: aus). Die URL lautet `https://<app-domain>/invite/<token>`, ist öffentlich erreichbar und bleibt beim Aus- und Wiedereinschalten dieselbe.
 
-- **Neue Person:** Name + E-Mail eingeben → Konto wird sofort aktiv (keine Admin-Freigabe, der Link gilt als Bürgschaft) → Magic Link per Mail, dessen Ziel die Meeting-Seite ist. Am Konto bleibt gespeichert, über welchen Link es entstanden ist (*Verwaltung → Mitglieder*). Der Zähler am Link zählt nur neue Konten.
+- **Neue Person:** Name + E-Mail eingeben → Konto wird sofort aktiv (keine Admin-Freigabe, der eingeschaltete Link gilt als Bürgschaft) → Magic Link per Mail, dessen Ziel die Meeting-Seite ist. Am Konto bleibt gespeichert, über welches Meeting es entstanden ist (*Verwaltung → Mitglieder*). Der Zähler am Link zählt nur neue Konten.
 - **Bestehendes Mitglied:** dieselbe Seite schickt einen Magic Link zum Meeting; eingeloggte Mitglieder werden direkt weitergeleitet. Wartende oder gesperrte Konten bekommen nichts – die Bestätigung sieht immer gleich aus.
 - **Später anmelden:** Läuft der Magic Link ab und die Person meldet sich über `/login` an, leitet `/home` einmalig auf das Meeting weiter (`invite_landed_at`).
-- **Zurückziehen:** Ein widerrufener Link zeigt „Einladung nicht mehr gültig“; bereits registrierte Mitglieder bleiben. Gelöschte Meetings machen ihre Links ebenfalls ungültig.
-- Workflows: `member.registered` und `member.approved` tragen dann `invite` (`id`, `label`, `meetingId`, `meetingTitle`, `meetingHref`).
+- **Ausschalten:** Ein deaktivierter Link zeigt „Einladung nicht mehr gültig“; bereits registrierte Mitglieder bleiben. Gelöschte Meetings machen ihren Link ebenfalls ungültig.
+- Workflows: `member.registered` und `member.approved` tragen dann `invite` (`id`, `meetingId`, `meetingTitle`, `meetingHref`).
 
 ## 6. Lokal entwickeln
 

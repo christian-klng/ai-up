@@ -101,7 +101,6 @@ export async function registerViaInvite(_prev: AuthFormState, formData: FormData
       locale,
       invite: {
         id: resolved.invite.id,
-        label: resolved.invite.label,
         createdBy: resolved.invite.createdBy,
         meetingId: resolved.meeting.id,
         meetingTitle: resolved.meeting.title,

@@ -67,7 +67,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
                   {inviteSources.has(m.id) && (
                     <>
                       {" · "}
-                      {t("invitedVia", { label: inviteSources.get(m.id)!.label })}{" "}
+                      {t("invitedVia")}{" "}
                       <Link href={inviteSources.get(m.id)!.href} className="underline-offset-4 hover:underline">
                         {inviteSources.get(m.id)!.meetingTitle}
                       </Link>

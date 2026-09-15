@@ -1,18 +1,16 @@
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { auditLog, meetingInvites, meetingSpaces, meetings, users, type MeetingInvite, type User } from "@/server/db/schema";
 import { env } from "@/server/env";
 
 /**
- * Meeting invite links (admins only).
+ * Meeting invite link (one per meeting, admins only, off by default).
  *
- * A link is a random token; the public page /invite/<token> lets people register and activates the
- * account right away (the admin vouches by handing out the link). The account remembers the link it
- * came through (users.invitedViaId) and is taken to the meeting page once after signing in.
+ * The link is a random token; the public page /invite/<token> lets people register and activates the
+ * account right away (the admin vouches by switching the link on). The account remembers the link it
+ * came through (users.invitedViaId = the meeting) and is taken to the meeting page once after signing in.
  */
-
-export const INVITE_LABEL_MAX = 80;
 
 export type ResolvedInvite = {
   invite: MeetingInvite;
@@ -30,43 +28,35 @@ export function meetingHref(spaceSlug: string, meetingId: string): string {
   return `/meetings/${spaceSlug}/${meetingId}`;
 }
 
-export async function createInvite(meetingId: string, label: string, actorId: string): Promise<MeetingInvite> {
-  const token = randomBytes(24).toString("base64url");
-  const [row] = await db
-    .insert(meetingInvites)
-    .values({ meetingId, token, label: label.trim().slice(0, INVITE_LABEL_MAX) || "Link", createdBy: actorId })
-    .returning();
-  await db.insert(auditLog).values({ actorId, action: "meeting.invite.created", targetType: "meeting_invite", targetId: row.id, details: { meetingId, label: row.label } });
-  return row;
+export type InviteWithUrl = MeetingInvite & { url: string };
+
+export async function getMeetingInvite(meetingId: string): Promise<InviteWithUrl | undefined> {
+  const row = await db.query.meetingInvites.findFirst({ where: eq(meetingInvites.meetingId, meetingId) });
+  return row ? { ...row, url: inviteUrl(row.token) } : undefined;
 }
 
-export async function revokeInvite(id: string, actorId: string): Promise<MeetingInvite | undefined> {
-  const [row] = await db
-    .update(meetingInvites)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(meetingInvites.id, id), isNull(meetingInvites.revokedAt)))
-    .returning();
-  if (row) await db.insert(auditLog).values({ actorId, action: "meeting.invite.revoked", targetType: "meeting_invite", targetId: id, details: { meetingId: row.meetingId } });
-  return row;
+/**
+ * Switches the meeting's link on or off; the row (and thus the URL) is created on first use and the
+ * token stays stable across toggles, so a link sent out earlier works again after re-enabling.
+ */
+export async function setInviteEnabled(meetingId: string, enabled: boolean, actorId: string): Promise<InviteWithUrl> {
+  const existing = await db.query.meetingInvites.findFirst({ where: eq(meetingInvites.meetingId, meetingId) });
+  let row: MeetingInvite;
+  if (existing) {
+    [row] = await db.update(meetingInvites).set({ enabled }).where(eq(meetingInvites.id, existing.id)).returning();
+  } else {
+    [row] = await db
+      .insert(meetingInvites)
+      .values({ meetingId, token: randomBytes(24).toString("base64url"), enabled, createdBy: actorId })
+      .returning();
+  }
+  if (!existing || existing.enabled !== enabled) {
+    await db.insert(auditLog).values({ actorId, action: enabled ? "meeting.invite.enabled" : "meeting.invite.disabled", targetType: "meeting_invite", targetId: row.id, details: { meetingId } });
+  }
+  return { ...row, url: inviteUrl(row.token) };
 }
 
-export async function getInvite(id: string): Promise<MeetingInvite | undefined> {
-  return db.query.meetingInvites.findFirst({ where: eq(meetingInvites.id, id) });
-}
-
-export type InviteListItem = MeetingInvite & { url: string; creator: { id: string; name: string } | null };
-
-/** All links of a meeting, newest first, revoked ones included (they keep their statistics). */
-export async function listInvites(meetingId: string): Promise<InviteListItem[]> {
-  const rows = await db.query.meetingInvites.findMany({
-    where: eq(meetingInvites.meetingId, meetingId),
-    orderBy: [desc(meetingInvites.createdAt)],
-    with: { creator: { columns: { id: true, name: true } } },
-  });
-  return rows.map((r) => ({ ...r, url: inviteUrl(r.token) }));
-}
-
-/** Returns the invite with its meeting when the token is valid: not revoked, meeting not deleted. */
+/** Returns the invite with its meeting when the token is valid: enabled, meeting not deleted. */
 export async function resolveInvite(token: string): Promise<ResolvedInvite | null> {
   if (!token || token.length > 64) return null;
   const [row] = await db
@@ -80,7 +70,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
     .where(eq(meetingInvites.token, token))
     .limit(1);
-  if (!row || row.invite.revokedAt || row.meeting.deletedAt) return null;
+  if (!row || !row.invite.enabled || row.meeting.deletedAt) return null;
   const { deletedAt: _deleted, ...meeting } = row.meeting;
   void _deleted;
   return { invite: row.invite, meeting, space: row.space, href: meetingHref(row.space.slug, row.meeting.id) };
@@ -115,19 +105,19 @@ export async function markInviteLanded(userId: string): Promise<void> {
   await db.update(users).set({ inviteLandedAt: new Date() }).where(and(eq(users.id, userId), isNull(users.inviteLandedAt)));
 }
 
-export type InviteSource = { inviteId: string; label: string; meetingId: string; meetingTitle: string; href: string };
+export type InviteSource = { inviteId: string; meetingId: string; meetingTitle: string; href: string };
 
-/** Which invite link each of the given users registered through (for the member list). */
+/** Which meeting each of the given users was invited to (for the member list). */
 export async function inviteSourcesForUsers(userIds: string[]): Promise<Map<string, InviteSource>> {
   const out = new Map<string, InviteSource>();
   if (userIds.length === 0) return out;
   const rows = await db
-    .select({ userId: users.id, inviteId: meetingInvites.id, label: meetingInvites.label, meetingId: meetings.id, meetingTitle: meetings.title, slug: meetingSpaces.slug })
+    .select({ userId: users.id, inviteId: meetingInvites.id, meetingId: meetings.id, meetingTitle: meetings.title, slug: meetingSpaces.slug })
     .from(users)
     .innerJoin(meetingInvites, eq(meetingInvites.id, users.invitedViaId))
     .innerJoin(meetings, eq(meetings.id, meetingInvites.meetingId))
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
     .where(inArray(users.id, userIds));
-  for (const r of rows) out.set(r.userId, { inviteId: r.inviteId, label: r.label, meetingId: r.meetingId, meetingTitle: r.meetingTitle, href: meetingHref(r.slug, r.meetingId) });
+  for (const r of rows) out.set(r.userId, { inviteId: r.inviteId, meetingId: r.meetingId, meetingTitle: r.meetingTitle, href: meetingHref(r.slug, r.meetingId) });
   return out;
 }

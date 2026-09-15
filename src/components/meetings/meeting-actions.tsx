@@ -9,18 +9,18 @@ import { deleteMeetingAction } from "@/server/actions/meetings";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MeetingDialog, type MeetingFormValues } from "./meeting-dialog";
-import { InviteLinksDialog, type InviteLinkItem } from "./invite-links-dialog";
+import { InviteLinkDialog, type InviteLinkState } from "./invite-link-dialog";
 
-/** `invites` is null for non-admins – only admins may hand out invite links. */
-export function MeetingActions({ meeting, spaceId, spaceSlug, recordingDefault, callsAvailable, invites }: { meeting: MeetingFormValues; spaceId: string; spaceSlug: string; recordingDefault: boolean; callsAvailable: boolean; invites: InviteLinkItem[] | null }) {
+/** `invite` is null for non-admins – only admins may hand out the invite link. */
+export function MeetingActions({ meeting, spaceId, spaceSlug, recordingDefault, callsAvailable, invite }: { meeting: MeetingFormValues; spaceId: string; spaceSlug: string; recordingDefault: boolean; callsAvailable: boolean; invite: InviteLinkState | null }) {
   const t = useTranslations("meetings");
   const tc = useTranslations("common");
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [invitesOpen, setInvitesOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   return (
     <div className="flex items-center gap-1">
-      {invites && <InviteLinksDialog meetingId={meeting.id} invites={invites} open={invitesOpen} onOpenChange={setInvitesOpen} />}
+      {invite && <InviteLinkDialog meetingId={meeting.id} invite={invite} open={inviteOpen} onOpenChange={setInviteOpen} />}
       <MeetingDialog
         spaceId={spaceId}
         recordingDefault={recordingDefault}
@@ -39,9 +39,9 @@ export function MeetingActions({ meeting, spaceId, spaceSlug, recordingDefault, 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {invites && (
-            <DropdownMenuItem onSelect={() => setInvitesOpen(true)}>
-              <Link2 className="size-4" /> {t("invites.menu")}
+          {invite && (
+            <DropdownMenuItem onSelect={() => setInviteOpen(true)}>
+              <Link2 className="size-4" /> {t("invite.menu")}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem

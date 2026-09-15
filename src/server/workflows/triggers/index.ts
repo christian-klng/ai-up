@@ -223,7 +223,7 @@ const memberPayloadDoc = {
   "user.locale": "de | en",
   "user.registrationMessage": "optional message entered at registration (may be null)",
   href: "app-relative link (pending list resp. member profile)",
-  invite: "null, or {id, label, meetingId, meetingTitle, meetingHref} when the account was created through a meeting invite link (then it is active right away)",
+  invite: "null, or {id, meetingId, meetingTitle, meetingHref} when the account was created through a meeting invite link (then it is active right away)",
 };
 
 registerTrigger<z.infer<typeof memberTriggerConfig>>({

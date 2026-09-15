@@ -38,8 +38,8 @@ function memberEventPayload(user: User, href: string, actorId: string | null, in
   };
 }
 
-/** Meeting invite link the registration came through – the account is activated right away. */
-export type RegisterInvite = { id: string; label: string; createdBy: string | null; meetingId: string; meetingTitle: string; meetingHref: string };
+/** Meeting invite link the registration came through – the account is activated right away. `createdBy` = admin who set up the link. */
+export type RegisterInvite = { id: string; createdBy: string | null; meetingId: string; meetingTitle: string; meetingHref: string };
 
 export type RegisterInput = { email: string; name: string; locale: Locale; message?: string | null; invite?: RegisterInvite | null };
 export type RegisterResult = { ok: true; status: User["status"]; user: User } | { ok: false; reason: "exists"; user: User };
@@ -84,7 +84,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
   if (invite) {
     await db.insert(auditLog).values({ actorId: id, action: "user.registered", targetType: "user", targetId: id, details: { inviteId: invite.id, meetingId: invite.meetingId } });
     await countInviteUse(invite.id);
-    const eventInvite = { id: invite.id, label: invite.label, meetingId: invite.meetingId, meetingTitle: invite.meetingTitle, meetingHref: invite.meetingHref };
+    const eventInvite = { id: invite.id, meetingId: invite.meetingId, meetingTitle: invite.meetingTitle, meetingHref: invite.meetingHref };
     emitDomainEvent("member.registered", memberEventPayload(user, `/members/${user.id}`, id, eventInvite));
     emitDomainEvent("member.approved", memberEventPayload(user, `/members/${user.id}`, invite.createdBy, eventInvite));
     return { ok: true, status: user.status, user };

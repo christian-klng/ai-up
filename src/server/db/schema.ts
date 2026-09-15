@@ -827,9 +827,9 @@ export const meetingRecordings = pgTable(
 );
 
 /**
- * Shareable invite links for a meeting (admins only). Anyone holding the link may register and is
- * activated immediately – the admin vouches by creating the link. Several links per meeting allow
- * tracking which channel a member came through (users.invitedViaId).
+ * The shareable invite link of a meeting (one per meeting, admins only, off by default). Anyone
+ * holding an enabled link may register and is activated immediately – the admin vouches by switching
+ * it on. Accounts remember the link (users.invitedViaId), i.e. the meeting they came through.
  */
 export const meetingInvites = pgTable(
   "meeting_invites",
@@ -840,15 +840,14 @@ export const meetingInvites = pgTable(
       .references(() => meetings.id, { onDelete: "cascade" }),
     /** URL-safe random secret; the public URL is /invite/<token> */
     token: text("token").notNull(),
-    /** free label, e.g. the channel the link was sent through ("Newsletter", "LinkedIn") */
-    label: text("label").notNull(),
+    /** switched on by an admin; a disabled link shows "invitation not valid" */
+    enabled: boolean("enabled").notNull().default(false),
     /** number of accounts created through this link */
     useCount: integer("use_count").notNull().default(0),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("meeting_invites_token_idx").on(t.token), index("meeting_invites_meeting_idx").on(t.meetingId, t.createdAt)],
+  (t) => [uniqueIndex("meeting_invites_token_idx").on(t.token), uniqueIndex("meeting_invites_meeting_idx").on(t.meetingId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -1171,7 +1170,7 @@ export const meetingsRelations = relations(meetings, ({ one, many }) => ({
   protocolVersions: many(meetingProtocolVersions),
   participants: many(meetingParticipants),
   recordings: many(meetingRecordings),
-  invites: many(meetingInvites),
+  invite: one(meetingInvites, { fields: [meetings.id], references: [meetingInvites.meetingId] }),
 }));
 export const meetingRecordingsRelations = relations(meetingRecordings, ({ one }) => ({
   meeting: one(meetings, { fields: [meetingRecordings.meetingId], references: [meetings.id] }),

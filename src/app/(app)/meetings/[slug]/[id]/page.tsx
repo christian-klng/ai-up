@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronRight, History } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditMeeting, getMeeting, getSpaceBySlug, listParticipants, listRecordings } from "@/server/domain/meetings";
 import { getLiveKitConfig } from "@/server/domain/integrations";
-import { listInvites, markInviteLanded, meetingHref, pendingInviteRedirect } from "@/server/domain/invites";
+import { getMeetingInvite, markInviteLanded, meetingHref, pendingInviteRedirect } from "@/server/domain/invites";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/shell/user-avatar";
@@ -21,13 +21,13 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
   const [space, meeting] = await Promise.all([getSpaceBySlug(slug), getMeeting(id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
   const isAdmin = user.role === "admin";
-  const [t, format, participants, recordings, lk, invites] = await Promise.all([
+  const [t, format, participants, recordings, lk, invite] = await Promise.all([
     getTranslations("meetings"),
     getFormatter(),
     listParticipants(meeting.id),
     listRecordings(meeting.id),
     getLiveKitConfig(),
-    isAdmin ? listInvites(meeting.id) : Promise.resolve([]),
+    isAdmin ? getMeetingInvite(meeting.id) : Promise.resolve(undefined),
   ]);
   const editable = canEditMeeting(user, meeting);
   // An invited member arriving at their meeting has reached the target – no redirect from /home later.
@@ -66,7 +66,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
                 spaceSlug={space.slug}
                 recordingDefault={space.recordingDefault}
                 callsAvailable={callsAvailable}
-                invites={isAdmin ? invites.map((i) => ({ id: i.id, label: i.label, url: i.url, useCount: i.useCount, createdAt: i.createdAt.toISOString(), revokedAt: i.revokedAt?.toISOString() ?? null, creatorName: i.creator?.name ?? null })) : null}
+                invite={isAdmin ? (invite ? { url: invite.url, enabled: invite.enabled, useCount: invite.useCount } : { url: null, enabled: false, useCount: 0 }) : null}
               />
             )}
           </div>
