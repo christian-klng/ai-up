@@ -7,10 +7,10 @@ import { absolutePath, getMedia } from "@/server/media/storage";
 
 export const dynamic = "force-dynamic";
 
-const PUBLIC_PURPOSES = new Set(["logo", "favicon", "avatar", "landing"]);
+const PUBLIC_PURPOSES = new Set(["logo", "favicon", "avatar", "landing", "meeting"]);
 
 /**
- * Serves stored media. Branding assets and avatars are public (needed on the login page and in e-mails);
+ * Serves stored media. Branding assets, avatars, site-page images and meeting covers are public (login page, e-mails, OpenGraph);
  * everything else requires an active session. Supports `?v=thumb` variants and HTTP Range for video/audio.
  */
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">) {

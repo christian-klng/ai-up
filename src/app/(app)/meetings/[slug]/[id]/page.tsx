@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
@@ -14,6 +15,12 @@ import { MeetingKindIcon, MeetingStatusBadge } from "@/components/meetings/meeti
 import { ProtocolEditor } from "@/components/meetings/protocol-editor";
 import { CallPanel } from "@/components/meetings/call-panel";
 import { Markdown } from "@/components/content/markdown";
+
+export async function generateMetadata({ params }: PageProps<"/meetings/[slug]/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  const meeting = await getMeeting(id);
+  return meeting ? { title: meeting.title } : {};
+}
 
 export default async function MeetingDetailPage({ params }: PageProps<"/meetings/[slug]/[id]">) {
   const user = await requireUser();
@@ -42,6 +49,10 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
       <Link href={`/meetings/${space.slug}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> {space.name}
       </Link>
+      {meeting.coverMediaId && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/files/${meeting.coverMediaId}`} alt="" className="mb-6 aspect-[1200/630] w-full rounded-lg border object-cover" />
+      )}
       <PageHeader
         title={
           <span className="inline-flex flex-wrap items-center gap-3">
@@ -61,7 +72,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
             </Button>
             {editable && (
               <MeetingActions
-                meeting={{ id: meeting.id, title: meeting.title, description: meeting.description, kind: meeting.kind, startsAt: meeting.startsAt?.toISOString() ?? null, recordingEnabled: meeting.recordingEnabled, status: meeting.status }}
+                meeting={{ id: meeting.id, title: meeting.title, description: meeting.description, kind: meeting.kind, startsAt: meeting.startsAt?.toISOString() ?? null, recordingEnabled: meeting.recordingEnabled, status: meeting.status, coverMediaId: meeting.coverMediaId }}
                 spaceId={space.id}
                 spaceSlug={space.slug}
                 recordingDefault={space.recordingDefault}

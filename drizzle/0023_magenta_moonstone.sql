@@ -1,0 +1,2 @@
+ALTER TABLE "meetings" ADD COLUMN "cover_media_id" uuid;--> statement-breakpoint
+ALTER TABLE "meetings" ADD CONSTRAINT "meetings_cover_media_id_media_files_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_files"("id") ON DELETE set null ON UPDATE no action;

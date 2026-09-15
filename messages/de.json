@@ -1128,6 +1128,16 @@
       "enabledToast": "Einladungslink aktiviert.",
       "disabledToast": "Einladungslink deaktiviert.",
       "uses": "{count, plural, =0 {noch keine Registrierung} =1 {# Registrierung} other {# Registrierungen}}"
+    },
+    "cover": {
+      "label": "Titelbild",
+      "hint": "Optional, z. B. für Seminare und Workshops. Erscheint auf der Meeting-Seite und als Vorschaubild, wenn der Einladungslink geteilt wird. Ideal: 1200 × 630 Pixel.",
+      "upload": "Bild hochladen",
+      "replace": "Ersetzen",
+      "remove": "Titelbild entfernen",
+      "uploading": "Lädt hoch …",
+      "tooLarge": "Das Bild ist zu groß.",
+      "unsupported": "Nur JPEG, PNG, WebP oder GIF."
     }
   }
 }

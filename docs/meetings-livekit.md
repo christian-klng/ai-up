@@ -75,6 +75,7 @@ Jedes Meeting hat genau einen Einladungslink, den Admins im Meeting-Menü unter 
 - **Später anmelden:** Läuft der Magic Link ab und die Person meldet sich über `/login` an, leitet `/home` einmalig auf das Meeting weiter (`invite_landed_at`).
 - **Ausschalten:** Ein deaktivierter Link zeigt „Einladung nicht mehr gültig“; bereits registrierte Mitglieder bleiben. Gelöschte Meetings machen ihren Link ebenfalls ungültig.
 - Workflows: `member.registered` und `member.approved` tragen dann `invite` (`id`, `meetingId`, `meetingTitle`, `meetingHref`).
+- **Titelbild und Social-Vorschau:** Admins laden im Meeting-Dialog ein Titelbild hoch (oder per MCP `set_meeting_cover` mit Bild-URL). Es erscheint auf der Meeting-Seite, in der Liste und auf der Einladungsseite. Wird die Einladungs-URL in Social Media oder Messengern geteilt, liefert die Seite OpenGraph-/Twitter-Tags mit Titel, Termin, Bereich, Beschreibung und dem Bild – **1200 × 630 px** ist das ideale Format. Die Meeting-Seite selbst liegt hinter dem Login und hat deshalb keine Vorschau.
 
 ## 6. Lokal entwickeln
 

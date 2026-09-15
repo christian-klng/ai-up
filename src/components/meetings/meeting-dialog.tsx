@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { ImagePlus, Plus, X } from "lucide-react";
 import { useActionFeedback } from "@/hooks/use-action-feedback";
+import { uploadFile } from "@/lib/upload-client";
 import { saveMeetingAction, type MeetingFormState } from "@/server/actions/meetings";
 import type { MeetingKind } from "@/server/db/schema";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { MeetingKindIcon } from "./meeting-badges";
 import { cn } from "@/lib/utils";
 
-export type MeetingFormValues = { id: string; title: string; description: string | null; kind: MeetingKind; startsAt: string | null; recordingEnabled: boolean; status: "scheduled" | "live" | "ended" };
+export type MeetingFormValues = { id: string; title: string; description: string | null; kind: MeetingKind; startsAt: string | null; recordingEnabled: boolean; status: "scheduled" | "live" | "ended"; coverMediaId: string | null };
 
 const KINDS: MeetingKind[] = ["protocol", "audio", "video"];
 
@@ -29,11 +30,29 @@ function toLocalInput(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, callsAvailable }: { spaceId: string; recordingDefault: boolean; meeting?: MeetingFormValues; trigger?: React.ReactNode; callsAvailable: boolean }) {
+/** `canSetCover`: admins only – cover images are publicly served (OpenGraph) and uploaded with purpose "meeting". */
+export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, callsAvailable, canSetCover = false }: { spaceId: string; recordingDefault: boolean; meeting?: MeetingFormValues; trigger?: React.ReactNode; callsAvailable: boolean; canSetCover?: boolean }) {
   const t = useTranslations("meetings");
   const tc = useTranslations("common");
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [cover, setCover] = useState<string | null>(meeting?.coverMediaId ?? null);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const onCoverUpload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const media = await uploadFile(file, "meeting");
+      setCover(media.id);
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      toast.error(code === "too_large" ? t("cover.tooLarge") : code === "unsupported_type" ? t("cover.unsupported") : tc("unexpectedError"));
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
   const [kind, setKind] = useState<MeetingKind>(meeting?.kind ?? "protocol");
   const [startsAt, setStartsAt] = useState(toLocalInput(meeting?.startsAt ?? null));
   const [state, action, pending] = useActionState<MeetingFormState, FormData>(saveMeetingAction, { status: "idle" });
@@ -56,7 +75,7 @@ export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, cal
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <form action={action} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{isEdit ? t("edit") : t("create")}</DialogTitle>
@@ -99,6 +118,34 @@ export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, cal
             <Input id="m-starts" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="max-w-64" />
             <p className="text-xs text-muted-foreground">{t("startsAtHint")}</p>
           </div>
+          {canSetCover && (
+            <div className="grid gap-2">
+              <Label>{t("cover.label")}</Label>
+              <input type="hidden" name="coverMediaId" value={cover ?? ""} />
+              <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => void onCoverUpload(e.target.files?.[0])} />
+              {cover ? (
+                <div className="relative overflow-hidden rounded-md border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/files/${cover}`} alt="" className="aspect-[1200/630] w-full object-cover" />
+                  <div className="absolute right-2 top-2 flex gap-1">
+                    <Button type="button" variant="secondary" size="sm" disabled={uploading} onClick={() => fileInput.current?.click()}>
+                      <ImagePlus className="size-4" /> {uploading ? t("cover.uploading") : t("cover.replace")}
+                    </Button>
+                    <Button type="button" variant="secondary" size="icon" aria-label={t("cover.remove")} title={t("cover.remove")} onClick={() => setCover(null)}>
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileInput.current?.click()}>
+                    <ImagePlus className="size-4" /> {uploading ? t("cover.uploading") : t("cover.upload")}
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">{t("cover.hint")}</p>
+            </div>
+          )}
           {kind !== "protocol" && (
             <div className="flex items-start gap-3">
               <Switch id="m-rec" name="recordingEnabled" defaultChecked={meeting?.recordingEnabled ?? recordingDefault} />
@@ -112,7 +159,7 @@ export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, cal
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               {tc("cancel")}
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || uploading}>
               {isEdit ? tc("save") : t("createSubmit")}
             </Button>
           </DialogFooter>

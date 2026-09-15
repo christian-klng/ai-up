@@ -26,6 +26,7 @@ export function MeetingActions({ meeting, spaceId, spaceSlug, recordingDefault, 
         recordingDefault={recordingDefault}
         meeting={meeting}
         callsAvailable={callsAvailable}
+        canSetCover={invite !== null}
         trigger={
           <Button variant="outline" size="sm">
             <Pencil className="size-4" /> {tc("edit")}

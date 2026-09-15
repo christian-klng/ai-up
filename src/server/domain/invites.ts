@@ -14,7 +14,7 @@ import { env } from "@/server/env";
 
 export type ResolvedInvite = {
   invite: MeetingInvite;
-  meeting: { id: string; title: string; startsAt: Date | null; kind: string; status: string };
+  meeting: { id: string; title: string; description: string | null; startsAt: Date | null; kind: string; status: string; coverMediaId: string | null };
   space: { id: string; name: string; slug: string };
   /** app-relative meeting page */
   href: string;
@@ -62,7 +62,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
   const [row] = await db
     .select({
       invite: meetingInvites,
-      meeting: { id: meetings.id, title: meetings.title, startsAt: meetings.startsAt, kind: meetings.kind, status: meetings.status, deletedAt: meetings.deletedAt },
+      meeting: { id: meetings.id, title: meetings.title, description: meetings.description, startsAt: meetings.startsAt, kind: meetings.kind, status: meetings.status, coverMediaId: meetings.coverMediaId, deletedAt: meetings.deletedAt },
       space: { id: meetingSpaces.id, name: meetingSpaces.name, slug: meetingSpaces.slug },
     })
     .from(meetingInvites)

@@ -103,7 +103,7 @@ export async function moveSpace(id: string, direction: "up" | "down"): Promise<v
 
 export type MeetingListItem = Meeting & { host: { id: string; name: string; avatarMediaId: string | null } | null; recording: MediaFile | null; spaceSlug: string; spaceName: string };
 
-export type MeetingInput = { title: string; description?: string | null; kind: MeetingKind; startsAt?: Date | null; recordingEnabled?: boolean };
+export type MeetingInput = { title: string; description?: string | null; kind: MeetingKind; startsAt?: Date | null; recordingEnabled?: boolean; coverMediaId?: string | null };
 
 async function eventMeeting(m: Meeting): Promise<MeetingEventMeeting> {
   const space = await getSpaceById(m.spaceId);
@@ -123,6 +123,7 @@ export async function createMeeting(spaceId: string, input: MeetingInput, actorI
       hostId: actorId,
       createdBy: actorId,
       recordingEnabled: input.kind === "protocol" ? false : (input.recordingEnabled ?? true),
+      coverMediaId: input.coverMediaId ?? null,
     })
     .returning();
   // room name = meeting id (stable, unique, no secrets)
@@ -138,6 +139,7 @@ export async function updateMeeting(id: string, input: Partial<MeetingInput>, ac
   if (input.startsAt !== undefined) patch.startsAt = input.startsAt;
   if (input.recordingEnabled !== undefined) patch.recordingEnabled = input.recordingEnabled;
   if (input.kind !== undefined) patch.kind = input.kind;
+  if (input.coverMediaId !== undefined) patch.coverMediaId = input.coverMediaId;
   const [row] = await db.update(meetings).set(patch).where(and(eq(meetings.id, id), isNull(meetings.deletedAt))).returning();
   if (row) await db.insert(auditLog).values({ actorId, action: "meeting.updated", targetType: "meeting", targetId: id });
   return row;

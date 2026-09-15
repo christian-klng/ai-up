@@ -22,6 +22,8 @@ const ALLOWED: Record<string, Set<string>> = {
   message: new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]),
   /** Landing page images are publicly served; upload is restricted to admins below. */
   landing: new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+  /** Meeting cover images are publicly served (OpenGraph); admins only. */
+  meeting: new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]),
 };
 
 /**
@@ -38,7 +40,7 @@ export async function PUT(req: NextRequest) {
   const purpose = (req.nextUrl.searchParams.get("purpose") ?? "content") as MediaPurpose;
   const allowed = ALLOWED[purpose];
   if (!allowed) return Response.json({ error: "invalid purpose" }, { status: 400 });
-  if (purpose === "landing" && user.role !== "admin") return Response.json({ error: "forbidden" }, { status: 403 });
+  if ((purpose === "landing" || purpose === "meeting") && user.role !== "admin") return Response.json({ error: "forbidden" }, { status: 403 });
   const originalName = (req.nextUrl.searchParams.get("name") ?? "upload").slice(0, 200);
   const maxBytes = env.MAX_UPLOAD_MB * 1024 * 1024;
   const declared = Number(req.headers.get("content-length") ?? 0);

@@ -271,6 +271,9 @@ Every meeting belongs to exactly one space; the app URL is /meetings/<spaceSlug>
 - \`recordingEnabled\` (audio/video only; defaults to the space's recordingDefault). Protocol meetings never record.
 - \`status\` is managed by the app (\`scheduled\` → \`live\` → \`ended\`) and cannot be set here.
 - The API key's owner becomes host and creator of meetings created here.
+- \`coverUrl\`: optional cover image (set with set_meeting_cover). Shown on the meeting page and used as the
+  social preview (OpenGraph) of the invite link – **1200×630 px** is the ideal size; other sizes work but
+  get cropped by social networks. Useful for seminars and workshops.
 
 ## Invite link (scope meetings:invite)
 Each meeting has exactly one invite link, off by default. While it is **enabled**, anyone with the URL can
@@ -334,7 +337,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_invite.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_cover / set_meeting_invite.",
     },
   );
 
@@ -994,6 +997,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     participantCount: m.participantCount,
     host: m.host ? { id: m.host.id, name: m.host.name } : null,
     space: { id: m.spaceId, slug: m.spaceSlug, name: m.spaceName },
+    coverUrl: m.coverMediaId ? `${env.APP_URL}/api/files/${m.coverMediaId}` : null,
     href: `/meetings/${m.spaceSlug}/${m.id}`,
     url: `${env.APP_URL}/meetings/${m.spaceSlug}/${m.id}`,
   });
@@ -1099,6 +1103,35 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       await audit(auth, "meeting.updated", id, {}, "meeting");
       const full = await getMeeting(id);
       return text(full ? meetingOut(full) : { id });
+    },
+  );
+  server.registerTool(
+    "set_meeting_cover",
+    {
+      title: "Meetings - Set cover image",
+      description: "Sets or removes the cover image of a meeting. Pass imageUrl (public https URL of a jpeg/png/webp/gif; imported and re-encoded, ideally 1200×630 px) or remove=true. The cover is publicly served and becomes the OpenGraph image of the invite link.",
+      inputSchema: { meetingId: z.string().uuid(), imageUrl: z.string().url().optional(), remove: z.boolean().optional() },
+    },
+    async ({ meetingId, imageUrl, remove }) => {
+      require(auth, "meetings:write");
+      const meeting = await getMeeting(meetingId);
+      if (!meeting) return fail("meeting not found");
+      if (remove) {
+        await updateMeeting(meetingId, { coverMediaId: null }, auth.user.id);
+        await audit(auth, "meeting.cover.removed", meetingId, {}, "meeting");
+      } else {
+        if (!imageUrl) return fail("pass imageUrl or remove=true");
+        let media;
+        try {
+          media = await importImageFromUrl(imageUrl, auth.user.id, "meeting");
+        } catch (err) {
+          return fail(`image import failed: ${(err as Error).message}`);
+        }
+        await updateMeeting(meetingId, { coverMediaId: media.id }, auth.user.id);
+        await audit(auth, "meeting.cover.set", meetingId, { mediaId: media.id, width: media.width, height: media.height }, "meeting");
+      }
+      const full = await getMeeting(meetingId);
+      return text(full ? meetingOut(full) : { id: meetingId });
     },
   );
   server.registerTool(

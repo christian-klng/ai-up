@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertUser } from "@/server/auth/session";
 import { setInviteEnabled } from "@/server/domain/invites";
+import { getMedia } from "@/server/media/storage";
 import { canEditMeeting, createMeeting, getMeeting, getSpaceById, restoreProtocolVersion, saveProtocol, softDeleteMeeting, updateMeeting } from "@/server/domain/meetings";
 
 export type MeetingFormState = { status: "idle" } | { status: "saved"; meetingId: string; spaceSlug: string } | { status: "error"; code: "titleRequired" | "forbidden" | "unexpected" };
@@ -16,7 +17,18 @@ const schema = z.object({
   kind: z.enum(["protocol", "audio", "video"]),
   startsAt: z.string().optional(),
   recordingEnabled: z.boolean().optional(),
+  /** "" clears the cover; omitted (non-admin form) leaves it untouched */
+  coverMediaId: z.union([z.literal(""), z.string().uuid()]).optional(),
 });
+
+/** Only admins set covers, and only images uploaded with purpose "meeting" (publicly served) are accepted. */
+async function resolveCover(user: { role: string }, value: "" | string | undefined): Promise<string | null | undefined> {
+  if (value === undefined || user.role !== "admin") return undefined;
+  if (value === "") return null;
+  const media = await getMedia(value);
+  if (!media || media.kind !== "image" || media.purpose !== "meeting") throw new Error("invalid cover");
+  return media.id;
+}
 
 export async function saveMeetingAction(_prev: MeetingFormState, formData: FormData): Promise<MeetingFormState> {
   const user = await assertUser();
@@ -28,6 +40,7 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     kind: formData.get("kind"),
     startsAt: formData.get("startsAt") || undefined,
     recordingEnabled: formData.has("recordingEnabled") ? formData.get("recordingEnabled") === "on" : undefined,
+    coverMediaId: formData.has("coverMediaId") ? String(formData.get("coverMediaId")) : undefined,
   });
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];
@@ -41,15 +54,21 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     const dt = new Date(d.startsAt);
     if (!Number.isNaN(dt.getTime())) startsAt = dt;
   }
+  let coverMediaId: string | null | undefined;
+  try {
+    coverMediaId = await resolveCover(user, d.coverMediaId);
+  } catch {
+    return { status: "error", code: "unexpected" };
+  }
   if (d.meetingId) {
     const existing = await getMeeting(d.meetingId);
     if (!existing) return { status: "error", code: "unexpected" };
     if (!canEditMeeting(user, existing)) return { status: "error", code: "forbidden" };
-    await updateMeeting(d.meetingId, { title: d.title, description: d.description ?? null, startsAt, recordingEnabled: d.recordingEnabled, kind: existing.status === "scheduled" ? d.kind : undefined }, user.id);
+    await updateMeeting(d.meetingId, { title: d.title, description: d.description ?? null, startsAt, recordingEnabled: d.recordingEnabled, kind: existing.status === "scheduled" ? d.kind : undefined, coverMediaId }, user.id);
     revalidatePath("/", "layout");
     return { status: "saved", meetingId: d.meetingId, spaceSlug: space.slug };
   }
-  const created = await createMeeting(d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled ?? space.recordingDefault }, user.id);
+  const created = await createMeeting(d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled ?? space.recordingDefault, coverMediaId: coverMediaId ?? null }, user.id);
   revalidatePath("/", "layout");
   return { status: "saved", meetingId: created.id, spaceSlug: space.slug };
 }

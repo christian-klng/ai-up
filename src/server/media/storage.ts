@@ -6,7 +6,7 @@ import { db } from "@/server/db/client";
 import { mediaFiles, type MediaFile } from "@/server/db/schema";
 import { env } from "@/server/env";
 
-export type MediaPurpose = "avatar" | "logo" | "favicon" | "content" | "message" | "recording" | "landing";
+export type MediaPurpose = "avatar" | "logo" | "favicon" | "content" | "message" | "recording" | "landing" | "meeting";
 
 const KIND_BY_MIME: Array<[RegExp, MediaFile["kind"]]> = [
   [/^image\//, "image"],

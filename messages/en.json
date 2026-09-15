@@ -1128,6 +1128,16 @@
       "enabledToast": "Invite link enabled.",
       "disabledToast": "Invite link disabled.",
       "uses": "{count, plural, =0 {no registrations yet} =1 {# registration} other {# registrations}}"
+    },
+    "cover": {
+      "label": "Cover image",
+      "hint": "Optional, e.g. for seminars and workshops. Shown on the meeting page and as the preview image when the invite link is shared. Ideal: 1200 × 630 pixels.",
+      "upload": "Upload image",
+      "replace": "Replace",
+      "remove": "Remove cover",
+      "uploading": "Uploading …",
+      "tooLarge": "The image is too large.",
+      "unsupported": "Only JPEG, PNG, WebP or GIF."
     }
   }
 }

@@ -766,6 +766,8 @@ export const meetings = pgTable(
     recordingEgressId: text("recording_egress_id"),
     recordingMediaId: uuid("recording_media_id").references(() => mediaFiles.id, { onDelete: "set null" }),
     recordingError: text("recording_error"),
+    /** optional cover image (purpose "meeting", publicly served – used as OpenGraph image of the invite page) */
+    coverMediaId: uuid("cover_media_id").references(() => mediaFiles.id, { onDelete: "set null" }),
     /** transcript of the recording (markdown), written by the set_meeting_transcript workflow action */
     transcriptMarkdown: text("transcript_markdown"),
     /** live participant count (maintained by webhooks) */
@@ -1167,6 +1169,7 @@ export const meetingsRelations = relations(meetings, ({ one, many }) => ({
   space: one(meetingSpaces, { fields: [meetings.spaceId], references: [meetingSpaces.id] }),
   host: one(users, { fields: [meetings.hostId], references: [users.id] }),
   recording: one(mediaFiles, { fields: [meetings.recordingMediaId], references: [mediaFiles.id] }),
+  cover: one(mediaFiles, { fields: [meetings.coverMediaId], references: [mediaFiles.id] }),
   protocolVersions: many(meetingProtocolVersions),
   participants: many(meetingParticipants),
   recordings: many(meetingRecordings),

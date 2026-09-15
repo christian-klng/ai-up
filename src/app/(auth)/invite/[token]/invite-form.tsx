@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function InviteForm({ token, appName, meetingTitle, spaceName, startsAt, loginHref }: { token: string; appName: string; meetingTitle: string; spaceName: string; startsAt: string | null; loginHref: string }) {
+export function InviteForm({ token, appName, meetingTitle, meetingDescription, spaceName, startsAt, coverUrl, loginHref }: { token: string; appName: string; meetingTitle: string; meetingDescription: string | null; spaceName: string; startsAt: string | null; coverUrl: string | null; loginHref: string }) {
   const t = useTranslations("auth.invite");
   const ta = useTranslations("auth");
   const [state, action, pending] = useActionState<AuthFormState, FormData>(registerViaInvite, { status: "idle" });
@@ -34,14 +34,21 @@ export function InviteForm({ token, appName, meetingTitle, spaceName, startsAt, 
         <CardDescription>{t("intro")}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-5 rounded-md border bg-muted/40 p-3">
-          <div className="font-medium">{meetingTitle}</div>
-          <div className="text-sm text-muted-foreground">{spaceName}</div>
-          {startsAt && (
-            <div className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <CalendarClock className="size-4" aria-hidden /> {startsAt}
-            </div>
+        <div className="mb-5 overflow-hidden rounded-md border bg-muted/40">
+          {coverUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt="" className="aspect-[1200/630] w-full object-cover" />
           )}
+          <div className="p-3">
+            <div className="font-medium">{meetingTitle}</div>
+            <div className="text-sm text-muted-foreground">{spaceName}</div>
+            {startsAt && (
+              <div className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                <CalendarClock className="size-4" aria-hidden /> {startsAt}
+              </div>
+            )}
+            {meetingDescription && <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{meetingDescription}</p>}
+          </div>
         </div>
         <form action={action} className="grid gap-4">
           <input type="hidden" name="token" value={token} />

@@ -12,7 +12,7 @@ import { AreaIcon } from "@/components/knowledge/area-icon";
 import type { MeetingListItem } from "@/server/domain/meetings";
 
 export default async function MeetingSpacePage({ params }: PageProps<"/meetings/[slug]">) {
-  await requireUser();
+  const user = await requireUser();
   const { slug } = await params;
   const space = await getSpaceBySlug(slug);
   if (!space) notFound();
@@ -31,7 +31,7 @@ export default async function MeetingSpacePage({ params }: PageProps<"/meetings/
           </span>
         }
         description={space.purpose}
-        actions={<MeetingDialog spaceId={space.id} recordingDefault={space.recordingDefault} callsAvailable={callsAvailable} />}
+        actions={<MeetingDialog spaceId={space.id} recordingDefault={space.recordingDefault} callsAvailable={callsAvailable} canSetCover={user.role === "admin"} />}
       />
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">{t("empty")}</div>
@@ -56,9 +56,14 @@ async function MeetingSection({ title, list, spaceSlug }: { title: string; list:
         {list.map((m) => (
           <li key={m.id}>
             <Link href={`/meetings/${spaceSlug}/${m.id}`} className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-accent/40">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <MeetingKindIcon kind={m.kind} />
-              </span>
+              {m.coverMediaId ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`/api/files/${m.coverMediaId}?v=thumb`} alt="" className="h-9 w-14 shrink-0 rounded-md object-cover" />
+              ) : (
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <MeetingKindIcon kind={m.kind} />
+                </span>
+              )}
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{m.title}</span>
