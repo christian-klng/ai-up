@@ -7,7 +7,8 @@ import { apiKeys, auditLog, users, type ApiKey, type User } from "@/server/db/sc
  * API keys for MCP / external tooling. Format: aiup_<prefix8>_<secret32>; only the sha256 hash is stored.
  * Keys belong to an admin user; scopes restrict what the key may do.
  */
-export const API_SCOPES = ["workflows:read", "workflows:write", "runs:read", "runs:trigger", "llm:read", "llm:write", "questions:read", "landing:read", "landing:write", "knowledge:read", "knowledge:write"] as const;
+/** `meetings:invite` is deliberately separate from `meetings:write`: switching an invite link on lets strangers create active accounts. */
+export const API_SCOPES = ["workflows:read", "workflows:write", "runs:read", "runs:trigger", "llm:read", "llm:write", "questions:read", "landing:read", "landing:write", "knowledge:read", "knowledge:write", "meetings:read", "meetings:write", "meetings:invite"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 
 function hash(secret: string): string {

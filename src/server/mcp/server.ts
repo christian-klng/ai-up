@@ -10,6 +10,9 @@ import { validateDefinition } from "@/server/workflows/definitions";
 import { startRun } from "@/server/workflows/dispatch";
 import { getAction, getTrigger, loadRegistry } from "@/server/workflows/registry";
 import { createWorkflow, deleteWorkflow, getRunWithSteps, getWorkflow, listRuns, listWorkflowVersions, listWorkflows, setWorkflowStatus, toDefinition, updateWorkflow, workflowStats } from "@/server/workflows/service";
+import { createMeeting, getMeeting, listMeetings, listSpaces, updateMeeting } from "@/server/domain/meetings";
+import { getLiveKitConfig } from "@/server/domain/integrations";
+import { getMeetingInvite, setInviteEnabled } from "@/server/domain/invites";
 import { db } from "@/server/db/client";
 import { auditLog } from "@/server/db/schema";
 import { loadAppSettings, updateAppSettings } from "@/server/domain/settings";
@@ -255,6 +258,38 @@ A template can carry qualitative criteria that an LLM checks against every entry
 `;
 
 /** Current templates and collections appended to the doc so the calling LLM knows ids, slugs and versions. */
+const MEETINGS_DOC = `# AI-Up meetings and invite links
+
+Meetings live in **meeting spaces** (created by admins in the UI only – there is no create_space tool).
+Every meeting belongs to exactly one space; the app URL is /meetings/<spaceSlug>/<meetingId>.
+
+## Meeting fields
+- \`kind\`: \`protocol\` (markdown protocol only, for meetings held outside the app), \`audio\` or \`video\`
+  (a call inside the app). Calls need the LiveKit integration – the context below says whether it is enabled;
+  without it, create protocol meetings only.
+- \`title\`, optional \`description\` (plain text), optional \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00).
+- \`recordingEnabled\` (audio/video only; defaults to the space's recordingDefault). Protocol meetings never record.
+- \`status\` is managed by the app (\`scheduled\` → \`live\` → \`ended\`) and cannot be set here.
+- The API key's owner becomes host and creator of meetings created here.
+
+## Invite link (scope meetings:invite)
+Each meeting has exactly one invite link, off by default. While it is **enabled**, anyone with the URL can
+register with name and e-mail and is activated immediately – no admin approval. The account remembers the
+meeting it came through. Switching the link off keeps the URL (re-enabling makes the same URL work again)
+and keeps members who already registered. Handle the URL like a credential: it creates active accounts.
+`;
+
+async function meetingsContext(): Promise<string> {
+  const [spaces, lk] = await Promise.all([listSpaces(), getLiveKitConfig()]);
+  return [
+    "## Current context",
+    `- Calls (audio/video meetings) available: ${lk?.enabled ? "yes" : "no – create protocol meetings only"}`,
+    `- App URL: ${env.APP_URL}`,
+    "- Meeting spaces:",
+    ...spaces.map((s) => `  - ${s.name} (id ${s.id}, slug ${s.slug}, recordingDefault ${s.recordingDefault}, ${s.meetingCount} meetings): ${s.purpose}`),
+  ].join("\n");
+}
+
 async function collectionsContext(): Promise<string> {
   const [settings, areas, templates, assignments] = await Promise.all([loadAppSettings(), listAreas(), listTemplates(), listAllAssignments()]);
   const templateLines = templates.map((t) => `- ${t.name} (id ${t.id}${t.systemKey ? `, systemKey "${t.systemKey}"` : ""}, v${t.version}${t.isSystem ? ", system" : ""})`);
@@ -299,7 +334,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_invite.",
     },
   );
 
@@ -326,6 +361,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "aiup://docs/collections",
     { title: "Collections, templates & entries", description: "Template definition format, answer shapes and rules for content collections, plus the current templates and collections.", mimeType: "text/markdown" },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${COLLECTIONS_DOC}\n${await collectionsContext()}` }] }),
+  );
+
+  server.registerResource(
+    "meetings",
+    "aiup://docs/meetings",
+    { title: "Meetings & invite links", description: "Meeting fields, rules for invite links and the current meeting spaces.", mimeType: "text/markdown" },
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${MEETINGS_DOC}\n${await meetingsContext()}` }] }),
   );
 
   // ---- catalog -------------------------------------------------------------
@@ -934,6 +976,148 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
 
   // ---- questions ------------------------------------------------------------
+  // ---- meetings ------------------------------------------------------------
+  const meetingOut = (m: Awaited<ReturnType<typeof getMeeting>> & object) => ({
+    id: m.id,
+    title: m.title,
+    description: m.description,
+    kind: m.kind,
+    status: m.status,
+    startsAt: m.startsAt?.toISOString() ?? null,
+    startedAt: m.startedAt?.toISOString() ?? null,
+    endedAt: m.endedAt?.toISOString() ?? null,
+    recordingEnabled: m.recordingEnabled,
+    recordingStatus: m.recordingStatus,
+    hasRecording: !!m.recordingMediaId,
+    hasTranscript: !!m.transcriptMarkdown,
+    protocolVersion: m.protocolVersion,
+    participantCount: m.participantCount,
+    host: m.host ? { id: m.host.id, name: m.host.name } : null,
+    space: { id: m.spaceId, slug: m.spaceSlug, name: m.spaceName },
+    href: `/meetings/${m.spaceSlug}/${m.id}`,
+    url: `${env.APP_URL}/meetings/${m.spaceSlug}/${m.id}`,
+  });
+  const inviteOut = async (meetingId: string) => {
+    if (!hasScope(auth, "meetings:invite")) return undefined;
+    const inv = await getMeetingInvite(meetingId);
+    return inv ? { enabled: inv.enabled, url: inv.enabled ? inv.url : null, registrations: inv.useCount } : { enabled: false, url: null, registrations: 0 };
+  };
+  const parseStartsAt = (v: string | null | undefined): Date | null | undefined => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) throw new Error(`startsAt is not a valid ISO 8601 date: "${v}"`);
+    return d;
+  };
+
+  server.registerTool("list_meeting_spaces", { title: "Meetings - List spaces", description: "All meeting spaces with purpose, recording default and meeting counts. Spaces are created in the UI only.", inputSchema: {} }, async () => {
+    require(auth, "meetings:read");
+    const spaces = await listSpaces();
+    return text(spaces.map((s) => ({ id: s.id, slug: s.slug, name: s.name, purpose: s.purpose, description: s.description, recordingDefault: s.recordingDefault, meetingCount: s.meetingCount, liveCount: s.liveCount })));
+  });
+  server.registerTool(
+    "list_meetings",
+    { title: "Meetings - List meetings", description: "Meetings (live first, then upcoming, then past), optionally filtered by space or status.", inputSchema: { spaceId: z.string().uuid().optional(), status: z.enum(["scheduled", "live", "ended"]).optional(), limit: z.number().int().min(1).max(200).optional() } },
+    async ({ spaceId, status, limit }) => {
+      require(auth, "meetings:read");
+      const rows = await listMeetings({ spaceId, status, limit });
+      return text(rows.map(meetingOut));
+    },
+  );
+  server.registerTool("get_meeting", { title: "Meetings - Get meeting", description: "One meeting with protocol and transcript markdown; includes the invite link state when the key has meetings:invite.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
+    require(auth, "meetings:read");
+    const m = await getMeeting(id);
+    if (!m) return fail("meeting not found");
+    return text({ ...meetingOut(m), protocolMarkdown: m.protocolMarkdown, transcriptMarkdown: m.transcriptMarkdown, invite: await inviteOut(m.id) });
+  });
+  server.registerTool(
+    "create_meeting",
+    {
+      title: "Meetings - Create meeting",
+      description: "Creates a meeting in a space (read resource aiup://docs/meetings first). The key's owner becomes host. Audio/video kinds need calls to be available.",
+      inputSchema: {
+        spaceId: z.string().uuid(),
+        title: z.string().trim().min(1).max(200),
+        kind: z.enum(["protocol", "audio", "video"]).optional().describe("default protocol"),
+        description: z.string().trim().max(4000).optional(),
+        startsAt: z.string().optional().describe("ISO 8601 with timezone"),
+        recordingEnabled: z.boolean().optional().describe("audio/video only; default = space's recordingDefault"),
+      },
+    },
+    async ({ spaceId, title, kind, description, startsAt, recordingEnabled }) => {
+      require(auth, "meetings:write");
+      const spaces = await listSpaces();
+      const space = spaces.find((s) => s.id === spaceId);
+      if (!space) return fail("meeting space not found – use list_meeting_spaces");
+      const k = kind ?? "protocol";
+      if (k !== "protocol") {
+        const lk = await getLiveKitConfig();
+        if (!lk?.enabled) return fail("calls are not available (LiveKit integration disabled) – create a protocol meeting instead");
+      }
+      let when: Date | null = null;
+      try {
+        when = parseStartsAt(startsAt) ?? null;
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+      const meeting = await createMeeting(spaceId, { title, description: description ?? null, kind: k, startsAt: when, recordingEnabled: recordingEnabled ?? space.recordingDefault }, auth.user.id);
+      await audit(auth, "meeting.created", meeting.id, { spaceId, kind: k }, "meeting");
+      const full = await getMeeting(meeting.id);
+      return text(full ? meetingOut(full) : { id: meeting.id });
+    },
+  );
+  server.registerTool(
+    "update_meeting",
+    {
+      title: "Meetings - Update meeting",
+      description: "Changes title, description, date or recording flag of a meeting. Kind can only change while the meeting is still scheduled. Omitted fields stay; startsAt null clears the date.",
+      inputSchema: {
+        id: z.string().uuid(),
+        title: z.string().trim().min(1).max(200).optional(),
+        description: z.string().trim().max(4000).nullable().optional(),
+        kind: z.enum(["protocol", "audio", "video"]).optional(),
+        startsAt: z.string().nullable().optional().describe("ISO 8601 with timezone; null clears"),
+        recordingEnabled: z.boolean().optional(),
+      },
+    },
+    async ({ id, title, description, kind, startsAt, recordingEnabled }) => {
+      require(auth, "meetings:write");
+      const existing = await getMeeting(id);
+      if (!existing) return fail("meeting not found");
+      if (kind !== undefined && kind !== existing.kind && existing.status !== "scheduled") return fail("kind can only change while the meeting is scheduled");
+      if (kind && kind !== "protocol") {
+        const lk = await getLiveKitConfig();
+        if (!lk?.enabled) return fail("calls are not available (LiveKit integration disabled)");
+      }
+      let when: Date | null | undefined;
+      try {
+        when = parseStartsAt(startsAt);
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+      await updateMeeting(id, { title, description, kind, startsAt: when, recordingEnabled }, auth.user.id);
+      await audit(auth, "meeting.updated", id, {}, "meeting");
+      const full = await getMeeting(id);
+      return text(full ? meetingOut(full) : { id });
+    },
+  );
+  server.registerTool(
+    "set_meeting_invite",
+    {
+      title: "Meetings - Enable or disable invite link",
+      description: "Switches a meeting's invite link on or off and returns its URL. While enabled, anyone with the URL can register and is activated immediately – see resource aiup://docs/meetings. Requires scope meetings:invite.",
+      inputSchema: { meetingId: z.string().uuid(), enabled: z.boolean() },
+    },
+    async ({ meetingId, enabled }) => {
+      require(auth, "meetings:invite");
+      const meeting = await getMeeting(meetingId);
+      if (!meeting) return fail("meeting not found");
+      const inv = await setInviteEnabled(meeting.id, enabled, auth.user.id);
+      await audit(auth, enabled ? "meeting.invite.enabled" : "meeting.invite.disabled", inv.id, { meetingId }, "meeting_invite");
+      return text({ meetingId, title: meeting.title, enabled: inv.enabled, url: inv.enabled ? inv.url : null, registrations: inv.useCount });
+    },
+  );
+
   server.registerTool("list_questions", { title: "Questions - List questions", description: "Questions created by ask_user steps with response counts.", inputSchema: { questionKey: z.string().optional(), limit: z.number().int().min(1).max(200).optional() } }, async ({ questionKey, limit }) => {
     require(auth, "questions:read");
     const items = await listQuestions({ questionKey, limit });
