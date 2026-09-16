@@ -9,9 +9,11 @@ import { getAppSettings } from "@/server/domain/settings";
 import { getMedia } from "@/server/media/storage";
 import { env } from "@/server/env";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { MeetingCover, MeetingFacts, MeetingHeader, MeetingLayout } from "@/components/meetings/meeting-detail";
 import { InviteForm } from "./invite-form";
 
-/** Date line for the invite card and the OpenGraph description (shared so both say the same). */
+/** Date line for the OpenGraph description. */
 async function startsAtLabel(resolved: ResolvedInvite): Promise<string | null> {
   if (!resolved.meeting.startsAt) return null;
   const format = await getFormatter();
@@ -40,8 +42,9 @@ export async function generateMetadata({ params }: PageProps<"/invite/[token]">)
 }
 
 /**
- * Public landing page of a meeting invite link. Signed-in members go straight to the meeting;
- * everyone else registers here (and is activated right away) or signs in with the meeting as target.
+ * Public landing page of a meeting invite link – the meeting page without members-only parts
+ * (participants, recording, protocol). Signed-in members go straight to the meeting; everyone else
+ * registers in the details card (and is activated right away) or signs in with the meeting as target.
  */
 export default async function InvitePage({ params }: PageProps<"/invite/[token]">) {
   const { token } = await params;
@@ -49,7 +52,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
 
   if (!resolved) {
     return (
-      <Card>
+      <Card className="mx-auto max-w-md">
         <CardHeader>
           <LinkIcon className="size-8 text-muted-foreground" aria-hidden />
           <CardTitle>{t("invalidTitle")}</CardTitle>
@@ -66,17 +69,27 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
 
   if (user) redirect(user.status === "active" ? resolved.href : "/pending");
 
-  const [settings, startsAt] = await Promise.all([getAppSettings(), startsAtLabel(resolved)]);
+  const settings = await getAppSettings();
+  const { meeting, host, space } = resolved;
   return (
-    <InviteForm
-      token={token}
-      appName={settings.name}
-      meetingTitle={resolved.meeting.title}
-      meetingDescription={resolved.meeting.description}
-      spaceName={resolved.space.name}
-      startsAt={startsAt}
-      coverUrl={resolved.meeting.coverMediaId ? `/api/files/${resolved.meeting.coverMediaId}` : null}
-      loginHref={`/login?next=${encodeURIComponent(resolved.href)}`}
-    />
+    <article>
+      <MeetingCover mediaId={meeting.coverMediaId} className="mb-6" />
+      <MeetingLayout
+        header={<MeetingHeader status={meeting.status} startsAt={meeting.startsAt} kind={meeting.kind} title={meeting.title} host={host} description={meeting.description} />}
+        aside={
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("title", { app: settings.name })}</CardTitle>
+              <CardDescription>{t("intro")}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <MeetingFacts startsAt={meeting.startsAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} status={meeting.status} space={space} />
+              <Separator />
+              <InviteForm token={token} loginHref={`/login?next=${encodeURIComponent(resolved.href)}`} />
+            </CardContent>
+          </Card>
+        }
+      />
+    </article>
   );
 }

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { auditLog, meetingInvites, meetingSpaces, meetings, users, type MeetingInvite, type User } from "@/server/db/schema";
+import { auditLog, meetingInvites, meetingSpaces, meetings, users, type MeetingInvite, type MeetingKind, type MeetingStatus, type User } from "@/server/db/schema";
 import { env } from "@/server/env";
 
 /**
@@ -14,8 +14,10 @@ import { env } from "@/server/env";
 
 export type ResolvedInvite = {
   invite: MeetingInvite;
-  meeting: { id: string; title: string; description: string | null; startsAt: Date | null; kind: string; status: string; coverMediaId: string | null };
-  space: { id: string; name: string; slug: string };
+  meeting: { id: string; title: string; description: string | null; startsAt: Date | null; kind: MeetingKind; status: MeetingStatus; recordingEnabled: boolean; coverMediaId: string | null };
+  /** avatars are served publicly, so the host can be shown on the invite page */
+  host: { id: string; name: string; avatarMediaId: string | null } | null;
+  space: { id: string; name: string; slug: string; icon: string };
   /** app-relative meeting page */
   href: string;
 };
@@ -62,18 +64,20 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
   const [row] = await db
     .select({
       invite: meetingInvites,
-      meeting: { id: meetings.id, title: meetings.title, description: meetings.description, startsAt: meetings.startsAt, kind: meetings.kind, status: meetings.status, coverMediaId: meetings.coverMediaId, deletedAt: meetings.deletedAt },
-      space: { id: meetingSpaces.id, name: meetingSpaces.name, slug: meetingSpaces.slug },
+      meeting: { id: meetings.id, title: meetings.title, description: meetings.description, startsAt: meetings.startsAt, kind: meetings.kind, status: meetings.status, recordingEnabled: meetings.recordingEnabled, coverMediaId: meetings.coverMediaId, deletedAt: meetings.deletedAt },
+      host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId },
+      space: { id: meetingSpaces.id, name: meetingSpaces.name, slug: meetingSpaces.slug, icon: meetingSpaces.icon },
     })
     .from(meetingInvites)
     .innerJoin(meetings, eq(meetings.id, meetingInvites.meetingId))
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
+    .leftJoin(users, eq(users.id, meetings.hostId))
     .where(eq(meetingInvites.token, token))
     .limit(1);
   if (!row || !row.invite.enabled || row.meeting.deletedAt) return null;
   const { deletedAt: _deleted, ...meeting } = row.meeting;
   void _deleted;
-  return { invite: row.invite, meeting, space: row.space, href: meetingHref(row.space.slug, row.meeting.id) };
+  return { invite: row.invite, meeting, host: row.host?.id ? row.host : null, space: row.space, href: meetingHref(row.space.slug, row.meeting.id) };
 }
 
 /** Counts one more account created through the link. */
