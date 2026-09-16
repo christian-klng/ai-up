@@ -47,7 +47,9 @@ export function themeCss(theme: ThemeSettings): string {
   const fgDark = dark.l > 0.66 ? "oklch(0.15 0 0)" : "oklch(0.985 0 0)";
   const radius = `${Math.min(Math.max(theme.radius, 0), 1.5)}rem`;
   const tint = (l: number, c: number) => fmt({ l, c: Math.min(c, 0.05), h: base.h });
+  // The sidebar stays visually neutral: only a whisper of the brand hue so it harmonizes without reading as "colored".
+  const neutral = (l: number, c: number) => fmt({ l, c: Math.min(c, 0.008), h: base.h });
 
-  return `:root{--primary:${fmt(light)};--primary-foreground:${fgLight};--ring:${fmt({ ...light, c: light.c * 0.6 })};--sidebar-primary:${fmt(light)};--sidebar-primary-foreground:${fgLight};--chart-1:${fmt(light)};--radius:${radius};--accent:${tint(0.96, base.c * 0.25)};--sidebar-accent:${tint(0.95, base.c * 0.25)};--muted:${tint(0.965, base.c * 0.15)};--sidebar:${tint(0.985, base.c * 0.1)}}
-.dark{--primary:${fmt(dark)};--primary-foreground:${fgDark};--ring:${fmt({ ...dark, c: dark.c * 0.6 })};--sidebar-primary:${fmt(dark)};--sidebar-primary-foreground:${fgDark};--chart-1:${fmt(dark)};--accent:${tint(0.27, base.c * 0.2)};--sidebar-accent:${tint(0.26, base.c * 0.2)};--muted:${tint(0.26, base.c * 0.12)};--sidebar:${tint(0.19, base.c * 0.1)}}`;
+  return `:root{--primary:${fmt(light)};--primary-foreground:${fgLight};--ring:${fmt({ ...light, c: light.c * 0.6 })};--sidebar-primary:${fmt(light)};--sidebar-primary-foreground:${fgLight};--chart-1:${fmt(light)};--radius:${radius};--accent:${tint(0.96, base.c * 0.25)};--sidebar-accent:${neutral(0.94, base.c * 0.04)};--muted:${tint(0.965, base.c * 0.15)};--sidebar:${neutral(0.985, base.c * 0.02)}}
+.dark{--primary:${fmt(dark)};--primary-foreground:${fgDark};--ring:${fmt({ ...dark, c: dark.c * 0.6 })};--sidebar-primary:${fmt(dark)};--sidebar-primary-foreground:${fgDark};--chart-1:${fmt(dark)};--accent:${tint(0.27, base.c * 0.2)};--sidebar-accent:${neutral(0.27, base.c * 0.03)};--muted:${tint(0.26, base.c * 0.12)};--sidebar:${neutral(0.19, base.c * 0.02)}}`;
 }
