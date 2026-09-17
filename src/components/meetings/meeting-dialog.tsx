@@ -20,7 +20,9 @@ import { cn } from "@/lib/utils";
 
 export type MeetingFormValues = { id: string; title: string; description: string | null; kind: MeetingKind; startsAt: string | null; recordingEnabled: boolean; status: "scheduled" | "live" | "ended"; coverMediaId: string | null };
 
-const KINDS: MeetingKind[] = ["protocol", "audio", "video"];
+/** Selectable kinds. "protocol" (minutes without a call) is legacy: no longer offered, but an existing
+ *  protocol meeting keeps its kind and still shows it while editing. */
+const KINDS: MeetingKind[] = ["audio", "video"];
 
 /** Local datetime-local value from an ISO string (keeps the user's timezone). */
 function toLocalInput(iso: string | null): string {
@@ -53,7 +55,8 @@ export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, cal
       if (fileInput.current) fileInput.current.value = "";
     }
   };
-  const [kind, setKind] = useState<MeetingKind>(meeting?.kind ?? "protocol");
+  const [kind, setKind] = useState<MeetingKind>(meeting?.kind ?? "video");
+  const kinds = meeting?.kind === "protocol" ? (["protocol", ...KINDS] as MeetingKind[]) : KINDS;
   const [startsAt, setStartsAt] = useState(toLocalInput(meeting?.startsAt ?? null));
   const [state, action, pending] = useActionState<MeetingFormState, FormData>(saveMeetingAction, { status: "idle" });
   const isEdit = !!meeting;
@@ -89,8 +92,8 @@ export function MeetingDialog({ spaceId, recordingDefault, meeting, trigger, cal
 
           <div className="grid gap-2">
             <Label>{t("kind")}</Label>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {KINDS.map((k) => {
+            <div className={cn("grid gap-2", kinds.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+              {kinds.map((k) => {
                 const disabled = (isEdit && meeting.status !== "scheduled") || (k !== "protocol" && !callsAvailable);
                 return (
                   <button key={k} type="button" disabled={disabled} aria-pressed={kind === k} onClick={() => setKind(k)} className={cn("flex items-start gap-2 rounded-lg border p-3 text-left transition-colors hover:bg-accent/60 disabled:cursor-not-allowed disabled:opacity-50", kind === k && "border-primary bg-primary/5")}>

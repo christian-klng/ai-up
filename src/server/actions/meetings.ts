@@ -42,6 +42,8 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     recordingEnabled: formData.has("recordingEnabled") ? formData.get("recordingEnabled") === "on" : undefined,
     coverMediaId: formData.has("coverMediaId") ? String(formData.get("coverMediaId")) : undefined,
   });
+  // "protocol" (minutes without a call) is legacy – kept for existing meetings, no longer created.
+  if (parsed.success && !parsed.data.meetingId && parsed.data.kind === "protocol") return { status: "error", code: "unexpected" };
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];
     return { status: "error", code: field === "title" ? "titleRequired" : "unexpected" };

@@ -1000,7 +1000,7 @@
     "create": "Neues Meeting",
     "createSubmit": "Meeting anlegen",
     "edit": "Meeting bearbeiten",
-    "dialogIntro": "Art, Titel und optional ein Termin. Protokolle lassen sich jederzeit schreiben; Calls starten die Teilnehmenden selbst.",
+    "dialogIntro": "Art, Titel und optional ein Termin. Den Call starten die Teilnehmenden selbst; das Protokoll entsteht auf der Meeting-Seite.",
     "kind": "Art",
     "kinds": {
       "protocol": "Protokoll",

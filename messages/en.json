@@ -1000,7 +1000,7 @@
     "create": "New meeting",
     "createSubmit": "Create meeting",
     "edit": "Edit meeting",
-    "dialogIntro": "Kind, title and an optional date. Minutes can be written any time; calls are started by the participants.",
+    "dialogIntro": "Kind, title and an optional date. Participants start the call themselves; the minutes are written on the meeting page.",
     "kind": "Kind",
     "kinds": {
       "protocol": "Minutes",
