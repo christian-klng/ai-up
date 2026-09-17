@@ -39,7 +39,7 @@ async function ownThread(threadId: string) {
 
 export async function createThreadAction(agentSlug: string): Promise<{ ok: true; threadId: string } | { ok: false }> {
   const me = await assertUser();
-  const agent = await getAgentBySlug(agentSlug);
+  const agent = await getAgentBySlug(me.communityId, agentSlug);
   if (!agent || !agent.enabled) return { ok: false };
   if (agent.ownerId && agent.ownerId !== me.id) return { ok: false };
   const thread = await createThread(agent.id, me.id);
@@ -66,12 +66,12 @@ export async function startThreadAction(
   config: { mode: "assist" | "curate"; writeApproval: "always" | "never"; readAreaIds: string[]; writeAreaIds: string[]; instructionContentIds: string[] },
 ): Promise<{ ok: true; threadId: string } | { ok: false; reason: "invalid" | "quota" }> {
   const me = await assertUser();
-  const agent = await getAgentBySlug(agentSlug);
+  const agent = await getAgentBySlug(me.communityId, agentSlug);
   if (!agent || !agent.enabled || (agent.ownerId && agent.ownerId !== me.id)) return { ok: false, reason: "invalid" };
   const parsedBody = sendSchema.safeParse(body);
   const parsedConfig = configSchema.safeParse(config);
   if (!parsedBody.success || !parsedConfig.success) return { ok: false, reason: "invalid" };
-  if ((await getBudgetStatus(me.id)).exceeded) return { ok: false, reason: "quota" };
+  if ((await getBudgetStatus(me.communityId, me.id)).exceeded) return { ok: false, reason: "quota" };
 
   const cfg = parsedConfig.data;
   const thread = await createThread(agent.id, me.id);
@@ -122,7 +122,7 @@ export async function sendAgentMessageAction(threadId: string, body: string): Pr
   if (await hasRunningTurn(owned.thread.id)) return { ok: false, reason: "busy" };
   // The turn already running may still exceed the quota by at most maxTokensPerTurn – that cap is
   // what bounds the overshoot; starting a new turn over the limit is refused outright.
-  if ((await getBudgetStatus(owned.me.id)).exceeded) return { ok: false, reason: "quota" };
+  if ((await getBudgetStatus(owned.me.communityId, owned.me.id)).exceeded) return { ok: false, reason: "quota" };
 
   const message = await addMessage({ threadId: owned.thread.id, role: "user", content: parsed.data, status: "complete" });
   const dto = toDto(message);
@@ -147,7 +147,7 @@ export async function cancelAgentTurnAction(threadId: string): Promise<{ ok: boo
 /** The member's own quota state – shown as a percentage in the configuration panel. */
 export async function getBudgetStatusAction(): Promise<{ budget: number; percent: number; exceeded: boolean; resetsAt: string }> {
   const me = await assertUser();
-  const status = await getBudgetStatus(me.id);
+  const status = await getBudgetStatus(me.communityId, me.id);
   return { budget: status.budget, percent: status.percent, exceeded: status.exceeded, resetsAt: status.resetsAt.toISOString() };
 }
 
@@ -201,18 +201,18 @@ export async function getThreadConfigAction(threadId: string) {
 
 /** Configuration tree: the entries of one collection, loaded when the member unfolds it. */
 export async function listCollectionEntriesAction(areaId: string): Promise<{ id: string; title: string; areaId: string; areaName: string; chars: number }[]> {
-  await assertUser();
+  const me = await assertUser();
   const id = z.string().uuid().parse(areaId);
-  const [area, items] = await Promise.all([getAreaById(id), listContents({ areaId: id, limit: TREE_ENTRY_LIMIT })]);
+  const [area, items] = await Promise.all([getAreaById(me.communityId, id), listContents(me.communityId, { areaId: id, limit: TREE_ENTRY_LIMIT })]);
   if (!area) return [];
   return items.map((c) => ({ id: c.id, title: c.title, areaId: c.areaId, areaName: area.name, chars: instructionBlockChars(c.title, c.version?.bodyMarkdown ?? "") }));
 }
 
 /** Entry picker in the configuration panel: search across the collections, grouped by the caller. */
 export async function searchEntriesAction(query: string): Promise<{ id: string; title: string; areaId: string; areaName: string; chars: number }[]> {
-  await assertUser();
+  const me = await assertUser();
   const q = z.string().trim().max(200).parse(query);
-  const [areas, items] = await Promise.all([listAreas(), listContents({ query: q || undefined, limit: 40 })]);
+  const [areas, items] = await Promise.all([listAreas(me.communityId), listContents(me.communityId, { query: q || undefined, limit: 40 })]);
   const names = new Map(areas.map((a) => [a.id, a.name]));
   // `chars` is what the entry costs in the instruction budget – the panel sums it up before anything is sent.
   return items.map((c) => ({ id: c.id, title: c.title, areaId: c.areaId, areaName: names.get(c.areaId) ?? "", chars: instructionBlockChars(c.title, c.version?.bodyMarkdown ?? "") }));

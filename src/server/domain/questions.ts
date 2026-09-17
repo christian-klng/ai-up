@@ -2,7 +2,7 @@ import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { questionDismissals, questionResponses, questions, users, workflows, type Question, type QuestionAudience, type QuestionField } from "@/server/db/schema";
 import { emitDomainEvent } from "@/server/events/bus";
-import { publishBroadcast, publishToUser, publishToUsers } from "@/server/realtime/publish";
+import { publishToCommunity, publishToUser, publishToUsers } from "@/server/realtime/publish";
 import type { QuestionDto } from "@/lib/realtime-events";
 
 export function toQuestionDto(q: Question, workflowName: string | null = null): QuestionDto {
@@ -20,6 +20,7 @@ export function toQuestionDto(q: Question, workflowName: string | null = null): 
 }
 
 export type CreateQuestionInput = {
+  communityId: string;
   questionKey: string;
   title: string;
   description?: string | null;
@@ -39,6 +40,7 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Questi
   const [q] = await db
     .insert(questions)
     .values({
+      communityId: input.communityId,
       questionKey: input.questionKey,
       title: input.title,
       description: input.description ?? null,
@@ -53,7 +55,7 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Questi
     })
     .returning();
   const dto = toQuestionDto(q, input.workflowName ?? null);
-  if (input.audience.type === "all") await publishBroadcast("question.created", { question: dto });
+  if (input.audience.type === "all") await publishToCommunity(input.communityId, "question.created", { question: dto });
   else await publishToUsers(input.recipientIds, "question.created", { question: dto });
   return q;
 }
@@ -63,10 +65,10 @@ function isOpen(q: Question): boolean {
 }
 
 /** Open questions for a user: targeted at them, not answered, not dismissed. */
-export async function listOpenQuestionsForUser(userId: string): Promise<QuestionDto[]> {
+export async function listOpenQuestionsForUser(communityId: string, userId: string): Promise<QuestionDto[]> {
   const now = new Date();
   const rows = await db.query.questions.findMany({
-    where: and(isNull(questions.closedAt), or(isNull(questions.expiresAt), gt(questions.expiresAt, now))),
+    where: and(eq(questions.communityId, communityId), isNull(questions.closedAt), or(isNull(questions.expiresAt), gt(questions.expiresAt, now))),
     orderBy: [desc(questions.createdAt)],
     limit: 50,
   });
@@ -143,8 +145,8 @@ export async function questionStats(questionId: string): Promise<{ responses: nu
   return { responses: rows.length, distribution };
 }
 
-export async function answerQuestion(userId: string, questionId: string, rawAnswers: Record<string, unknown>): Promise<{ ok: true } | { ok: false; error: string }> {
-  const q = await db.query.questions.findFirst({ where: eq(questions.id, questionId) });
+export async function answerQuestion(communityId: string, userId: string, questionId: string, rawAnswers: Record<string, unknown>): Promise<{ ok: true } | { ok: false; error: string }> {
+  const q = await db.query.questions.findFirst({ where: and(eq(questions.id, questionId), eq(questions.communityId, communityId)) });
   if (!q || !isOpen(q)) return { ok: false, error: "question is closed" };
   if (q.audience.type !== "all" && !q.recipientIds.includes(userId)) return { ok: false, error: "not addressed to you" };
   const v = validateAnswers(q.fields, rawAnswers);
@@ -154,7 +156,7 @@ export async function answerQuestion(userId: string, questionId: string, rawAnsw
     .values({ questionId, userId, answers: v.answers })
     .onConflictDoUpdate({ target: [questionResponses.questionId, questionResponses.userId], set: { answers: v.answers, updatedAt: new Date() } });
   const [user, stats] = await Promise.all([db.query.users.findFirst({ where: eq(users.id, userId), columns: { id: true, name: true } }), questionStats(questionId)]);
-  emitDomainEvent("question.answered", {
+  emitDomainEvent("question.answered", communityId, {
     question: { id: q.id, key: q.questionKey, title: q.title, workflowId: q.workflowId, fields: q.fields },
     response: { answers: v.answers, answeredAt: new Date().toISOString() },
     user: { id: userId, name: user?.name ?? "" },
@@ -166,8 +168,8 @@ export async function answerQuestion(userId: string, questionId: string, rawAnsw
   return { ok: true };
 }
 
-export async function dismissQuestion(userId: string, questionId: string): Promise<void> {
-  const q = await db.query.questions.findFirst({ where: eq(questions.id, questionId) });
+export async function dismissQuestion(communityId: string, userId: string, questionId: string): Promise<void> {
+  const q = await db.query.questions.findFirst({ where: and(eq(questions.id, questionId), eq(questions.communityId, communityId)) });
   if (!q || !q.allowDismiss) return;
   await db.insert(questionDismissals).values({ questionId, userId }).onConflictDoNothing();
 }
@@ -175,17 +177,18 @@ export async function dismissQuestion(userId: string, questionId: string): Promi
 export async function closeQuestion(questionId: string): Promise<void> {
   const [q] = await db.update(questions).set({ closedAt: new Date() }).where(and(eq(questions.id, questionId), isNull(questions.closedAt))).returning();
   if (!q) return;
-  if (q.audience.type === "all") await publishBroadcast("question.closed", { questionId });
+  if (q.audience.type === "all") await publishToCommunity(q.communityId, "question.closed", { questionId });
   else await publishToUsers(q.recipientIds, "question.closed", { questionId });
 }
 
 export type QuestionListItem = Question & { responseCount: number; workflowName: string | null; isOpen: boolean };
 
-export async function listQuestions(opts: { limit?: number; questionKey?: string } = {}): Promise<QuestionListItem[]> {
+export async function listQuestions(communityId: string, opts: { limit?: number; questionKey?: string } = {}): Promise<QuestionListItem[]> {
   const rows = await db.execute<{ id: string; response_count: number; workflow_name: string | null }>(sql`
     select q.id, (select count(*)::int from question_responses r where r.question_id = q.id) as response_count,
       (select w.name from workflows w where w.id = q.workflow_id) as workflow_name
-    from questions q ${opts.questionKey ? sql`where q.question_key = ${opts.questionKey}` : sql``}
+    from questions q
+    where q.community_id = ${communityId} ${opts.questionKey ? sql`and q.question_key = ${opts.questionKey}` : sql``}
     order by q.created_at desc limit ${opts.limit ?? 100}
   `);
   if (!rows.rows.length) return [];
@@ -194,8 +197,8 @@ export async function listQuestions(opts: { limit?: number; questionKey?: string
   return rows.rows.map((r) => ({ ...byId.get(r.id)!, responseCount: r.response_count, workflowName: r.workflow_name, isOpen: isOpen(byId.get(r.id)!) })).filter((x) => x.id);
 }
 
-export async function getQuestionWithResponses(questionId: string) {
-  const q = await db.query.questions.findFirst({ where: eq(questions.id, questionId) });
+export async function getQuestionWithResponses(communityId: string, questionId: string) {
+  const q = await db.query.questions.findFirst({ where: and(eq(questions.id, questionId), eq(questions.communityId, communityId)) });
   if (!q) return undefined;
   const responses = await db
     .select({ id: questionResponses.id, answers: questionResponses.answers, createdAt: questionResponses.createdAt, user: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId } })
@@ -208,9 +211,11 @@ export async function getQuestionWithResponses(questionId: string) {
 }
 
 /** Distinct question keys known from created questions (for trigger pickers / MCP). */
-export async function listQuestionKeys(): Promise<{ key: string; title: string; count: number }[]> {
+export async function listQuestionKeys(communityId: string): Promise<{ key: string; title: string; count: number }[]> {
   const rows = await db.execute<{ key: string; title: string; count: number }>(sql`
-    select question_key as key, max(title) as title, count(*)::int as count from questions group by question_key order by max(created_at) desc limit 200
+    select question_key as key, max(title) as title, count(*)::int as count from questions
+    where community_id = ${communityId}
+    group by question_key order by max(created_at) desc limit 200
   `);
   return rows.rows;
 }

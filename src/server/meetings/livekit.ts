@@ -2,11 +2,11 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { AccessToken, RoomServiceClient, WebhookReceiver, type WebhookEvent } from "livekit-server-sdk";
 import { ParticipantInfo_Kind } from "@livekit/protocol";
 import { db } from "@/server/db/client";
-import { meetingParticipants, meetings, users, type Meeting } from "@/server/db/schema";
+import { meetingParticipants, meetingSpaces, meetings, users, type Meeting } from "@/server/db/schema";
 import { getLiveKitConfig, livekitHttpUrl } from "@/server/domain/integrations";
-import { getMeetingByRoom, getSpaceById } from "@/server/domain/meetings";
+import { getMeetingByRoom } from "@/server/domain/meetings";
 import { emitDomainEvent } from "@/server/events/bus";
-import { publishBroadcast } from "@/server/realtime/publish";
+import { publishToCommunity } from "@/server/realtime/publish";
 import { logger } from "@/server/logger";
 
 /**
@@ -87,14 +87,28 @@ export async function verifyWebhook(body: string, authHeader: string | null): Pr
   return receiver.receive(body, authHeader ?? undefined);
 }
 
+/**
+ * Webhooks arrive without a session, so the community is resolved from the meeting's space –
+ * and the live dot is published to that community only.
+ */
+async function spaceOfMeeting(m: Meeting) {
+  return db.query.meetingSpaces.findFirst({ where: eq(meetingSpaces.id, m.spaceId) });
+}
+
 async function broadcastMeeting(m: Meeting) {
-  const space = await getSpaceById(m.spaceId);
-  await publishBroadcast("meeting.updated", { meetingId: m.id, spaceId: m.spaceId, spaceSlug: space?.slug ?? "", status: m.status, participantCount: m.participantCount, recordingStatus: m.recordingStatus });
+  const space = await spaceOfMeeting(m);
+  if (!space) return;
+  await publishToCommunity(space.communityId, "meeting.updated", { meetingId: m.id, spaceId: m.spaceId, spaceSlug: space.slug, status: m.status, participantCount: m.participantCount, recordingStatus: m.recordingStatus });
 }
 
 async function eventPayload(m: Meeting) {
-  const space = await getSpaceById(m.spaceId);
+  const space = await spaceOfMeeting(m);
   return { id: m.id, title: m.title, kind: m.kind, status: m.status, spaceId: m.spaceId, spaceSlug: space?.slug ?? "", spaceName: space?.name ?? "", hostId: m.hostId, href: `/meetings/${space?.slug ?? m.spaceId}/${m.id}` };
+}
+
+/** The community a meeting belongs to; "default" is never assumed – a missing space means skip. */
+async function communityOf(m: Meeting): Promise<string | undefined> {
+  return (await spaceOfMeeting(m))?.communityId;
 }
 
 /** Applies a LiveKit webhook event to our meeting state. Idempotent where possible. */
@@ -110,7 +124,10 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
     case "room_started": {
       if (meeting.status !== "live") {
         const [m] = await db.update(meetings).set({ status: "live", startedAt: meeting.startedAt ?? new Date(), endedAt: null, participantCount: 0 }).where(eq(meetings.id, meeting.id)).returning();
-        emitDomainEvent("meeting.started", { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
+        {
+          const cid = await communityOf(m);
+          if (cid) emitDomainEvent("meeting.started", cid, { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
+        }
         await broadcastMeeting(m);
       }
       break;
@@ -126,7 +143,10 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
         .set({ status: "live", startedAt: meeting.startedAt ?? new Date(), endedAt: null, participantCount: sql`(select count(*)::int from ${meetingParticipants} mp where mp.meeting_id = ${meeting.id} and mp.left_at is null)` })
         .where(eq(meetings.id, meeting.id))
         .returning();
-      if (meeting.status !== "live") emitDomainEvent("meeting.started", { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
+      if (meeting.status !== "live") {
+          const cid = await communityOf(m);
+          if (cid) emitDomainEvent("meeting.started", cid, { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
+        }
       await broadcastMeeting(m);
       if (m.recordingEnabled && (m.recordingStatus === "none" || m.recordingStatus === "failed")) {
         const { startRecording } = await import("./recording");
@@ -156,7 +176,10 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
       }
       await db.update(meetingParticipants).set({ leftAt: new Date() }).where(and(eq(meetingParticipants.meetingId, meeting.id), isNull(meetingParticipants.leftAt)));
       const [m] = await db.update(meetings).set({ status: "ended", endedAt: new Date(), participantCount: 0 }).where(eq(meetings.id, meeting.id)).returning();
-      emitDomainEvent("meeting.ended", { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
+      {
+          const cid = await communityOf(m);
+          if (cid) emitDomainEvent("meeting.ended", cid, { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
+        }
       await broadcastMeeting(m);
       break;
     }
@@ -183,7 +206,8 @@ export async function markMeetingEnded(meetingId: string): Promise<Meeting | und
   await db.update(meetingParticipants).set({ leftAt: new Date() }).where(and(eq(meetingParticipants.meetingId, meetingId), isNull(meetingParticipants.leftAt)));
   const [m] = await db.update(meetings).set({ status: "ended", endedAt: new Date(), participantCount: 0 }).where(eq(meetings.id, meetingId)).returning();
   if (m) {
-    emitDomainEvent("meeting.ended", { meeting: await eventPayload(m), actorId: null, origin: { kind: "user" } });
+    const cid = await communityOf(m);
+    if (cid) emitDomainEvent("meeting.ended", cid, { meeting: await eventPayload(m), actorId: null, origin: { kind: "user" } });
     await broadcastMeeting(m);
   }
   return m;

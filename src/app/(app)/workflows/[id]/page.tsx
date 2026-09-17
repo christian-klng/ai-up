@@ -13,9 +13,9 @@ import { WorkflowDefinitionView } from "@/components/workflows/definition-view";
 export default async function WorkflowDetailPage({ params }: PageProps<"/workflows/[id]">) {
   const user = await requireUser();
   const { id } = await params;
-  const wf = await getWorkflow(id);
+  const wf = await getWorkflow(user.communityId, id);
   if (!wf || (wf.status === "draft" && user.role !== "admin")) notFound();
-  const [t, format, locale, runs, catalog] = await Promise.all([getTranslations("workflows"), getFormatter(), getLocale(), listRuns({ workflowId: wf.id, limit: 10 }), getEditorCatalog()]);
+  const [t, format, locale, runs, catalog] = await Promise.all([getTranslations("workflows"), getFormatter(), getLocale(), listRuns(user.communityId, { workflowId: wf.id, limit: 10 }), getEditorCatalog(user.communityId)]);
   const loc = locale === "en" ? "en" : "de";
   return (
     <div className="max-w-3xl">

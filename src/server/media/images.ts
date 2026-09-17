@@ -12,6 +12,8 @@ export async function processAndStoreImage(opts: {
   buffer: Buffer;
   originalName: string;
   purpose: MediaPurpose;
+  /** Community the image belongs to; null = platform-wide (generated account avatars). */
+  communityId?: string | null;
   uploadedBy?: string | null;
   /** Longest edge for the main image; omit to keep original size (max 4096). */
   maxEdge?: number;
@@ -39,6 +41,7 @@ export async function processAndStoreImage(opts: {
     mime: "image/webp",
     originalName: opts.originalName.replace(/\.[a-z0-9]+$/i, "") + ".webp",
     purpose: opts.purpose,
+    communityId: opts.communityId ?? null,
     uploadedBy: opts.uploadedBy,
     width: mainBuf.info.width,
     height: mainBuf.info.height,

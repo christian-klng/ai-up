@@ -40,6 +40,7 @@ export async function saveTemplateAction(input: {
   const evaluation = validateEvaluation(d.evaluation);
   if (!evaluation.evaluation) return { ok: false, issues: evaluation.issues };
   const saved = await saveTemplate(
+    admin.communityId,
     { id: d.templateId, name: d.name, description: d.description || null, icon: d.icon, definition: result.def, evaluation: evaluation.evaluation },
     admin.id,
     d.changeNote,
@@ -55,8 +56,8 @@ export async function saveTemplateAction(input: {
 
 /** Re-runs the criteria for every entry of this template (admin decision – can be many LLM calls). */
 export async function reevaluateTemplateEntriesAction(templateId: string): Promise<{ ok: boolean; queued: number }> {
-  await assertAdmin();
-  const template = await getTemplateById(templateId);
+  const admin = await assertAdmin();
+  const template = await getTemplateById(admin.communityId, templateId);
   if (!template) return { ok: false, queued: 0 };
   if (template.evaluation.criteria.length === 0) return { ok: true, queued: 0 };
   const entries = await listContentIdsForTemplate(templateId);
@@ -66,7 +67,7 @@ export async function reevaluateTemplateEntriesAction(templateId: string): Promi
 
 export async function deleteTemplateAction(templateId: string): Promise<{ ok: boolean; reason?: "system" | "notFound" }> {
   const admin = await assertAdmin();
-  const result = await deleteTemplate(templateId, admin.id);
+  const result = await deleteTemplate(admin.communityId, templateId, admin.id);
   if (result.ok) {
     revalidatePath("/admin/templates");
     revalidatePath("/admin/knowledge");
@@ -77,13 +78,13 @@ export async function deleteTemplateAction(templateId: string): Promise<{ ok: bo
 
 export async function setAreaTemplatesAction(areaId: string, templateIds: string[]): Promise<{ ok: boolean }> {
   const admin = await assertAdmin();
-  const area = await getAreaById(areaId);
+  const area = await getAreaById(admin.communityId, areaId);
   if (!area) return { ok: false };
   const unique = [...new Set(templateIds)];
   for (const id of unique) {
-    if (!(await getTemplateById(id))) return { ok: false };
+    if (!(await getTemplateById(admin.communityId, id))) return { ok: false };
   }
-  await setAreaTemplates(area.id, unique, admin.id);
+  await setAreaTemplates(admin.communityId, area.id, unique, admin.id);
   revalidatePath("/admin/knowledge");
   revalidatePath(`/knowledge/${area.slug}`, "layout");
   return { ok: true };
@@ -99,7 +100,7 @@ export async function saveTemplateEvaluationAction(templateId: string, evaluatio
   if (!parsedId.success) return { ok: false, issues: [{ path: "", message: "invalid input" }] };
   const parsed = validateEvaluation(evaluation);
   if (!parsed.evaluation) return { ok: false, issues: parsed.issues };
-  const saved = await setTemplateEvaluation(parsedId.data, parsed.evaluation, admin.id);
+  const saved = await setTemplateEvaluation(admin.communityId, parsedId.data, parsed.evaluation, admin.id);
   if (!saved) return { ok: false, issues: [{ path: "", message: "template not found" }] };
   await deleteEvaluationsForTemplate(saved.id, parsed.evaluation.criteria.map((c) => c.key));
   revalidatePath("/admin/templates");

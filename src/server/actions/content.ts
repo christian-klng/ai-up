@@ -63,7 +63,7 @@ export async function saveContentAction(_prev: ContentFormState, formData: FormD
     return { status: "error", code: field === "title" ? "titleRequired" : "unexpected" };
   }
   const d = parsed.data;
-  const area = await getAreaById(d.areaId);
+  const area = await getAreaById(user.communityId, d.areaId);
   if (!area) return { status: "error", code: "unexpected" };
 
   // Build version input by type
@@ -132,10 +132,10 @@ export async function saveContentAction(_prev: ContentFormState, formData: FormD
   input.meta = meta;
 
   try {
-    const existing = await getContent(d.contentId);
+    const existing = await getContent(user.communityId, d.contentId);
     if (!existing || existing.type !== d.type) return { status: "error", code: "unexpected" };
     if (!canEditContent(user, existing)) return { status: "error", code: "forbidden" };
-    await addContentVersion(d.contentId, input, user.id);
+    await addContentVersion(user.communityId, d.contentId, input, user.id);
     revalidatePath(`/knowledge/${area.slug}`, "layout");
     return { status: "saved", contentId: d.contentId, areaSlug: area.slug };
   } catch (err) {
@@ -146,19 +146,19 @@ export async function saveContentAction(_prev: ContentFormState, formData: FormD
 
 export async function deleteContentAction(contentId: string): Promise<{ ok: boolean; areaSlug?: string }> {
   const user = await assertUser();
-  const existing = await getContent(contentId);
+  const existing = await getContent(user.communityId, contentId);
   if (!existing || !canEditContent(user, existing)) return { ok: false };
-  const area = await getAreaById(existing.areaId);
-  await softDeleteContent(contentId, user.id);
+  const area = await getAreaById(user.communityId, existing.areaId);
+  await softDeleteContent(user.communityId, contentId, user.id);
   revalidatePath("/", "layout");
   return { ok: true, areaSlug: area?.slug };
 }
 
 export async function restoreVersionAction(contentId: string, versionId: string, note: string): Promise<{ ok: boolean }> {
   const user = await assertUser();
-  const existing = await getContent(contentId);
+  const existing = await getContent(user.communityId, contentId);
   if (!existing || !canEditContent(user, existing)) return { ok: false };
-  const res = await restoreContentVersion(contentId, versionId, user.id, note);
+  const res = await restoreContentVersion(user.communityId, contentId, versionId, user.id, note);
   revalidatePath("/", "layout");
   return { ok: !!res };
 }
@@ -166,6 +166,6 @@ export async function restoreVersionAction(contentId: string, versionId: string,
 export async function togglePinAction(contentId: string, pinned: boolean): Promise<void> {
   const user = await assertUser();
   if (user.role !== "admin") return;
-  await setContentPinned(contentId, pinned);
+  await setContentPinned(user.communityId, contentId, pinned);
   revalidatePath("/", "layout");
 }

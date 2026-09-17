@@ -17,12 +17,12 @@ import { ContentActions } from "./content-actions";
 export default async function ContentPage({ params }: PageProps<"/knowledge/[slug]/[contentId]">) {
   const user = await requireUser();
   const { slug, contentId } = await params;
-  const [area, content] = await Promise.all([getAreaBySlug(slug), getContent(contentId)]);
+  const [area, content] = await Promise.all([getAreaBySlug(user.communityId, slug), getContent(user.communityId, contentId)]);
   if (!area || !content || content.areaId !== area.id) notFound();
   const [t, format] = await Promise.all([getTranslations("knowledge"), getFormatter()]);
   const v = content.version;
   const editable = canEditContent(user, content);
-  const evaluation = await getEvaluationSummary(content.id, content.currentVersionId, v?.meta.structure?.structureId ?? null);
+  const evaluation = await getEvaluationSummary(user.communityId, content.id, content.currentVersionId, v?.meta.structure?.structureId ?? null);
 
   return (
     <article className="mx-auto max-w-3xl">

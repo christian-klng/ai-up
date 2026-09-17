@@ -26,7 +26,7 @@ import { slugify } from "@/lib/slug";
 
 export type AreaWithCount = KnowledgeArea & { contentCount: number };
 
-export async function listAreas(): Promise<AreaWithCount[]> {
+export async function listAreas(communityId: string): Promise<AreaWithCount[]> {
   const rows = await db
     .select({
       area: knowledgeAreas,
@@ -34,23 +34,37 @@ export async function listAreas(): Promise<AreaWithCount[]> {
       contentCount: sql<number>`(select count(*)::int from ${contents} c where c.area_id = ${knowledgeAreas}."id" and c.deleted_at is null)`,
     })
     .from(knowledgeAreas)
+    .where(eq(knowledgeAreas.communityId, communityId))
     .orderBy(asc(knowledgeAreas.sortOrder), asc(knowledgeAreas.name));
   return rows.map((r) => ({ ...r.area, contentCount: r.contentCount }));
 }
 
-export async function getAreaBySlug(slug: string): Promise<KnowledgeArea | undefined> {
-  return db.query.knowledgeAreas.findFirst({ where: eq(knowledgeAreas.slug, slug) });
+export async function getAreaBySlug(communityId: string, slug: string): Promise<KnowledgeArea | undefined> {
+  return db.query.knowledgeAreas.findFirst({ where: and(eq(knowledgeAreas.communityId, communityId), eq(knowledgeAreas.slug, slug)) });
 }
 
-export async function getAreaById(id: string): Promise<KnowledgeArea | undefined> {
+/**
+ * Loads a collection *inside* a community. An id from another community answers `undefined` – the
+ * same answer as "does not exist", so ids cannot be probed across the tenant boundary.
+ */
+export async function getAreaById(communityId: string, id: string): Promise<KnowledgeArea | undefined> {
+  return db.query.knowledgeAreas.findFirst({ where: and(eq(knowledgeAreas.communityId, communityId), eq(knowledgeAreas.id, id)) });
+}
+
+/** Unqualified lookup for internal use where the community is already established (events, joins). */
+async function areaOf(id: string): Promise<KnowledgeArea | undefined> {
   return db.query.knowledgeAreas.findFirst({ where: eq(knowledgeAreas.id, id) });
 }
 
-async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
+async function uniqueSlug(communityId: string, base: string, excludeId?: string): Promise<string> {
   let slug = slugify(base);
   for (let i = 2; i < 100; i++) {
     const clash = await db.query.knowledgeAreas.findFirst({
-      where: excludeId ? and(eq(knowledgeAreas.slug, slug), ne(knowledgeAreas.id, excludeId)) : eq(knowledgeAreas.slug, slug),
+      where: and(
+        eq(knowledgeAreas.communityId, communityId),
+        eq(knowledgeAreas.slug, slug),
+        excludeId ? ne(knowledgeAreas.id, excludeId) : undefined,
+      ),
       columns: { id: true },
     });
     if (!clash) return slug;
@@ -61,13 +75,17 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
 
 export type AreaInput = { name: string; purpose: string; description?: string | null; icon?: string; layout?: CollectionLayout; sortMode?: CollectionSort };
 
-export async function createArea(input: AreaInput, actorId: string): Promise<KnowledgeArea> {
-  const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${knowledgeAreas.sortOrder}), -1)::int` }).from(knowledgeAreas);
+export async function createArea(communityId: string, input: AreaInput, actorId: string): Promise<KnowledgeArea> {
+  const [{ max }] = await db
+    .select({ max: sql<number>`coalesce(max(${knowledgeAreas.sortOrder}), -1)::int` })
+    .from(knowledgeAreas)
+    .where(eq(knowledgeAreas.communityId, communityId));
   const [row] = await db
     .insert(knowledgeAreas)
     .values({
+      communityId,
       name: input.name.trim(),
-      slug: await uniqueSlug(input.name),
+      slug: await uniqueSlug(communityId, input.name),
       purpose: input.purpose.trim(),
       description: input.description?.trim() || null,
       icon: input.icon ?? "book",
@@ -77,18 +95,18 @@ export async function createArea(input: AreaInput, actorId: string): Promise<Kno
       createdBy: actorId,
     })
     .returning();
-  await db.insert(auditLog).values({ actorId, action: "knowledge_area.created", targetType: "knowledge_area", targetId: row.id, details: { name: row.name } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "knowledge_area.created", targetType: "knowledge_area", targetId: row.id, details: { name: row.name } });
   return row;
 }
 
-export async function updateArea(id: string, input: AreaInput, actorId: string): Promise<KnowledgeArea | undefined> {
-  const existing = await getAreaById(id);
+export async function updateArea(communityId: string, id: string, input: AreaInput, actorId: string): Promise<KnowledgeArea | undefined> {
+  const existing = await getAreaById(communityId, id);
   if (!existing) return undefined;
   const [row] = await db
     .update(knowledgeAreas)
     .set({
       name: input.name.trim(),
-      slug: existing.name.trim() === input.name.trim() ? existing.slug : await uniqueSlug(input.name, id),
+      slug: existing.name.trim() === input.name.trim() ? existing.slug : await uniqueSlug(communityId, input.name, id),
       purpose: input.purpose.trim(),
       description: input.description?.trim() || null,
       icon: input.icon ?? existing.icon,
@@ -97,24 +115,28 @@ export async function updateArea(id: string, input: AreaInput, actorId: string):
     })
     .where(eq(knowledgeAreas.id, id))
     .returning();
-  await db.insert(auditLog).values({ actorId, action: "knowledge_area.updated", targetType: "knowledge_area", targetId: id, details: { name: row.name } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "knowledge_area.updated", targetType: "knowledge_area", targetId: id, details: { name: row.name } });
   return row;
 }
 
 /** Deletes an area. Returns false if it still contains contents. */
-export async function deleteArea(id: string, actorId: string): Promise<boolean> {
+export async function deleteArea(communityId: string, id: string, actorId: string): Promise<boolean> {
+  if (!(await getAreaById(communityId, id))) return false;
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(contents)
     .where(and(eq(contents.areaId, id), isNull(contents.deletedAt)));
   if (count > 0) return false;
   await db.delete(knowledgeAreas).where(eq(knowledgeAreas.id, id));
-  await db.insert(auditLog).values({ actorId, action: "knowledge_area.deleted", targetType: "knowledge_area", targetId: id });
+  await db.insert(auditLog).values({ communityId, actorId, action: "knowledge_area.deleted", targetType: "knowledge_area", targetId: id });
   return true;
 }
 
-export async function moveArea(id: string, direction: "up" | "down"): Promise<void> {
-  const all = await db.query.knowledgeAreas.findMany({ orderBy: [asc(knowledgeAreas.sortOrder), asc(knowledgeAreas.name)] });
+export async function moveArea(communityId: string, id: string, direction: "up" | "down"): Promise<void> {
+  const all = await db.query.knowledgeAreas.findMany({
+    where: eq(knowledgeAreas.communityId, communityId),
+    orderBy: [asc(knowledgeAreas.sortOrder), asc(knowledgeAreas.name)],
+  });
   const idx = all.findIndex((a) => a.id === id);
   const swap = direction === "up" ? idx - 1 : idx + 1;
   if (idx < 0 || swap < 0 || swap >= all.length) return;
@@ -154,7 +176,7 @@ function buildSearchText(type: ContentType, v: ContentVersionInput): string {
 }
 
 async function contentEventPayload(content: Content, input: ContentVersionInput, versionNo: number, actorId: string | null, origin: EventOrigin): Promise<ContentEventPayload> {
-  const [area, author] = await Promise.all([getAreaById(content.areaId), content.authorId ? db.query.users.findFirst({ where: eq(users.id, content.authorId), columns: { name: true } }) : null]);
+  const [area, author] = await Promise.all([areaOf(content.areaId), content.authorId ? db.query.users.findFirst({ where: eq(users.id, content.authorId), columns: { name: true } }) : null]);
   return {
     content: {
       id: content.id,
@@ -176,7 +198,16 @@ async function contentEventPayload(content: Content, input: ContentVersionInput,
   };
 }
 
-export async function createContent(areaId: string, type: ContentType, input: ContentVersionInput, authorId: string | null, origin: EventOrigin = { kind: "user" }): Promise<Content> {
+export async function createContent(
+  communityId: string,
+  areaId: string,
+  type: ContentType,
+  input: ContentVersionInput,
+  authorId: string | null,
+  origin: EventOrigin = { kind: "user" },
+): Promise<Content> {
+  const area = await getAreaById(communityId, areaId);
+  if (!area) throw new Error("collection not found in this community");
   const result = await db.transaction(async (tx) => {
     const [content] = await tx
       .insert(contents)
@@ -199,7 +230,7 @@ export async function createContent(areaId: string, type: ContentType, input: Co
     const [updated] = await tx.update(contents).set({ currentVersionId: version.id }).where(eq(contents.id, content.id)).returning();
     return updated;
   });
-  emitDomainEvent("content.created", await contentEventPayload(result, input, 1, authorId, origin));
+  emitDomainEvent("content.created", communityId, await contentEventPayload(result, input, 1, authorId, origin));
   await queueEvaluation(result, input, origin);
   return result;
 }
@@ -216,9 +247,16 @@ async function queueEvaluation(content: Content, input: ContentVersionInput, ori
 }
 
 /** Appends a new version (edits are never destructive). */
-export async function addContentVersion(contentId: string, input: ContentVersionInput, editorId: string, origin: EventOrigin = { kind: "user" }): Promise<Content | undefined> {
+export async function addContentVersion(
+  communityId: string,
+  contentId: string,
+  input: ContentVersionInput,
+  editorId: string,
+  origin: EventOrigin = { kind: "user" },
+): Promise<Content | undefined> {
   const existing = await db.query.contents.findFirst({ where: and(eq(contents.id, contentId), isNull(contents.deletedAt)) });
   if (!existing) return undefined;
+  if (!(await getAreaById(communityId, existing.areaId))) return undefined;
   const nextNo = existing.versionCount + 1;
   const result = await db.transaction(async (tx) => {
     const [version] = await tx
@@ -242,39 +280,43 @@ export async function addContentVersion(contentId: string, input: ContentVersion
       .returning();
     return updated;
   });
-  emitDomainEvent("content.updated", await contentEventPayload(result, input, nextNo, editorId, origin));
+  emitDomainEvent("content.updated", communityId, await contentEventPayload(result, input, nextNo, editorId, origin));
   if (result) await queueEvaluation(result, input, origin);
   return result;
 }
 
 /** Restores an older version by copying it into a new version (history stays intact). */
-export async function restoreContentVersion(contentId: string, versionId: string, editorId: string, note: string): Promise<Content | undefined> {
+export async function restoreContentVersion(communityId: string, contentId: string, versionId: string, editorId: string, note: string): Promise<Content | undefined> {
   const v = await db.query.contentVersions.findFirst({ where: and(eq(contentVersions.id, versionId), eq(contentVersions.contentId, contentId)) });
   if (!v) return undefined;
-  return addContentVersion(contentId, { title: v.title, bodyMarkdown: v.bodyMarkdown, mediaId: v.mediaId, url: v.url, meta: v.meta, changeNote: note }, editorId);
+  return addContentVersion(communityId, contentId, { title: v.title, bodyMarkdown: v.bodyMarkdown, mediaId: v.mediaId, url: v.url, meta: v.meta, changeNote: note }, editorId);
 }
 
-export async function softDeleteContent(contentId: string, actorId: string): Promise<Content | undefined> {
+export async function softDeleteContent(communityId: string, contentId: string, actorId: string): Promise<Content | undefined> {
+  const existing = await getContent(communityId, contentId);
+  if (!existing) return undefined;
   const [row] = await db.update(contents).set({ deletedAt: new Date() }).where(and(eq(contents.id, contentId), isNull(contents.deletedAt))).returning();
   if (row) {
-    await db.insert(auditLog).values({ actorId, action: "content.deleted", targetType: "content", targetId: contentId });
-    emitDomainEvent("content.deleted", { contentId, areaId: row.areaId, actorId });
+    await db.insert(auditLog).values({ communityId, actorId, action: "content.deleted", targetType: "content", targetId: contentId });
+    emitDomainEvent("content.deleted", communityId, { contentId, areaId: row.areaId, actorId });
   }
   return row;
 }
 
-export async function setContentPinned(contentId: string, pinned: boolean): Promise<void> {
+export async function setContentPinned(communityId: string, contentId: string, pinned: boolean): Promise<void> {
+  if (!(await getContent(communityId, contentId))) return;
   await db.update(contents).set({ pinned }).where(eq(contents.id, contentId));
 }
 
-export async function getContent(contentId: string): Promise<ContentListItem | undefined> {
+export async function getContent(communityId: string, contentId: string): Promise<ContentListItem | undefined> {
   const rows = await db
     .select({ content: contents, version: contentVersions, media: mediaFiles, author: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId } })
     .from(contents)
+    .innerJoin(knowledgeAreas, eq(knowledgeAreas.id, contents.areaId))
     .leftJoin(contentVersions, eq(contentVersions.id, contents.currentVersionId))
     .leftJoin(mediaFiles, eq(mediaFiles.id, contentVersions.mediaId))
     .leftJoin(users, eq(users.id, contents.authorId))
-    .where(and(eq(contents.id, contentId), isNull(contents.deletedAt)))
+    .where(and(eq(contents.id, contentId), eq(knowledgeAreas.communityId, communityId), isNull(contents.deletedAt)))
     .limit(1);
   const r = rows[0];
   if (!r) return undefined;
@@ -297,14 +339,17 @@ function contentOrderBy(sort: CollectionSort) {
   }
 }
 
-export async function listContents(opts: ListContentsOptions = {}): Promise<ContentListItem[]> {
-  const conds = [isNull(contents.deletedAt)];
+export async function listContents(communityId: string, opts: ListContentsOptions = {}): Promise<ContentListItem[]> {
+  // Entries carry no community of their own – they inherit it from their collection, which the
+  // join enforces. (Denormalizing contents.community_id is the fallback if this ever gets slow.)
+  const conds = [isNull(contents.deletedAt), eq(knowledgeAreas.communityId, communityId)];
   if (opts.areaId) conds.push(eq(contents.areaId, opts.areaId));
   if (opts.type) conds.push(eq(contents.type, opts.type));
   if (opts.query?.trim()) conds.push(ilike(contents.searchText, `%${opts.query.trim()}%`));
   const rows = await db
     .select({ content: contents, version: contentVersions, media: mediaFiles, author: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId } })
     .from(contents)
+    .innerJoin(knowledgeAreas, eq(knowledgeAreas.id, contents.areaId))
     .leftJoin(contentVersions, eq(contentVersions.id, contents.currentVersionId))
     .leftJoin(mediaFiles, eq(mediaFiles.id, contentVersions.mediaId))
     .leftJoin(users, eq(users.id, contents.authorId))

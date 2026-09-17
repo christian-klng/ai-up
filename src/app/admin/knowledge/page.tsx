@@ -7,8 +7,8 @@ import { AreaDialog } from "./area-dialog";
 import { AreaList } from "./area-list";
 
 export default async function AdminKnowledgePage() {
-  await requireAdmin();
-  const [t, areas, assignments, templates] = await Promise.all([getTranslations("admin.knowledge"), listAreas(), listAllAssignments(), listTemplates()]);
+  const user = await requireAdmin();
+  const [t, areas, assignments, templates] = await Promise.all([getTranslations("admin.knowledge"), listAreas(user.communityId), listAllAssignments(user.communityId), listTemplates(user.communityId)]);
   return (
     <div className="max-w-4xl">
       <PageHeader title={t("title")} description={t("intro")} actions={<AreaDialog mode="create" />} />

@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import type { AppSettings } from "@/server/db/schema";
+import type { Community } from "@/server/db/schema";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import { LandingShell } from "./landing-shell";
 
@@ -10,7 +10,7 @@ export async function LandingView({
   signedIn,
 }: {
   definition: LandingDefinition;
-  settings: AppSettings;
+  settings: Community;
   signedIn: boolean;
 }) {
   const [t, tCommon] = await Promise.all([getTranslations("landing"), getTranslations("common")]);

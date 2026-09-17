@@ -95,11 +95,19 @@ flowchart LR
 
 Alle IDs als `uuid`, Zeitstempel `timestamptz`, weiche Löschung wo sinnvoll (`deleted_at`).
 
-**Identität & Einstellungen**
-- `users` – `email`, `name`, `role` (`member`|`admin`), `status` (`pending`|`active`|`suspended`), `avatar_media_id`, `locale`, `approved_at`, `approved_by`, `last_seen_at`
+> **Seit 16./17.09.2026 ist die App mandantenfähig** (Phasen A–D, siehe `docs/communities.md`): Jede
+> Zeile gehört genau einer Community, die Installation selbst ist die Haupt-Community. Die Tabellen
+> unten haben deshalb fast alle eine Spalte `community_id`, und aus `app_settings` wurde
+> `communities`. Der Abschnitt beschreibt weiterhin den fachlichen Kern; die vollständige Liste der
+> betroffenen Tabellen steht in `docs/communities.md` Abschnitt 2.
+
+**Identität & Mandanten**
+- `users` – Konto: `email`, `name`, `status` (`pending`|`active`|`suspended` – „darf sich einloggen"), `avatar_media_id`, `locale`, `last_seen_at`, `is_bot`. `role` ist `@deprecated` und wird nicht mehr gelesen.
+- `communities` (ehemals `app_settings`) – `slug`, `parent_id`, `name`, `logo_media_id`, `favicon_media_id`, `theme`, `purpose`, `default_locale`, `allow_member_subcommunities`, `allow_registration`, `deleted_at`
+- `community_members` – `community_id` + `user_id` (PK), `role` (`member`|`admin`), `status`, `approved_at`, `approved_by`, `registration_message`, `invited_via_id`, `joined_at` — **hier** steht, was jemand darf
+- `community_invites` – Beitrittslink je Community: `token`, `enabled`, `use_count`
 - `sessions`, `verifications` – von Better Auth verwaltet
-- `app_settings` (Singleton) – `name`, `logo_media_id`, `favicon_media_id`, `theme` (JSON: Primärfarbe, Radius, Modus), `purpose` (Text, Community-Zweck → System-Prompts), `default_locale`, `nextcloud` (JSON, Secrets verschlüsselt), `smtp_from`
-- `api_keys` – `user_id`, `name`, `key_hash`, `prefix`, `scopes` (JSON), `last_used_at`, `expires_at`, `revoked_at`
+- `api_keys` – `community_id`, `user_id`, `name`, `key_hash`, `prefix`, `scopes` (JSON), `last_used_at`, `expires_at`, `revoked_at`
 
 **Wissen**
 - `knowledge_areas` – `name`, `slug`, `purpose` (Pflicht), `description`, `icon`, `sort_order`, `visibility`
@@ -478,6 +486,8 @@ ai-up/
 | **5 – Workflow-Engine** | Registry, Engine, Worker, Trigger `content.*`/`schedule`/`manual`, Aktionen `llm`/`read_webpage`/`notify_user`/`create_content`, LLM-Provider-Admin, Workflow-Editor (schema-getriebene Formulare), Toasts, Historie, Statistik, Mitglieder-Ansicht. | Beispiel „Link speichern → Webseite lesen → LLM-Zusammenfassung → Notification" läuft Ende-zu-Ende. |
 | **6 – Fragen & MCP** | Aktion `ask_user` + Fragen-Dock unten links + dynamischer Trigger `question.answered`, Ergebnisse; MCP-Server, API-Keys, Tool-Set, Doku, Test mit Claude Code. | Admin editiert per Claude Code eine LLM-Aktion; Umfrage-Workflow mit Folge-Notification funktioniert. |
 | **7 – Härtung & Betrieb** | Tests (Engine, Auth, Upload), **Sicherheits-Review** (vorgezogen: App und Repo sind seit 24.08.2026 öffentlich), Backups/Restore-Probe, Performance (Indizes, Caching), Barrierefreiheit-Grundlagen, Doku, Onboarding-Texte. Aufzeichnungen: ~~(a) Quelldatei nach erfolgreichem Import löschen~~ und ~~(b) S3-Übergabeweg (Egress → S3-kompatibler Speicher → App-Import)~~ – beides erledigt 24.08.2026; offen bleibt die Aufbewahrungsfrist/Löschung für Aufzeichnungen. Aus dem Produktiv-Deployment (24.08.2026) hinzugekommen: TURN-Relay-Ports freigeben (LiveKit belegt dafür standardmäßig UDP 30000–40000 – in `livekit.yaml` unter `turn:` auf einen schmalen Bereich setzen und diesen in der Firewall öffnen; bis dahin greift der langsamere TCP-Fallback auf 7881), App-VPS vergrößern (2 vCPU / 3,8 GB reichen für `next build` nur mit 4 GB Swap), ~~Validierungsmeldungen der Integrations-Einstellungen übersetzen~~ und ~~`/api/health` um die Redis-Prüfung ergänzen~~ – beides erledigt 24.08.2026. | Produktivfreigabe. |
+
+| **8 – Unter-Communities** (neu, `docs/communities.md`) | Mandantenfähigkeit: `communities` + `community_members`, Community als expliziter Parameter durch alle Schichten, Mitgliedschaft statt Konto-Rolle, Beitrittslink, Wechsel-Modal, `/c/<slug>`-Links, Anlegen/Löschen mit Frist und Purge-Job, dazu eigene Hosts je Community: Subdomains (C2) und eigene Domains mit DNS-Nachweis und Session-Handoff (G). | Erledigt 17.09.2026 (A–E, C2, G) – App-Seite vollständig. Offen ist nur die Infrastruktur des Betreibers: Wildcard-DNS + Wildcard-Zertifikat für Subdomains, und ein Proxy, der fremde Hosts annimmt (`docs/communities.md` 7.5 und 7.10). |
 
 Reihenfolge ist so gewählt, dass nach Phase 2 bereits eine nutzbare Wissensplattform steht und Phase 4 (das größte externe Risiko) parallel zu 3/5 begonnen werden kann.
 

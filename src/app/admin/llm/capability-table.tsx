@@ -9,8 +9,8 @@ import type { LlmModelInfo, ReasoningLevel } from "@/server/db/schema";
  * What the app knows about each enabled model – read-only. Maintained over MCP
  * (see docs/modell-faehigkeiten.md); this view exists so a guess is recognisable as one.
  */
-export async function CapabilityTable() {
-  const [t, format, providers, caps] = await Promise.all([getTranslations("admin.llm"), getFormatter(), listProviders(), getCapabilityMap()]);
+export async function CapabilityTable({ communityId }: { communityId: string }) {
+  const [t, format, providers, caps] = await Promise.all([getTranslations("admin.llm"), getFormatter(), listProviders(communityId), getCapabilityMap()]);
 
   // Capabilities are keyed by model id alone, so the same model from two providers is one row.
   const models = new Map<string, { info: LlmModelInfo | undefined; providers: string[] }>();

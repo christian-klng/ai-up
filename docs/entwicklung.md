@@ -31,12 +31,14 @@ Alle Mails (Magic Links!) landen im lokalen Mailpit unter http://localhost:8025.
 
 ```
 src/app/(auth)      Login, Registrierung, Warten-auf-Freigabe
-src/app/(app)       eingeloggter Bereich (Start, Wissen, Mitglieder, Meetings inkl. Call-Seite, Nachrichten, Notifications, Workflows, Profil)
-src/app/admin       Verwaltung (Allgemein/Branding, Zweck, Mitglieder, Sammlungen, Meeting-Bereiche, Fragen, LLM, Workflows, Integrationen, API-Schlüssel)
+src/app/(app)       eingeloggter Bereich (Start, Wissen, Mitglieder, Meetings inkl. Call-Seite, Nachrichten, Notifications, Workflows, Profil, Community anlegen)
+src/app/(public)    öffentliche Seiten mit breitem Rahmen: Meeting-Einladung /invite, Community-Beitritt /join
+src/app/c/[slug]    Redirect-Route für teilbare Links: setzt die aktive Community und leitet weiter
+src/app/admin       Verwaltung (Allgemein/Branding, Zweck, Webseiten*, Communities*, Mitglieder, Sammlungen, Meeting-Bereiche, Fragen, LLM, Workflows, Integrationen*, API-Schlüssel) – * nur in der Haupt-Community
 src/app/api         auth (Better Auth), files (Medien), upload, events (SSE), mcp, livekit/webhook, health
 src/server/auth     Better-Auth-Konfiguration, Session-Guards
 src/server/db       Drizzle-Schema, Client, Migrate/Seed
-src/server/domain   Fachlogik (users, settings, knowledge, meetings, integrations, messenger, notifications, questions, bot, api-keys)
+src/server/domain   Fachlogik (communities, community-setup, community-invites, users, knowledge, meetings, integrations, messenger, notifications, questions, bot, api-keys)
 src/server/meetings LiveKit-Glue (Token, Raum, Webhook-Verarbeitung, Aufzeichnung/Egress)
 src/server/events   Domain-Event-Bus (→ Workflow-Dispatch)
 src/server/realtime Redis-Pub/Sub → SSE
@@ -53,6 +55,37 @@ deploy/livekit/     Compose-Vorlage + Konfiguration für den LiveKit-Media-Serve
 docker/             Dockerfile, entrypoint.sh
 drizzle/            SQL-Migrationen
 ```
+
+## Mandanten (Communities)
+
+Jede Zeile gehört genau einer Community; die Installation selbst ist die **Haupt-Community**
+(`ROOT_COMMUNITY_ID = "default"`). Beim Arbeiten am Code sind drei Regeln wichtig:
+
+1. **Die Community ist ein expliziter Parameter, meist der erste** (`listAreas(communityId)`).
+   Kein impliziter Kontext – Worker, Workflow-Dispatcher und MCP haben keinen Request.
+2. **Rechte stehen in `community_members`**, nicht in `users`. `user.role` aus den Guards ist die
+   Rolle in der *aktiven* Community. Was dem Betreiber gehört (Integrationen, öffentliche Seiten,
+   Modell-Fähigkeiten), schützt `requireRootAdmin()`/`assertRootAdmin()`.
+3. **Funktionen, die per Id laden, prüfen die Zugehörigkeit** und antworten sonst `undefined` –
+   dieselbe Antwort wie „gibt es nicht", damit Ids nicht über Community-Grenzen erratbar sind.
+
+Lokal mit zwei Communities testen: eine zweite per SQL anlegen (`communities` + `community_members`),
+dann über das Modal am Community-Namen wechseln. Details und Begründungen in `docs/communities.md`.
+
+**Subdomains** (`COMMUNITY_SUBDOMAINS=true`) geben jeder Community einen eigenen Host
+`<slug>.<app-host>`; produktiv braucht das Wildcard-DNS und ein Wildcard-Zertifikat
+(`docs/communities.md` 7.5). Auf `localhost` funktioniert alles außer der geteilten Session – der
+Browser nimmt kein Cookie für `.localhost`. Für den vollständigen Durchlauf einen Eintrag in
+`/etc/hosts` (`127.0.0.1 aiup.test lesekreis.aiup.test`) setzen und `APP_URL=http://aiup.test:3000`.
+
+**Eigene Domains** (`COMMUNITY_CUSTOM_DOMAINS=true`) tragen Community-Admins unter *Verwaltung →
+Allgemein* ein. Sie wirken erst nach einem DNS-Nachweis (TXT `_aiup-verify.<host>` oder CNAME auf den
+App-Host); bis dahin ist die Zeile sichtbar, aber wirkungslos. Weil ein Cookie keine registrierbare
+Domain überquert, läuft die Anmeldung dort über den Handoff – `switchCommunityAction` schickt den
+Browser über `/auth/handoff`. Lokal prüfbar, indem man eine Zeile mit gesetztem `verified_at` per SQL
+anlegt (etwa für `127.0.0.1`, das einen eigenen Cookie-Speicher hat) – über die Oberfläche geht das
+nicht, denn dort entscheidet DNS. Produktiv muss der Proxy den fremden Host annehmen
+(`docs/communities.md` 7.10).
 
 ## Deployment auf Coolify
 

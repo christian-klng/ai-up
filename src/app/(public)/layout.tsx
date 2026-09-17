@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUser } from "@/server/auth/session";
-import { getAppSettings } from "@/server/domain/settings";
+import { getPublicCommunity } from "@/server/auth/session";
 import { Button } from "@/components/ui/button";
 import { LocaleSwitcher } from "@/components/shell/locale-switcher";
 import { BrandLogo } from "@/components/shell/brand-logo";
@@ -11,7 +11,7 @@ import { BrandLogo } from "@/components/shell/brand-logo";
  * landing page and a wide main column, unlike the narrow card frame of the auth pages.
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
-  const [settings, user, t, ta] = await Promise.all([getAppSettings(), getCurrentUser(), getTranslations("common"), getTranslations("auth")]);
+  const [settings, user, t, ta] = await Promise.all([getPublicCommunity(), getCurrentUser(), getTranslations("common"), getTranslations("auth")]);
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">

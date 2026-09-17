@@ -1,19 +1,24 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { auditLog, meetingInvites, meetingSpaces, meetings, users, type MeetingInvite, type MeetingKind, type MeetingStatus, type User } from "@/server/db/schema";
+import { auditLog, communityMembers, meetingInvites, meetingSpaces, meetings, users, type CommunityMember, type MeetingInvite, type MeetingKind, type MeetingStatus } from "@/server/db/schema";
+import { emitDomainEvent } from "@/server/events/bus";
 import { env } from "@/server/env";
+import { addMembership } from "./communities";
 
 /**
  * Meeting invite link (one per meeting, admins only, off by default).
  *
  * The link is a random token; the public page /invite/<token> lets people register and activates the
- * account right away (the admin vouches by switching the link on). The account remembers the link it
- * came through (users.invitedViaId = the meeting) and is taken to the meeting page once after signing in.
+ * membership right away (the admin vouches by switching the link on). The membership remembers the
+ * link it came through (community_members.invitedViaId = the meeting) and is taken to the meeting
+ * page once after signing in.
  */
 
 export type ResolvedInvite = {
   invite: MeetingInvite;
+  /** The community the meeting belongs to – registration through the link joins exactly this one. */
+  communityId: string;
   meeting: { id: string; title: string; description: string | null; startsAt: Date | null; kind: MeetingKind; status: MeetingStatus; recordingEnabled: boolean; coverMediaId: string | null };
   /** avatars are served publicly, so the host can be shown on the invite page */
   host: { id: string; name: string; avatarMediaId: string | null } | null;
@@ -67,6 +72,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
       meeting: { id: meetings.id, title: meetings.title, description: meetings.description, startsAt: meetings.startsAt, kind: meetings.kind, status: meetings.status, recordingEnabled: meetings.recordingEnabled, coverMediaId: meetings.coverMediaId, deletedAt: meetings.deletedAt },
       host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId },
       space: { id: meetingSpaces.id, name: meetingSpaces.name, slug: meetingSpaces.slug, icon: meetingSpaces.icon },
+      communityId: meetingSpaces.communityId,
     })
     .from(meetingInvites)
     .innerJoin(meetings, eq(meetings.id, meetingInvites.meetingId))
@@ -77,7 +83,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
   if (!row || !row.invite.enabled || row.meeting.deletedAt) return null;
   const { deletedAt: _deleted, ...meeting } = row.meeting;
   void _deleted;
-  return { invite: row.invite, meeting, host: row.host?.id ? row.host : null, space: row.space, href: meetingHref(row.space.slug, row.meeting.id) };
+  return { invite: row.invite, communityId: row.communityId, meeting, host: row.host?.id ? row.host : null, space: row.space, href: meetingHref(row.space.slug, row.meeting.id) };
 }
 
 /** Counts one more account created through the link. */
@@ -92,36 +98,96 @@ export async function countInviteUse(id: string): Promise<void> {
  * Where a freshly invited member should land after signing in, or null once that happened
  * (or when the meeting is gone). Callers mark the redirect done with `markInviteLanded`.
  */
-export async function pendingInviteRedirect(user: Pick<User, "invitedViaId" | "inviteLandedAt">): Promise<string | null> {
-  if (!user.invitedViaId || user.inviteLandedAt) return null;
+export async function pendingInviteRedirect(membership: Pick<CommunityMember, "invitedViaId" | "inviteLandedAt">): Promise<string | null> {
+  if (!membership.invitedViaId || membership.inviteLandedAt) return null;
   const [row] = await db
     .select({ meetingId: meetings.id, slug: meetingSpaces.slug, deletedAt: meetings.deletedAt })
     .from(meetingInvites)
     .innerJoin(meetings, eq(meetings.id, meetingInvites.meetingId))
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
-    .where(eq(meetingInvites.id, user.invitedViaId))
+    .where(eq(meetingInvites.id, membership.invitedViaId))
     .limit(1);
   if (!row || row.deletedAt) return null;
   return meetingHref(row.slug, row.meetingId);
 }
 
-export async function markInviteLanded(userId: string): Promise<void> {
-  await db.update(users).set({ inviteLandedAt: new Date() }).where(and(eq(users.id, userId), isNull(users.inviteLandedAt)));
+export async function markInviteLanded(communityId: string, userId: string): Promise<void> {
+  await db
+    .update(communityMembers)
+    .set({ inviteLandedAt: new Date() })
+    .where(and(eq(communityMembers.communityId, communityId), eq(communityMembers.userId, userId), isNull(communityMembers.inviteLandedAt)));
 }
 
 export type InviteSource = { inviteId: string; meetingId: string; meetingTitle: string; href: string };
 
 /** Which meeting each of the given users was invited to (for the member list). */
-export async function inviteSourcesForUsers(userIds: string[]): Promise<Map<string, InviteSource>> {
+export async function inviteSourcesForUsers(communityId: string, userIds: string[]): Promise<Map<string, InviteSource>> {
   const out = new Map<string, InviteSource>();
   if (userIds.length === 0) return out;
   const rows = await db
-    .select({ userId: users.id, inviteId: meetingInvites.id, meetingId: meetings.id, meetingTitle: meetings.title, slug: meetingSpaces.slug })
-    .from(users)
-    .innerJoin(meetingInvites, eq(meetingInvites.id, users.invitedViaId))
+    .select({ userId: communityMembers.userId, inviteId: meetingInvites.id, meetingId: meetings.id, meetingTitle: meetings.title, slug: meetingSpaces.slug })
+    .from(communityMembers)
+    .innerJoin(meetingInvites, eq(meetingInvites.id, communityMembers.invitedViaId))
     .innerJoin(meetings, eq(meetings.id, meetingInvites.meetingId))
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
-    .where(inArray(users.id, userIds));
+    .where(and(eq(communityMembers.communityId, communityId), inArray(communityMembers.userId, userIds)));
   for (const r of rows) out.set(r.userId, { inviteId: r.inviteId, meetingId: r.meetingId, meetingTitle: r.meetingTitle, href: meetingHref(r.slug, r.meetingId) });
   return out;
+}
+
+export type MeetingJoinResult = { ok: true; href: string; alreadyMember: boolean } | { ok: false; reason: "invalid" | "suspended" };
+
+/**
+ * Lets a signed-in account join the meeting's community through the link. The meeting link is an
+ * invitation into the community too – that is what made registration through it active from the
+ * start – so someone who is signed in with a *different* community gets the same offer instead of
+ * being forwarded into a meeting they cannot see.
+ *
+ * A suspended membership is not revived, mirroring the community join link.
+ */
+export async function joinViaMeetingInvite(token: string, userId: string): Promise<MeetingJoinResult> {
+  const resolved = await resolveInvite(token);
+  if (!resolved) return { ok: false, reason: "invalid" };
+
+  const existing = await db.query.communityMembers.findFirst({
+    where: and(eq(communityMembers.communityId, resolved.communityId), eq(communityMembers.userId, userId)),
+  });
+  if (existing?.status === "suspended") return { ok: false, reason: "suspended" };
+  if (existing?.status === "active") return { ok: true, href: resolved.href, alreadyMember: true };
+
+  if (existing) {
+    await db
+      .update(communityMembers)
+      .set({ status: "active", approvedAt: new Date(), approvedBy: resolved.invite.createdBy, invitedViaId: resolved.invite.id })
+      .where(and(eq(communityMembers.communityId, resolved.communityId), eq(communityMembers.userId, userId)));
+  } else {
+    await addMembership({
+      communityId: resolved.communityId,
+      userId,
+      status: "active",
+      approvedBy: resolved.invite.createdBy,
+      invitedViaId: resolved.invite.id,
+    });
+  }
+  await countInviteUse(resolved.invite.id);
+  await db.insert(auditLog).values({
+    communityId: resolved.communityId,
+    actorId: userId,
+    action: "member.joined",
+    targetType: "user",
+    targetId: userId,
+    details: { inviteId: resolved.invite.id, meetingId: resolved.meeting.id },
+  });
+
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (user) {
+    emitDomainEvent("member.approved", resolved.communityId, {
+      user: { id: user.id, name: user.name, email: user.email, locale: user.locale, registrationMessage: null },
+      href: `/members/${user.id}`,
+      invite: { id: resolved.invite.id, meetingId: resolved.meeting.id, meetingTitle: resolved.meeting.title, meetingHref: resolved.href },
+      actorId: resolved.invite.createdBy,
+      origin: { kind: "user" },
+    });
+  }
+  return { ok: true, href: resolved.href, alreadyMember: false };
 }

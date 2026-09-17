@@ -3,15 +3,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { LinkIcon } from "lucide-react";
-import { getCurrentUser } from "@/server/auth/session";
+import { getAccount, getPublicCommunity } from "@/server/auth/session";
+import { getMembership } from "@/server/domain/communities";
 import { resolveInvite, type ResolvedInvite } from "@/server/domain/invites";
-import { getAppSettings } from "@/server/domain/settings";
 import { getMedia } from "@/server/media/storage";
 import { env } from "@/server/env";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { MeetingCover, MeetingFacts, MeetingHeader, MeetingLayout } from "@/components/meetings/meeting-detail";
 import { InviteForm } from "./invite-form";
+import { MeetingJoinButton } from "./meeting-join-button";
 
 /** Date line for the OpenGraph description. */
 async function startsAtLabel(resolved: ResolvedInvite): Promise<string | null> {
@@ -26,7 +27,7 @@ async function startsAtLabel(resolved: ResolvedInvite): Promise<string | null> {
  */
 export async function generateMetadata({ params }: PageProps<"/invite/[token]">): Promise<Metadata> {
   const { token } = await params;
-  const [resolved, settings] = await Promise.all([resolveInvite(token), getAppSettings()]);
+  const [resolved, settings] = await Promise.all([resolveInvite(token), getPublicCommunity()]);
   if (!resolved) return { title: settings.name, robots: { index: false } };
   const when = await startsAtLabel(resolved);
   const description = [when, resolved.space.name, resolved.meeting.description].filter(Boolean).join(" · ").slice(0, 300);
@@ -48,7 +49,7 @@ export async function generateMetadata({ params }: PageProps<"/invite/[token]">)
  */
 export default async function InvitePage({ params }: PageProps<"/invite/[token]">) {
   const { token } = await params;
-  const [resolved, user, t] = await Promise.all([resolveInvite(token), getCurrentUser(), getTranslations("auth.invite")]);
+  const [resolved, account, t] = await Promise.all([resolveInvite(token), getAccount(), getTranslations("auth.invite")]);
 
   if (!resolved) {
     return (
@@ -67,9 +68,17 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
     );
   }
 
-  if (user) redirect(user.status === "active" ? resolved.href : "/pending");
+  // Signed in: a member of *this* community goes through /open (which also points the active
+  // community at it); anyone else is offered the join, because the link invites into the community
+  // just as much as into the meeting.
+  if (account && account.status === "active") {
+    const membership = await getMembership(resolved.communityId, account.id);
+    if (membership?.status === "active") redirect(`/invite/${token}/open`);
+  } else if (account) {
+    redirect("/pending");
+  }
 
-  const settings = await getAppSettings();
+  const settings = await getPublicCommunity();
   const { meeting, host, space } = resolved;
   return (
     <article>
@@ -85,7 +94,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
             <CardContent className="grid gap-4">
               <MeetingFacts startsAt={meeting.startsAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} status={meeting.status} space={space} />
               <Separator />
-              <InviteForm token={token} loginHref={`/login?next=${encodeURIComponent(resolved.href)}`} />
+              {account ? <MeetingJoinButton token={token} /> : <InviteForm token={token} loginHref={`/login?next=${encodeURIComponent(resolved.href)}`} />}
             </CardContent>
           </Card>
         }

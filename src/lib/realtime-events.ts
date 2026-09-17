@@ -42,16 +42,19 @@ export type RealtimeEventMap = {
   "question.created": { question: QuestionDto };
   /** Question closed/expired – remove from dock */
   "question.closed": { questionId: string };
-  /** New notification for the recipient; unreadCount = total unread notifications after insert */
-  "notification.created": { id: string; type: string; title: string; body: string | null; href: string | null; unreadCount: number };
-  /** Unread notification counter changed (mark read etc.) */
-  "notification.count": { unreadCount: number };
+  /**
+   * New notification for the recipient; unreadCount = unread notifications in `communityId`
+   * after the insert. `communityId` null means an account-level notice that shows everywhere.
+   */
+  "notification.created": { id: string; communityId: string | null; type: string; title: string; body: string | null; href: string | null; unreadCount: number };
+  /** Unread notification counter changed (mark read etc.) – scoped to one community */
+  "notification.count": { communityId: string; unreadCount: number };
   /** New chat message in a conversation the recipient is a member of */
-  "message.created": { message: ChatMessageDto; unreadMessages: number };
+  "message.created": { communityId: string; message: ChatMessageDto; unreadMessages: number };
   /** Another member read the conversation up to `at` */
   "message.read": { conversationId: string; userId: string; at: string };
-  /** Own unread-message counter changed */
-  "message.count": { unreadMessages: number };
+  /** Own unread-message counter changed – scoped to one community */
+  "message.count": { communityId: string; unreadMessages: number };
   /** Someone is typing */
   "conversation.typing": { conversationId: string; userId: string; name: string };
   /** Contact relation changed (request sent/accepted/declined/blocked) – UI refetches */

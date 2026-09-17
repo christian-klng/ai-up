@@ -21,7 +21,7 @@ import { syncSchedules } from "./queue";
 
 export type WorkflowListItem = Workflow & { runCount: number; successCount: number; lastRunStatus: RunStatus | null };
 
-export async function listWorkflows(opts: { onlyActive?: boolean } = {}): Promise<WorkflowListItem[]> {
+export async function listWorkflows(communityId: string, opts: { onlyActive?: boolean } = {}): Promise<WorkflowListItem[]> {
   const rows = await db
     .select({
       wf: workflows,
@@ -30,12 +30,17 @@ export async function listWorkflows(opts: { onlyActive?: boolean } = {}): Promis
       lastRunStatus: sql<RunStatus | null>`(select r.status from ${workflowRuns} r where r.workflow_id = ${workflows}."id" order by r.created_at desc limit 1)`,
     })
     .from(workflows)
-    .where(opts.onlyActive ? eq(workflows.status, "active") : undefined)
+    .where(and(eq(workflows.communityId, communityId), opts.onlyActive ? eq(workflows.status, "active") : undefined))
     .orderBy(asc(workflows.name));
   return rows.map((r) => ({ ...r.wf, runCount: r.runCount, successCount: r.successCount, lastRunStatus: r.lastRunStatus }));
 }
 
-export async function getWorkflow(id: string): Promise<Workflow | undefined> {
+export async function getWorkflow(communityId: string, id: string): Promise<Workflow | undefined> {
+  return db.query.workflows.findFirst({ where: and(eq(workflows.communityId, communityId), eq(workflows.id, id)) });
+}
+
+/** Unqualified lookup for the worker, which takes the community from the run row. */
+export async function loadWorkflow(id: string): Promise<Workflow | undefined> {
   return db.query.workflows.findFirst({ where: eq(workflows.id, id) });
 }
 
@@ -45,25 +50,25 @@ export function toDefinition(w: Workflow): WorkflowDefinition {
 
 export type SaveResult = { ok: true; workflow: Workflow; warnings: { path: string; message: string }[] } | { ok: false; issues: { path: string; message: string }[] };
 
-export async function createWorkflow(input: unknown, actorId: string | null, source: "ui" | "mcp" | "system" = "ui", opts: { status?: Workflow["status"]; changeNote?: string } = {}): Promise<SaveResult> {
+export async function createWorkflow(communityId: string, input: unknown, actorId: string | null, source: "ui" | "mcp" | "system" = "ui", opts: { status?: Workflow["status"]; changeNote?: string } = {}): Promise<SaveResult> {
   const v: ValidationResult = validateDefinition(input);
   if (!v.ok) return { ok: false, issues: v.issues };
   const d = v.definition;
   const workflow = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(workflows)
-      .values({ name: d.name, description: d.description ?? null, trigger: d.trigger, steps: d.steps, status: opts.status ?? "draft", version: 1, createdBy: actorId, updatedBy: actorId })
+      .values({ communityId, name: d.name, description: d.description ?? null, trigger: d.trigger, steps: d.steps, status: opts.status ?? "draft", version: 1, createdBy: actorId, updatedBy: actorId })
       .returning();
     await tx.insert(workflowVersions).values({ workflowId: row.id, version: 1, definition: d, source, changeNote: opts.changeNote ?? null, changedBy: actorId });
-    await tx.insert(auditLog).values({ actorId, action: "workflow.created", targetType: "workflow", targetId: row.id, details: { name: row.name, source } });
+    await tx.insert(auditLog).values({ communityId, actorId, action: "workflow.created", targetType: "workflow", targetId: row.id, details: { name: row.name, source } });
     return row;
   });
   await syncSchedules().catch(() => {});
   return { ok: true, workflow, warnings: v.warnings };
 }
 
-export async function updateWorkflow(id: string, input: unknown, actorId: string | null, source: "ui" | "mcp" | "system" = "ui", opts: { changeNote?: string } = {}): Promise<SaveResult | { ok: false; issues: { path: string; message: string }[]; notFound: true }> {
-  const existing = await getWorkflow(id);
+export async function updateWorkflow(communityId: string, id: string, input: unknown, actorId: string | null, source: "ui" | "mcp" | "system" = "ui", opts: { changeNote?: string } = {}): Promise<SaveResult | { ok: false; issues: { path: string; message: string }[]; notFound: true }> {
+  const existing = await getWorkflow(communityId, id);
   if (!existing) return { ok: false, issues: [{ path: "id", message: "workflow not found" }], notFound: true };
   const v = validateDefinition(input);
   if (!v.ok) return { ok: false, issues: v.issues };
@@ -83,22 +88,27 @@ export async function updateWorkflow(id: string, input: unknown, actorId: string
   return { ok: true, workflow, warnings: v.warnings };
 }
 
-export async function setWorkflowStatus(id: string, status: Workflow["status"], actorId: string | null): Promise<Workflow | undefined> {
-  const [row] = await db.update(workflows).set({ status, updatedBy: actorId }).where(eq(workflows.id, id)).returning();
+export async function setWorkflowStatus(communityId: string, id: string, status: Workflow["status"], actorId: string | null): Promise<Workflow | undefined> {
+  const [row] = await db
+    .update(workflows)
+    .set({ status, updatedBy: actorId })
+    .where(and(eq(workflows.communityId, communityId), eq(workflows.id, id)))
+    .returning();
   if (row) {
-    await db.insert(auditLog).values({ actorId, action: `workflow.${status}`, targetType: "workflow", targetId: id, details: { name: row.name } });
+    await db.insert(auditLog).values({ communityId, actorId, action: `workflow.${status}`, targetType: "workflow", targetId: id, details: { name: row.name } });
     await syncSchedules().catch(() => {});
   }
   return row;
 }
 
-export async function deleteWorkflow(id: string, actorId: string | null): Promise<void> {
-  await db.delete(workflows).where(eq(workflows.id, id));
-  await db.insert(auditLog).values({ actorId, action: "workflow.deleted", targetType: "workflow", targetId: id });
+export async function deleteWorkflow(communityId: string, id: string, actorId: string | null): Promise<void> {
+  await db.delete(workflows).where(and(eq(workflows.communityId, communityId), eq(workflows.id, id)));
+  await db.insert(auditLog).values({ communityId, actorId, action: "workflow.deleted", targetType: "workflow", targetId: id });
   await syncSchedules().catch(() => {});
 }
 
-export async function listWorkflowVersions(id: string) {
+export async function listWorkflowVersions(communityId: string, id: string) {
+  if (!(await getWorkflow(communityId, id))) return [];
   return db.query.workflowVersions.findMany({ where: eq(workflowVersions.workflowId, id), orderBy: [desc(workflowVersions.version)] });
 }
 
@@ -108,16 +118,16 @@ export async function listWorkflowVersions(id: string) {
 
 export type RunListOptions = { workflowId?: string; status?: RunStatus; since?: Date; limit?: number; offset?: number };
 
-export async function listRuns(opts: RunListOptions = {}): Promise<WorkflowRun[]> {
-  const conds = [];
+export async function listRuns(communityId: string, opts: RunListOptions = {}): Promise<WorkflowRun[]> {
+  const conds = [eq(workflowRuns.communityId, communityId)];
   if (opts.workflowId) conds.push(eq(workflowRuns.workflowId, opts.workflowId));
   if (opts.status) conds.push(eq(workflowRuns.status, opts.status));
   if (opts.since) conds.push(gte(workflowRuns.createdAt, opts.since));
-  return db.query.workflowRuns.findMany({ where: conds.length ? and(...conds) : undefined, orderBy: [desc(workflowRuns.createdAt)], limit: opts.limit ?? 50, offset: opts.offset ?? 0 });
+  return db.query.workflowRuns.findMany({ where: and(...conds), orderBy: [desc(workflowRuns.createdAt)], limit: opts.limit ?? 50, offset: opts.offset ?? 0 });
 }
 
-export async function getRunWithSteps(runId: string): Promise<(WorkflowRun & { steps: WorkflowRunStep[] }) | undefined> {
-  const run = await db.query.workflowRuns.findFirst({ where: eq(workflowRuns.id, runId) });
+export async function getRunWithSteps(communityId: string, runId: string): Promise<(WorkflowRun & { steps: WorkflowRunStep[] }) | undefined> {
+  const run = await db.query.workflowRuns.findFirst({ where: and(eq(workflowRuns.id, runId), eq(workflowRuns.communityId, communityId)) });
   if (!run) return undefined;
   const steps = await db.query.workflowRunSteps.findMany({ where: eq(workflowRunSteps.runId, runId), orderBy: [asc(workflowRunSteps.index)] });
   return { ...run, steps };
@@ -137,9 +147,9 @@ export type WorkflowStats = {
   topErrors: { error: string; count: number }[];
 };
 
-export async function workflowStats(workflowId: string | null, days = 14): Promise<WorkflowStats> {
+export async function workflowStats(communityId: string, workflowId: string | null, days = 14): Promise<WorkflowStats> {
   const since = new Date(Date.now() - days * 86_400_000);
-  const wfCond = workflowId ? sql`and r.workflow_id = ${workflowId}` : sql``;
+  const wfCond = sql`and r.community_id = ${communityId} ${workflowId ? sql`and r.workflow_id = ${workflowId}` : sql``}`;
   const [agg] = await db.execute<{ total: number; succeeded: number; failed: number; running: number; avg_ms: number | null; p95_ms: number | null; last_run_at: Date | null }>(sql`
     select count(*)::int as total,
       count(*) filter (where r.status = 'succeeded')::int as succeeded,

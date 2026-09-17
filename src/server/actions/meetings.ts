@@ -49,7 +49,7 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     return { status: "error", code: field === "title" ? "titleRequired" : "unexpected" };
   }
   const d = parsed.data;
-  const space = await getSpaceById(d.spaceId);
+  const space = await getSpaceById(user.communityId, d.spaceId);
   if (!space) return { status: "error", code: "unexpected" };
   let startsAt: Date | null = null;
   if (d.startsAt) {
@@ -63,14 +63,14 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     return { status: "error", code: "unexpected" };
   }
   if (d.meetingId) {
-    const existing = await getMeeting(d.meetingId);
+    const existing = await getMeeting(user.communityId, d.meetingId);
     if (!existing) return { status: "error", code: "unexpected" };
     if (!canEditMeeting(user, existing)) return { status: "error", code: "forbidden" };
-    await updateMeeting(d.meetingId, { title: d.title, description: d.description ?? null, startsAt, recordingEnabled: d.recordingEnabled, kind: existing.status === "scheduled" ? d.kind : undefined, coverMediaId }, user.id);
+    await updateMeeting(user.communityId, d.meetingId, { title: d.title, description: d.description ?? null, startsAt, recordingEnabled: d.recordingEnabled, kind: existing.status === "scheduled" ? d.kind : undefined, coverMediaId }, user.id);
     revalidatePath("/", "layout");
     return { status: "saved", meetingId: d.meetingId, spaceSlug: space.slug };
   }
-  const created = await createMeeting(d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled ?? space.recordingDefault, coverMediaId: coverMediaId ?? null }, user.id);
+  const created = await createMeeting(user.communityId, d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled ?? space.recordingDefault, coverMediaId: coverMediaId ?? null }, user.id);
   revalidatePath("/", "layout");
   return { status: "saved", meetingId: created.id, spaceSlug: space.slug };
 }
@@ -82,7 +82,7 @@ export async function saveProtocolAction(_prev: ProtocolFormState, formData: For
   const meetingId = z.string().uuid().parse(formData.get("meetingId"));
   const body = String(formData.get("body") ?? "").replace(/\r\n?/g, "\n");
   const note = String(formData.get("changeNote") ?? "").trim() || null;
-  const meeting = await getMeeting(meetingId);
+  const meeting = await getMeeting(user.communityId, meetingId);
   if (!meeting) return { status: "error", code: "unexpected" };
   // Every active member may contribute to a protocol (it is a shared minutes document)
   const updated = await saveProtocol(meetingId, body, note, user.id);
@@ -93,7 +93,7 @@ export async function saveProtocolAction(_prev: ProtocolFormState, formData: For
 
 export async function restoreProtocolAction(meetingId: string, versionId: string, note: string): Promise<{ ok: boolean }> {
   const user = await assertUser();
-  const meeting = await getMeeting(meetingId);
+  const meeting = await getMeeting(user.communityId, meetingId);
   if (!meeting) return { ok: false };
   const res = await restoreProtocolVersion(meetingId, versionId, user.id, note);
   revalidatePath(`/meetings/${meeting.spaceSlug}/${meetingId}`, "layout");
@@ -102,9 +102,9 @@ export async function restoreProtocolAction(meetingId: string, versionId: string
 
 export async function deleteMeetingAction(meetingId: string): Promise<{ ok: boolean; spaceSlug?: string }> {
   const user = await assertUser();
-  const meeting = await getMeeting(meetingId);
+  const meeting = await getMeeting(user.communityId, meetingId);
   if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
-  await softDeleteMeeting(meetingId, user.id);
+  await softDeleteMeeting(user.communityId, meetingId, user.id);
   revalidatePath("/", "layout");
   return { ok: true, spaceSlug: meeting.spaceSlug };
 }
@@ -114,7 +114,7 @@ export type JoinResult = { ok: true; token: string; url: string; roomName: strin
 /** Issues a LiveKit access token for the current user to join (or start) the meeting's room. */
 export async function joinMeetingAction(meetingId: string): Promise<JoinResult> {
   const user = await assertUser();
-  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  const meeting = await getMeeting(user.communityId, z.string().uuid().parse(meetingId));
   if (!meeting) return { ok: false, error: "notFound" };
   if (meeting.kind === "protocol") return { ok: false, error: "protocol" };
   if (meeting.status === "ended") return { ok: false, error: "ended" };
@@ -131,7 +131,7 @@ export async function joinMeetingAction(meetingId: string): Promise<JoinResult> 
 
 export async function endMeetingAction(meetingId: string): Promise<{ ok: boolean }> {
   const user = await assertUser();
-  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  const meeting = await getMeeting(user.communityId, z.string().uuid().parse(meetingId));
   if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
   const { endRoom, markMeetingEnded } = await import("@/server/meetings/livekit");
   await endRoom(meeting);
@@ -143,7 +143,7 @@ export async function endMeetingAction(meetingId: string): Promise<{ ok: boolean
 
 export async function reopenMeetingAction(meetingId: string): Promise<{ ok: boolean }> {
   const user = await assertUser();
-  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  const meeting = await getMeeting(user.communityId, z.string().uuid().parse(meetingId));
   if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
   const { reopenMeeting } = await import("@/server/meetings/livekit");
   await reopenMeeting(meeting.id);
@@ -153,7 +153,7 @@ export async function reopenMeetingAction(meetingId: string): Promise<{ ok: bool
 
 export async function startRecordingAction(meetingId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await assertUser();
-  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  const meeting = await getMeeting(user.communityId, z.string().uuid().parse(meetingId));
   if (!meeting || !canEditMeeting(user, meeting) || meeting.kind === "protocol") return { ok: false, error: "forbidden" };
   const { startRecording } = await import("@/server/meetings/recording");
   const res = await startRecording(meeting, { manual: true });
@@ -163,7 +163,7 @@ export async function startRecordingAction(meetingId: string): Promise<{ ok: boo
 
 export async function stopRecordingAction(meetingId: string): Promise<{ ok: boolean }> {
   const user = await assertUser();
-  const meeting = await getMeeting(z.string().uuid().parse(meetingId));
+  const meeting = await getMeeting(user.communityId, z.string().uuid().parse(meetingId));
   if (!meeting || !canEditMeeting(user, meeting)) return { ok: false };
   const { stopRecording } = await import("@/server/meetings/recording");
   await stopRecording(meeting);
@@ -182,7 +182,7 @@ export async function setInviteEnabledAction(input: { meetingId: string; enabled
   if (user.role !== "admin") return { ok: false, code: "forbidden" };
   const parsed = z.object({ meetingId: z.string().uuid(), enabled: z.boolean() }).safeParse(input);
   if (!parsed.success) return { ok: false, code: "unexpected" };
-  const meeting = await getMeeting(parsed.data.meetingId);
+  const meeting = await getMeeting(user.communityId, parsed.data.meetingId);
   if (!meeting) return { ok: false, code: "notFound" };
   try {
     const invite = await setInviteEnabled(meeting.id, parsed.data.enabled, user.id);

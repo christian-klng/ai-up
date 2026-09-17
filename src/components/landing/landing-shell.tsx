@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { AppSettings } from "@/server/db/schema";
+import type { Community } from "@/server/db/schema";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import { Menu } from "lucide-react";
 import { BrandLogo } from "@/components/shell/brand-logo";
@@ -22,7 +22,7 @@ export function LandingShell({
   editing,
 }: {
   definition: LandingDefinition;
-  settings: AppSettings;
+  settings: Community;
   signedIn: boolean;
   labels: LandingLabels;
   /** Inline-editor mode: FAQ items render expanded so their answers are clickable */

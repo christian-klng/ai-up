@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { registerAction } from "../registry";
 import type { ActionRunContext } from "../types";
 import { db } from "@/server/db/client";
-import { mediaFiles, users } from "@/server/db/schema";
+import { mediaFiles } from "@/server/db/schema";
 import { createNotifications } from "@/server/domain/notifications";
 import { createContent, getAreaById } from "@/server/domain/knowledge";
+import { listActiveMemberIds, listAdminIds } from "@/server/domain/communities";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { getTemplateBySystemKey } from "@/server/domain/templates";
 import { getSpaceById, setMeetingTranscript } from "@/server/domain/meetings";
@@ -76,7 +77,7 @@ registerAction<LlmActionConfig>({
   outputDoc: { text: "raw model answer", json: "parsed JSON when outputSchema/jsonMode was set", model: "model id used", finishReason: "provider finish reason", usage: "{promptTokens, completionTokens, totalTokens, cost}" },
   timeoutMs: 180_000,
   async run(config, ctx) {
-    const { provider, model, caps } = await resolveModel(config.providerId, config.model);
+    const { provider, model, caps } = await resolveModel(ctx.communityId, config.providerId, config.model);
     const cfg = await clientConfigFor(provider);
     const messages: { role: "system" | "user"; content: string }[] = [];
     let system = config.systemPrompt?.trim() ?? "";
@@ -105,6 +106,7 @@ registerAction<LlmActionConfig>({
         });
       } catch (err) {
         await reportLlmError(err, {
+          communityId: ctx.communityId,
           provider,
           model,
           source: "workflow",
@@ -209,7 +211,7 @@ registerAction<z.infer<typeof transcribeConfig>>({
     if (!media) throw new Error(`media file ${config.mediaId} not found`);
     if (media.kind !== "audio" && media.kind !== "video") throw new Error(`media file is ${media.kind}, expected audio/video`);
     if (media.size > MAX_TRANSCRIBE_BYTES) throw new Error(`file is ${Math.round(media.size / 1024 / 1024)} MB – the transcription endpoint accepts at most 25 MB`);
-    const provider = config.providerId && config.providerId !== "default" ? await getProvider(config.providerId) : await getDefaultProvider();
+    const provider = config.providerId && config.providerId !== "default" ? await getProvider(ctx.communityId, config.providerId) : await getDefaultProvider(ctx.communityId);
     if (!provider) throw new Error("No LLM provider configured. Add one under Admin → LLM.");
     const buffer = await readFile(absolutePath(media.storagePath));
     ctx.log("transcribing", { mediaId: media.id, size: media.size, provider: provider.name, model: config.model });
@@ -226,6 +228,7 @@ registerAction<z.infer<typeof transcribeConfig>>({
       });
     } catch (err) {
       await reportLlmError(err, {
+        communityId: ctx.communityId,
         provider,
         model: config.model,
         source: "transcribe",
@@ -278,10 +281,11 @@ registerAction<z.infer<typeof setTranscriptConfig>>({
   templateKeys: ["meetingId", "markdown"],
   outputDoc: { meetingId: "id of the meeting", href: "app-relative link to the meeting" },
   timeoutMs: 15_000,
-  async run(config) {
+  async run(config, ctx) {
     const meeting = await setMeetingTranscript(config.meetingId, config.markdown, { mode: config.mode });
     if (!meeting) throw new Error(`meeting ${config.meetingId} not found`);
-    const space = await getSpaceById(meeting.spaceId);
+    const space = await getSpaceById(ctx.communityId, meeting.spaceId);
+    if (!space) throw new Error(`meeting ${config.meetingId} not found`);
     return { output: { meetingId: meeting.id, href: `/meetings/${space?.slug ?? meeting.spaceId}/${meeting.id}` } };
   },
 });
@@ -302,7 +306,7 @@ const notifyConfig = z.object({
 });
 export type NotifyConfig = z.infer<typeof notifyConfig>;
 
-export async function resolveAudience(audience: NotifyConfig["audience"], ctx: Pick<ActionRunContext, "triggeredBy" | "template">): Promise<string[]> {
+export async function resolveAudience(audience: NotifyConfig["audience"], ctx: Pick<ActionRunContext, "triggeredBy" | "template" | "communityId">): Promise<string[]> {
   switch (audience.type) {
     case "triggerUser": {
       const t = ctx.template.trigger as { content?: { authorId?: string }; startedBy?: string; userId?: string; user?: { id?: string } };
@@ -310,9 +314,9 @@ export async function resolveAudience(audience: NotifyConfig["audience"], ctx: P
       return id ? [id] : [];
     }
     case "admins":
-      return (await db.select({ id: users.id }).from(users).where(eq(users.role, "admin"))).map((r) => r.id);
+      return listAdminIds(ctx.communityId);
     case "all":
-      return (await db.select({ id: users.id }).from(users).where(and(eq(users.status, "active"), eq(users.isBot, false)))).map((r) => r.id);
+      return listActiveMemberIds(ctx.communityId);
     case "users":
       return audience.userIds;
   }
@@ -337,6 +341,7 @@ registerAction<NotifyConfig>({
     if (!ids.length) return { output: { sent: 0, userIds: [] } };
     await createNotifications(
       ids.map((userId) => ({
+        communityId: ctx.communityId,
         userId,
         type: "workflow.result",
         title: config.title.slice(0, 200),
@@ -378,7 +383,7 @@ registerAction<z.infer<typeof createContentConfig>>({
   outputDoc: { contentId: "id of the new content", href: "app-relative link" },
   timeoutMs: 20_000,
   async run(config, ctx) {
-    const area = await getAreaById(config.areaId);
+    const area = await getAreaById(ctx.communityId, config.areaId);
     if (!area) throw new Error("knowledge area not found");
     if (config.type === "markdown" && !config.body.trim()) throw new Error("body is empty");
     if (config.type === "link" && !/^https?:\/\//i.test(config.url)) throw new Error("url must be http(s)");
@@ -390,7 +395,7 @@ registerAction<z.infer<typeof createContentConfig>>({
     const built = await buildStructuredVersionInput({ structureId: template.id, structureVersion: template.version, definition: template.definition }, config.title.slice(0, 200), answers, {});
     if (!built.ok) throw new Error(`invalid content: ${JSON.stringify(built.issues)}`);
     const authorId = ctx.triggeredBy;
-    const content = await createContent(area.id, "structured", built.input, authorId ?? null, { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth + 1 });
+    const content = await createContent(ctx.communityId, area.id, "structured", built.input, authorId ?? null, { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth + 1 });
     return { output: { contentId: content.id, href: `/knowledge/${area.slug}/${content.id}` } };
   },
 });
@@ -457,6 +462,7 @@ registerAction<AskUserConfig>({
     const { createQuestion } = await import("@/server/domain/questions");
     const recipientIds = config.audience.type === "all" ? [] : [...new Set(await resolveAudience(config.audience, ctx))];
     const q = await createQuestion({
+      communityId: ctx.communityId,
       questionKey: config.questionKey,
       title: config.title.slice(0, 200),
       description: config.description?.slice(0, 2000) || null,
@@ -499,7 +505,7 @@ registerAction<z.infer<typeof sendMessageConfig>>({
     const ids = [...new Set(await resolveAudience(config.audience, ctx))];
     const conversationIds: string[] = [];
     for (const userId of ids) {
-      const r = await sendBotMessage(userId, config.body.slice(0, 10_000));
+      const r = await sendBotMessage(ctx.communityId, userId, config.body.slice(0, 10_000));
       if (r) conversationIds.push(r.conversationId);
     }
     return { output: { sent: conversationIds.length, conversationIds } };

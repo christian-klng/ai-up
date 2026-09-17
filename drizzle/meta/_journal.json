@@ -169,6 +169,20 @@
       "when": 1789495180501,
       "tag": "0023_magenta_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789585959501,
+      "tag": "0024_communities",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789637426153,
+      "tag": "0025_community_domains",
+      "breakpoints": true
     }
   ]
 }

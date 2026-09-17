@@ -22,7 +22,7 @@ const RealtimeContext = createContext<RealtimeContextValue | null>(null);
  * Holds one EventSource per tab, dispatches events to subscribers, and keeps the topbar counters live.
  * Reconnects automatically (browser EventSource); after a reconnect the server sends `sync` and we refresh.
  */
-export function RealtimeProvider({ userId, initialCounts, children }: { userId: string; initialCounts: Counts; children: React.ReactNode }) {
+export function RealtimeProvider({ userId, communityId, initialCounts, children }: { userId: string; communityId: string; initialCounts: Counts; children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [counts, setCountsState] = useState<Counts>(initialCounts);
   const handlers = useRef(new Map<RealtimeEventType, Set<Handler<RealtimeEventType>>>());
@@ -33,6 +33,13 @@ export function RealtimeProvider({ userId, initialCounts, children }: { userId: 
     pathnameRef.current = pathname;
   }, [pathname]);
   const hadConnection = useRef(false);
+
+  /**
+   * Personal events (a message, a notification) reach the account wherever it is, so one that
+   * happened in another community must not move the counters of the one on screen. Community-wide
+   * events cannot arrive at all – the stream only subscribes to the active community's channel.
+   */
+  const isHere = useCallback((id: string | null | undefined) => id == null || id === communityId, [communityId]);
 
   // Keep counters in sync with fresh server renders (derived-state pattern: compare previous prop during render)
   const [prevInitial, setPrevInitial] = useState(initialCounts);
@@ -72,6 +79,7 @@ export function RealtimeProvider({ userId, initialCounts, children }: { userId: 
         }
         case "notification.created": {
           const p = event.payload as RealtimeEventMap["notification.created"];
+          if (!isHere(p.communityId)) break;
           setCountsState((c) => ({ ...c, unreadNotifications: p.unreadCount }));
           toast(p.title, { description: p.body ?? undefined, action: p.href ? { label: "→", onClick: () => router.push(p.href!) } : undefined });
           if (pathnameRef.current === "/notifications") router.refresh();
@@ -79,16 +87,19 @@ export function RealtimeProvider({ userId, initialCounts, children }: { userId: 
         }
         case "notification.count": {
           const p = event.payload as RealtimeEventMap["notification.count"];
+          if (!isHere(p.communityId)) break;
           setCountsState((c) => ({ ...c, unreadNotifications: p.unreadCount }));
           break;
         }
         case "message.created": {
           const p = event.payload as RealtimeEventMap["message.created"];
+          if (!isHere(p.communityId)) break;
           setCountsState((c) => ({ ...c, unreadMessages: p.unreadMessages }));
           break;
         }
         case "message.count": {
           const p = event.payload as RealtimeEventMap["message.count"];
+          if (!isHere(p.communityId)) break;
           setCountsState((c) => ({ ...c, unreadMessages: p.unreadMessages }));
           break;
         }
@@ -112,7 +123,7 @@ export function RealtimeProvider({ userId, initialCounts, children }: { userId: 
       if (set) for (const h of set) h(event.payload, event);
     };
     return () => es.close();
-  }, [router, userId]);
+  }, [router, userId, isHere]);
 
   const value = useMemo(() => ({ connected, counts, setCounts, subscribe }), [connected, counts, setCounts, subscribe]);
   return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>;

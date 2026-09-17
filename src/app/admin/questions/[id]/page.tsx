@@ -10,9 +10,9 @@ import { UserAvatar } from "@/components/shell/user-avatar";
 import { CloseQuestionButton } from "./close-button";
 
 export default async function AdminQuestionDetailPage({ params }: PageProps<"/admin/questions/[id]">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const { id } = await params;
-  const data = await getQuestionWithResponses(id);
+  const data = await getQuestionWithResponses(user.communityId, id);
   if (!data) notFound();
   const [t, format] = await Promise.all([getTranslations("admin.questions"), getFormatter()]);
   const { question, responses, stats, open } = data;

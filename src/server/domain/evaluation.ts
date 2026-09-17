@@ -1,12 +1,12 @@
 import { and, eq, notInArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { contentEvaluations, contentVersions, contents, type ContentEvaluation, type EvaluationStatus } from "@/server/db/schema";
+import { contentEvaluations, contentVersions, contents, knowledgeAreas, type ContentEvaluation, type EvaluationStatus } from "@/server/db/schema";
 import { getTemplateById } from "@/server/domain/templates";
 import { chatCompletion } from "@/server/llm/client";
 import { clientConfigFor, resolveModel } from "@/server/llm/providers";
 import { reportLlmError } from "@/server/llm/errors";
 import { extractJson } from "@/lib/extract-json";
-import { publishBroadcast } from "@/server/realtime/publish";
+import { publishToCommunity } from "@/server/realtime/publish";
 import { logger } from "@/server/logger";
 import type { EvaluationCriterion, TemplateEvaluation } from "@/lib/structures/evaluation";
 
@@ -38,9 +38,9 @@ export async function listEvaluations(versionId: string): Promise<ContentEvaluat
 }
 
 /** Verdicts for the entry's current version plus the "still running" hint for the UI. */
-export async function getEvaluationSummary(contentId: string, versionId: string | null, templateId: string | null): Promise<EvaluationSummary | null> {
+export async function getEvaluationSummary(communityId: string, contentId: string, versionId: string | null, templateId: string | null): Promise<EvaluationSummary | null> {
   if (!templateId || !versionId) return null;
-  const template = await getTemplateById(templateId);
+  const template = await getTemplateById(communityId, templateId);
   const criteriaCount = template?.evaluation.criteria.length ?? 0;
   if (criteriaCount === 0) return null;
   const rows = await listEvaluations(versionId);
@@ -98,11 +98,11 @@ function userPrompt(criterion: EvaluationCriterion, title: string, body: string)
 }
 
 /** Runs one criterion; provider/model errors become an "error" verdict instead of failing the batch. */
-async function judge(criterion: EvaluationCriterion, title: string, body: string, evaluation: TemplateEvaluation, contentId: string): Promise<CriterionVerdict> {
+async function judge(communityId: string, criterion: EvaluationCriterion, title: string, body: string, evaluation: TemplateEvaluation, contentId: string): Promise<CriterionVerdict> {
   // Kept outside the try so a provider failure can still be reported with provider and model.
   let resolved: { provider: Awaited<ReturnType<typeof resolveModel>>["provider"]; model: string } | undefined;
   try {
-    const { provider, model, caps } = await resolveModel(evaluation.providerId, evaluation.model);
+    const { provider, model, caps } = await resolveModel(communityId, evaluation.providerId, evaluation.model);
     resolved = { provider, model };
     const cfg = await clientConfigFor(provider);
     const res = await chatCompletion(cfg, {
@@ -123,7 +123,7 @@ async function judge(criterion: EvaluationCriterion, title: string, body: string
     const reason = typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 1000) : null;
     return { status: parsed.passed ? "pass" : "fail", reason, usage: res.usage };
   } catch (err) {
-    if (resolved) await reportLlmError(err, { provider: resolved.provider, model: resolved.model, source: "evaluation", sourceId: contentId });
+    if (resolved) await reportLlmError(err, { communityId, provider: resolved.provider, model: resolved.model, source: "evaluation", sourceId: contentId });
     return { status: "error", reason: (err as Error).message.slice(0, 1000) };
   }
 }
@@ -147,13 +147,17 @@ export type EvaluationRunResult = { ok: true; evaluated: number } | { ok: false;
 export async function evaluateContentVersion(contentId: string, versionId: string): Promise<EvaluationRunResult> {
   const content = await db.query.contents.findFirst({ where: eq(contents.id, contentId) });
   if (!content || content.deletedAt) return { ok: false, reason: "notFound" };
+  // The worker has no session: the community comes from the entry's collection.
+  const area = await db.query.knowledgeAreas.findFirst({ where: eq(knowledgeAreas.id, content.areaId), columns: { communityId: true } });
+  if (!area) return { ok: false, reason: "notFound" };
+  const communityId = area.communityId;
   if (content.currentVersionId !== versionId) return { ok: false, reason: "stale" };
   const version = await db.query.contentVersions.findFirst({ where: eq(contentVersions.id, versionId) });
   if (!version) return { ok: false, reason: "notFound" };
 
   const snapshot = version.meta.structure;
   if (content.type !== "structured" || !snapshot) return { ok: false, reason: "unstructured" };
-  const template = await getTemplateById(snapshot.structureId);
+  const template = await getTemplateById(communityId, snapshot.structureId);
   const criteria = template?.evaluation.criteria ?? [];
   if (!template || criteria.length === 0) {
     await db.delete(contentEvaluations).where(eq(contentEvaluations.versionId, versionId));
@@ -161,7 +165,7 @@ export async function evaluateContentVersion(contentId: string, versionId: strin
   }
 
   const body = (version.bodyMarkdown ?? "").slice(0, MAX_ENTRY_CHARS);
-  const verdicts = await runPooled(criteria, CONCURRENCY, (c) => judge(c, version.title, body, template.evaluation, contentId));
+  const verdicts = await runPooled(criteria, CONCURRENCY, (c) => judge(communityId, c, version.title, body, template.evaluation, contentId));
   const providerId = template.evaluation.providerId !== "default" ? template.evaluation.providerId : null;
 
   await db.transaction(async (tx) => {
@@ -192,7 +196,7 @@ export async function evaluateContentVersion(contentId: string, versionId: strin
   const failed = verdicts.filter((v) => v.status === "fail").length;
   const errored = verdicts.filter((v) => v.status === "error").length;
   logger.info({ contentId, versionId, criteria: criteria.length, failed, errored }, "entry evaluated");
-  await publishBroadcast("content.evaluation.updated", {
+  await publishToCommunity(communityId, "content.evaluation.updated", {
     contentId,
     versionId,
     passed: verdicts.length - failed - errored,

@@ -33,6 +33,8 @@ export type TemplateContext = {
 };
 
 export type ActionRunContext = {
+  /** The community this run belongs to – every side effect of an action stays inside it. */
+  communityId: string;
   runId: string;
   workflowId: string;
   workflowName: string;

@@ -24,6 +24,8 @@ export type LlmErrorContext = {
   href?: string | null;
   actorId?: string | null;
   origin?: EventOrigin;
+  /** The community whose workflows may react to the failure. */
+  communityId: string;
 };
 
 /** Best effort in every direction: reporting a failure must never turn into a second one. */
@@ -37,7 +39,7 @@ export async function reportLlmError(err: unknown, ctx: LlmErrorContext): Promis
     logger.warn({ err: redisErr }, "llm error cooldown unavailable");
   }
   try {
-    emitDomainEvent("llm.error", {
+    emitDomainEvent("llm.error", ctx.communityId, {
       provider: { id: ctx.provider.id, name: ctx.provider.name, kind: ctx.provider.kind },
       model: ctx.model,
       status: err instanceof LlmError ? (err.status ?? null) : null,

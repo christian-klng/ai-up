@@ -8,14 +8,14 @@ import { blockContact, respondContactRequest, sendContactRequest, unblockContact
 export async function sendContactRequestAction(otherUserId: string, message: string): Promise<{ ok: true } | { ok: false; error: ContactError }> {
   const me = await assertUser();
   const msg = z.string().trim().max(500).parse(message ?? "");
-  const res = await sendContactRequest(me.id, otherUserId, msg || null, me);
+  const res = await sendContactRequest(me.communityId, me.id, otherUserId, msg || null, me);
   revalidatePath(`/members/${otherUserId}`);
   return res;
 }
 
 export async function respondContactRequestAction(requestId: string, decision: "accept" | "decline"): Promise<{ ok: boolean; conversationId?: string }> {
   const me = await assertUser();
-  const res = await respondContactRequest(me.id, requestId, decision, me);
+  const res = await respondContactRequest(me.communityId, me.id, requestId, decision, me);
   revalidatePath("/notifications");
   revalidatePath("/members", "layout");
   return res;
@@ -23,12 +23,12 @@ export async function respondContactRequestAction(requestId: string, decision: "
 
 export async function blockContactAction(otherUserId: string): Promise<void> {
   const me = await assertUser();
-  await blockContact(me.id, otherUserId);
+  await blockContact(me.communityId, me.id, otherUserId);
   revalidatePath(`/members/${otherUserId}`);
 }
 
 export async function unblockContactAction(otherUserId: string): Promise<void> {
   const me = await assertUser();
-  await unblockContact(me.id, otherUserId);
+  await unblockContact(me.communityId, me.id, otherUserId);
   revalidatePath(`/members/${otherUserId}`);
 }

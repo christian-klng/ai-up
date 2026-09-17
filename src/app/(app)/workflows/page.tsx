@@ -11,7 +11,7 @@ import { RunStatusBadge, WorkflowStatusDot } from "@/components/workflows/run-st
 export default async function WorkflowsPage() {
   const user = await requireUser();
   await loadRegistry();
-  const [t, format, locale, items] = await Promise.all([getTranslations("workflows"), getFormatter(), getLocale(), listWorkflows()]);
+  const [t, format, locale, items] = await Promise.all([getTranslations("workflows"), getFormatter(), getLocale(), listWorkflows(user.communityId)]);
   const loc = locale === "en" ? "en" : "de";
   const visible = items.filter((w) => w.status !== "draft" || user.role === "admin");
 

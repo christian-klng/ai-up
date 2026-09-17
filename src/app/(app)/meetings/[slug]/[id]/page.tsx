@@ -18,14 +18,15 @@ import { Markdown } from "@/components/content/markdown";
 
 export async function generateMetadata({ params }: PageProps<"/meetings/[slug]/[id]">): Promise<Metadata> {
   const { id } = await params;
-  const meeting = await getMeeting(id);
+  const me = await requireUser();
+  const meeting = await getMeeting(me.communityId, id);
   return meeting ? { title: meeting.title } : {};
 }
 
 export default async function MeetingDetailPage({ params }: PageProps<"/meetings/[slug]/[id]">) {
   const user = await requireUser();
   const { slug, id } = await params;
-  const [space, meeting] = await Promise.all([getSpaceBySlug(slug), getMeeting(id)]);
+  const [space, meeting] = await Promise.all([getSpaceBySlug(user.communityId, slug), getMeeting(user.communityId, id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
   const isAdmin = user.role === "admin";
   const [t, format, participants, recordings, lk, invite] = await Promise.all([
@@ -38,9 +39,9 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
   ]);
   const editable = canEditMeeting(user, meeting);
   // An invited member arriving at their meeting has reached the target – no redirect from /home later.
-  if (user.invitedViaId && !user.inviteLandedAt) {
-    const target = await pendingInviteRedirect(user);
-    if (!target || target === meetingHref(space.slug, meeting.id)) await markInviteLanded(user.id);
+  if (user.membership.invitedViaId && !user.membership.inviteLandedAt) {
+    const target = await pendingInviteRedirect(user.membership);
+    if (!target || target === meetingHref(space.slug, meeting.id)) await markInviteLanded(user.communityId, user.id);
   }
   const callsAvailable = !!lk?.enabled;
   const callKind = meeting.kind === "protocol" ? null : meeting.kind;

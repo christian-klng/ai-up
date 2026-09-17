@@ -8,12 +8,15 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarNav, type SidebarNavProps } from "./sidebar-nav";
+import { CommunitySwitcher, type SwitcherCommunity } from "./community-switcher";
 import { UserAvatar } from "./user-avatar";
 import { cn } from "@/lib/utils";
 import { useRealtime } from "@/components/realtime/realtime-provider";
 
 export type AppShellProps = {
   brand: { name: string; logo: React.ReactNode };
+  /** The community being shown plus every other one the account may switch to. */
+  community: { current: SwitcherCommunity; all: SwitcherCommunity[]; canCreate: boolean };
   user: { id: string; name: string; email: string; avatarMediaId: string | null; role: "member" | "admin" };
   nav: Omit<SidebarNavProps, "onNavigate">;
   labels: { messages: string; notifications: string; profile: string; admin: string; signOut: string; menu: string };
@@ -21,17 +24,14 @@ export type AppShellProps = {
   children: React.ReactNode;
 };
 
-export function AppShell({ brand, user, nav, labels, signOutAction, children }: AppShellProps) {
+export function AppShell({ brand, community, user, nav, labels, signOutAction, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
   // Live counters (SSE) – initial values come from the RealtimeProvider rendered by the server shell.
   const { counts } = useRealtime();
 
   const sidebar = (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <Link href="/home" className="flex items-center gap-2.5 px-4 py-4" onClick={() => setOpen(false)}>
-        {brand.logo}
-        <span className="truncate font-semibold tracking-tight">{brand.name}</span>
-      </Link>
+      <CommunitySwitcher current={community.current} communities={community.all} canCreate={community.canCreate} logo={brand.logo} />
       <div className="flex-1 overflow-y-auto">
         <SidebarNav {...nav} onNavigate={() => setOpen(false)} />
       </div>

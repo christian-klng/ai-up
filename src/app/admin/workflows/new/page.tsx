@@ -7,8 +7,8 @@ import { PageHeader } from "@/components/common/page-header";
 import { WorkflowEditor } from "@/components/workflows/workflow-editor";
 
 export default async function NewWorkflowPage() {
-  await requireAdmin();
-  const [t, catalog] = await Promise.all([getTranslations("admin.workflows"), getEditorCatalog()]);
+  const user = await requireAdmin();
+  const [t, catalog] = await Promise.all([getTranslations("admin.workflows"), getEditorCatalog(user.communityId)]);
   return (
     <div className="max-w-4xl">
       <Link href="/admin/workflows" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">

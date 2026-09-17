@@ -1,12 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { users, workflowRunSteps, workflowRuns, workflows, type Workflow, type WorkflowRun } from "@/server/db/schema";
-import { loadAppSettings } from "@/server/domain/settings";
+import { workflowRunSteps, workflowRuns, workflows, type Workflow, type WorkflowRun } from "@/server/db/schema";
+import { listAdminIds, loadCommunity } from "@/server/domain/communities";
+import { listAdmins } from "@/server/domain/users";
 import { createNotifications, localized } from "@/server/domain/notifications";
 import { env } from "@/server/env";
 import { logger } from "@/server/logger";
-import { publishBroadcast, publishToUsers } from "@/server/realtime/publish";
+import { publishToCommunity, publishToUsers } from "@/server/realtime/publish";
 import { getAction, loadRegistry } from "./registry";
+import { loadWorkflow } from "./service";
 import { evaluateCondition, renderConfig } from "./templates";
 import type { ActionRunContext, TemplateContext } from "./types";
 
@@ -28,6 +30,7 @@ export async function createRun(
   const [run] = await db
     .insert(workflowRuns)
     .values({
+      communityId: workflow.communityId,
       workflowId: workflow.id,
       workflowVersion: workflow.version,
       workflowName: workflow.name,
@@ -42,16 +45,11 @@ export async function createRun(
   return run;
 }
 
-async function publishRunEvent(workflow: Workflow, event: Parameters<typeof publishBroadcast>[0], payload: Parameters<typeof publishBroadcast>[1]) {
+async function publishRunEvent(workflow: Workflow, event: Parameters<typeof publishToCommunity>[1], payload: Parameters<typeof publishToCommunity>[2]) {
   if (workflow.toastAudience === "admins") {
-    const admins = await db.select({ id: users.id }).from(users).where(and(eq(users.role, "admin"), eq(users.status, "active")));
-    await publishToUsers(
-      admins.map((a) => a.id),
-      event,
-      payload,
-    );
+    await publishToUsers(await listAdminIds(workflow.communityId), event, payload);
   } else {
-    await publishBroadcast(event, payload);
+    await publishToCommunity(workflow.communityId, event, payload);
   }
 }
 
@@ -83,12 +81,13 @@ export async function executeRun(runId: string): Promise<WorkflowRun | undefined
     logger.warn({ runId, status: run.status }, "run not queued – skipping");
     return run;
   }
-  const workflow = await db.query.workflows.findFirst({ where: eq(workflows.id, run.workflowId) });
+  // The run row carries the community; the workflow is looked up unqualified on purpose.
+  const workflow = await loadWorkflow(run.workflowId);
   if (!workflow) {
     await db.update(workflowRuns).set({ status: "failed", error: "workflow deleted", finishedAt: new Date(), durationMs: 0 }).where(eq(workflowRuns.id, runId));
     return undefined;
   }
-  const settings = await loadAppSettings();
+  const community = await loadCommunity(workflow.communityId);
   const startedAt = new Date();
   await db.update(workflowRuns).set({ status: "running", startedAt }).where(eq(workflowRuns.id, runId));
   await db.update(workflows).set({ lastRunAt: startedAt }).where(eq(workflows.id, workflow.id));
@@ -97,7 +96,7 @@ export async function executeRun(runId: string): Promise<WorkflowRun | undefined
   const template: TemplateContext = {
     trigger: run.triggerEvent,
     steps: {},
-    app: { name: settings.name, purpose: settings.purpose ?? "", url: env.APP_URL },
+    app: { name: community?.name ?? "AI-Up", purpose: community?.purpose ?? "", url: env.APP_URL },
     run: { id: run.id, workflowId: workflow.id, workflowName: workflow.name, triggeredBy: run.triggeredBy },
     now: new Date().toISOString(),
   };
@@ -136,6 +135,7 @@ export async function executeRun(runId: string): Promise<WorkflowRun | undefined
         throw new Error(`invalid config – ${msg}`);
       }
       const ctx: ActionRunContext = {
+        communityId: workflow.communityId,
         runId,
         workflowId: workflow.id,
         workflowName: workflow.name,
@@ -171,9 +171,10 @@ export async function executeRun(runId: string): Promise<WorkflowRun | undefined
 
   if (failure) {
     try {
-      const admins = await db.select({ id: users.id, locale: users.locale }).from(users).where(and(eq(users.role, "admin"), eq(users.status, "active")));
+      const admins = await listAdmins(workflow.communityId);
       await createNotifications(
         admins.map((a) => ({
+          communityId: workflow.communityId,
           userId: a.id,
           type: "workflow.failed",
           title: localized(a.locale, { de: `Workflow „${workflow.name}“ fehlgeschlagen`, en: `Workflow “${workflow.name}” failed` }),

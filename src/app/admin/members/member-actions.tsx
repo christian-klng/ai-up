@@ -4,10 +4,10 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Check, MoreHorizontal, ShieldCheck, ShieldOff, UserCheck, UserX } from "lucide-react";
-import { approveMemberAction, setMemberRoleAction, setMemberStatusAction, type MemberActionResult } from "@/server/actions/admin-settings";
+import { Check, MoreHorizontal, ShieldCheck, ShieldOff, UserCheck, UserMinus, UserX } from "lucide-react";
+import { approveMemberAction, removeMemberAction, setMemberRoleAction, setMemberStatusAction, type MemberActionResult } from "@/server/actions/admin-settings";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type Props = { userId: string; name: string; status: "pending" | "active" | "suspended"; role: "member" | "admin"; isSelf: boolean };
 
@@ -17,15 +17,15 @@ export function MemberActions({ userId, name, status, role, isSelf }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
-  const run = (fn: () => Promise<MemberActionResult>, successKey: "approved" | "suspended" | "reactivated" | "roleChanged") =>
+  const run = (fn: () => Promise<MemberActionResult>, successKey: "approved" | "suspended" | "reactivated" | "roleChanged" | "removed") =>
     start(async () => {
       const res = await fn();
       if (res.ok) {
         toast.success(t(successKey, { name: res.name }));
         router.refresh();
-      } else {
-        toast.error(res.reason === "self" ? t("cannotChangeSelf") : tc("unexpectedError"));
+        return;
       }
+      toast.error(res.reason === "self" ? t("cannotChangeSelf") : res.reason === "lastAdmin" ? t("lastAdmin") : tc("unexpectedError"));
     });
 
   if (isSelf) return null;
@@ -64,6 +64,16 @@ export function MemberActions({ userId, name, status, role, isSelf }: Props) {
               <ShieldOff className="size-4" /> {t("removeAdmin")}
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => {
+              // Removing only ends the membership – the account and its other communities stay.
+              if (confirm(t("removeConfirm", { name }))) run(() => removeMemberAction(userId), "removed");
+            }}
+          >
+            <UserMinus className="size-4" /> {t("remove")}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <span className="sr-only">{name}</span>

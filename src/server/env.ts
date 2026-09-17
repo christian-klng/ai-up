@@ -9,6 +9,24 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:3000"),
   APP_TIMEZONE: z.string().default("Europe/Berlin"),
+  /**
+   * Serve each community under `<slug>.<app host>`. Requires wildcard DNS and a wildcard certificate
+   * for the app host (see docs/communities.md §7.5) – without those the links would simply not
+   * resolve, so this stays off unless the operator has set the infrastructure up.
+   */
+  /**
+   * Stage B (spike): serve communities under their own customer domains. Needs a proxy that can get
+   * a certificate for an unknown host (docs/communities.md §7.5) plus the session hand-off, so it
+   * stays off until that infrastructure exists.
+   */
+  COMMUNITY_CUSTOM_DOMAINS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  COMMUNITY_SUBDOMAINS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   DEFAULT_LOCALE: z.enum(["de", "en"]).default("de"),
   SEED_ADMIN_EMAIL: z.string().email().optional(),
 

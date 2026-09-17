@@ -5,7 +5,7 @@ import { MessagesShell } from "@/components/messenger/messages-shell";
 
 export default async function MessagesLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
-  const [t, conversations, contacts] = await Promise.all([getTranslations("messages"), listConversations(me.id), listContacts(me.id)]);
+  const [t, conversations, contacts] = await Promise.all([getTranslations("messages"), listConversations(me.communityId, me.id), listContacts(me.communityId, me.id)]);
   return (
     <MessagesShell
       meId={me.id}

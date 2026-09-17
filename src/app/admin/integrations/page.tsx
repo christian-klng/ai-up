@@ -1,11 +1,12 @@
 import { getFormatter, getTranslations } from "next-intl/server";
-import { requireAdmin } from "@/server/auth/session";
+import { requireRootAdmin } from "@/server/auth/session";
 import { getLiveKitView } from "@/server/domain/integrations";
 import { PageHeader } from "@/components/common/page-header";
 import { LiveKitForm } from "./livekit-form";
 
 export default async function AdminIntegrationsPage() {
-  await requireAdmin();
+  // LiveKit credentials and the recording storage belong to whoever runs the installation.
+  await requireRootAdmin();
   const [t, format, lk] = await Promise.all([getTranslations("admin.integrations"), getFormatter(), getLiveKitView()]);
   return (
     <div className="max-w-3xl">

@@ -40,7 +40,9 @@ export async function saveProviderAction(_prev: ProviderFormState, formData: For
   }
   // Empty apiKey on edit = keep; the form sends "__keep__" explicitly for that case
   const apiKey = d.apiKey === "__keep__" ? undefined : (d.apiKey ?? "");
-  const row = d.id ? await updateProvider(d.id, { name: d.name, kind: d.kind, baseUrl: d.baseUrl, apiKey, extraHeaders }, admin.id) : await createProvider({ name: d.name, kind: d.kind, baseUrl: d.baseUrl, apiKey, extraHeaders }, admin.id);
+  const row = d.id
+    ? await updateProvider(admin.communityId, d.id, { name: d.name, kind: d.kind, baseUrl: d.baseUrl, apiKey, extraHeaders }, admin.id)
+    : await createProvider(admin.communityId, { name: d.name, kind: d.kind, baseUrl: d.baseUrl, apiKey, extraHeaders }, admin.id);
   if (!row) return { status: "error", message: "not found" };
   revalidatePath("/admin/llm");
   return { status: "saved", id: row.id };
@@ -48,38 +50,38 @@ export async function saveProviderAction(_prev: ProviderFormState, formData: For
 
 export async function deleteProviderAction(id: string): Promise<void> {
   const admin = await assertAdmin();
-  await deleteProvider(id, admin.id);
+  await deleteProvider(admin.communityId, id, admin.id);
   revalidatePath("/admin/llm");
 }
 
 export async function setDefaultProviderAction(id: string): Promise<void> {
-  await assertAdmin();
-  await setDefaultProvider(id);
+  const admin = await assertAdmin();
+  await setDefaultProvider(admin.communityId, id);
   revalidatePath("/admin/llm");
 }
 
 export async function syncModelsAction(id: string): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
-  await assertAdmin();
-  const res = await syncProviderModels(id);
+  const admin = await assertAdmin();
+  const res = await syncProviderModels(admin.communityId, id);
   revalidatePath("/admin/llm");
   return res;
 }
 
 export async function setEnabledModelsAction(id: string, enabled: string[], defaultModel: string | null): Promise<void> {
-  await assertAdmin();
-  await setEnabledModels(id, enabled, defaultModel);
+  const admin = await assertAdmin();
+  await setEnabledModels(admin.communityId, id, enabled, defaultModel);
   revalidatePath("/admin/llm");
 }
 
 export async function addManualModelsAction(id: string, raw: string): Promise<void> {
-  await assertAdmin();
-  await addManualModels(id, raw.split(/[\n,]/));
+  const admin = await assertAdmin();
+  await addManualModels(admin.communityId, id, raw.split(/[\n,]/));
   revalidatePath("/admin/llm");
 }
 
 export async function testProviderAction(id: string, model: string, prompt: string): Promise<{ ok: true; text: string; model: string; ms: number; usage: unknown } | { ok: false; error: string }> {
-  await assertAdmin();
-  const p = await getProvider(id);
+  const admin = await assertAdmin();
+  const p = await getProvider(admin.communityId, id);
   if (!p) return { ok: false, error: "provider not found" };
   const started = Date.now();
   try {

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { workflows, type Workflow } from "@/server/db/schema";
 import type { DomainEvent, EventOrigin } from "@/server/events/bus";
@@ -16,7 +16,8 @@ export async function dispatchEvent(event: DomainEvent): Promise<void> {
   await loadRegistry();
   const triggers = triggersForEvent(event.type);
   if (!triggers.length) return;
-  const active = await db.query.workflows.findMany({ where: eq(workflows.status, "active") });
+  // Only this community's workflows may react – an event never leaks across the tenant boundary.
+  const active = await db.query.workflows.findMany({ where: and(eq(workflows.status, "active"), eq(workflows.communityId, event.communityId)) });
   const payload = event.payload as Record<string, unknown>;
   const origin = (payload.origin as EventOrigin | undefined) ?? { kind: "user" };
   const parent = origin.kind === "workflow" ? origin : null;

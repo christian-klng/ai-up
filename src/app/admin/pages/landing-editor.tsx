@@ -4,7 +4,7 @@ import { useCallback, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import type { AppSettings } from "@/server/db/schema";
+import type { Community } from "@/server/db/schema";
 import type { LandingDefinition, SitePage } from "@/lib/landing-schema";
 import { saveLandingInlineAction } from "@/server/actions/admin-landing";
 import { LandingShell } from "@/components/landing/landing-shell";
@@ -47,7 +47,7 @@ export function LandingEditor({
   page: SitePage;
   onOpenChange: (open: boolean) => void;
   definition: LandingDefinition;
-  settings: AppSettings;
+  settings: Community;
 }) {
   const t = useTranslations("admin.landing");
   const tl = useTranslations("landing");

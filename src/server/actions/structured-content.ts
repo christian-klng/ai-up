@@ -46,14 +46,14 @@ export async function saveStructuredEntryAction(input: {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, issues: [{ key: "", code: "invalid" }] };
   const d = parsed.data;
-  const area = await getAreaById(d.areaId);
+  const area = await getAreaById(user.communityId, d.areaId);
   if (!area) return { ok: false, issues: [{ key: "", code: "invalid" }] };
 
   let snapshot: Pick<StructureEntryMeta, "structureId" | "structureVersion" | "definition">;
   let prevEnrichment: StructureEntryMeta["enrichment"];
 
   if (d.contentId) {
-    const existing = await getContent(d.contentId);
+    const existing = await getContent(user.communityId, d.contentId);
     if (!existing || existing.areaId !== area.id || existing.type !== "structured") return { ok: false, issues: [{ key: "", code: "invalid" }] };
     if (!canEditContent(user, existing)) return { ok: false, issues: [{ key: "", code: "invalid" }] };
     const prev = existing.version?.meta.structure;
@@ -61,14 +61,14 @@ export async function saveStructuredEntryAction(input: {
     snapshot = prev;
     prevEnrichment = prev.enrichment;
     if (d.upgrade) {
-      const template = await getTemplateById(prev.structureId);
+      const template = await getTemplateById(user.communityId, prev.structureId);
       if (template && template.version > prev.structureVersion) {
         snapshot = { structureId: template.id, structureVersion: template.version, definition: template.definition };
       }
     }
   } else {
     if (!d.templateId) return { ok: false, issues: [{ key: "", code: "invalid" }] };
-    const template = await getTemplateById(d.templateId);
+    const template = await getTemplateById(user.communityId, d.templateId);
     if (!template || !(await isTemplateAvailableForArea(area.id, template.id))) return { ok: false, issues: [{ key: "", code: "invalid" }] };
     snapshot = { structureId: template.id, structureVersion: template.version, definition: template.definition };
   }
@@ -78,11 +78,11 @@ export async function saveStructuredEntryAction(input: {
 
   try {
     if (d.contentId) {
-      await addContentVersion(d.contentId, built.input, user.id);
+      await addContentVersion(user.communityId, d.contentId, built.input, user.id);
       revalidatePath(`/knowledge/${area.slug}`, "layout");
       return { ok: true, contentId: d.contentId, areaSlug: area.slug };
     }
-    const created = await createContent(area.id, "structured", built.input, user.id);
+    const created = await createContent(user.communityId, area.id, "structured", built.input, user.id);
     revalidatePath(`/knowledge/${area.slug}`, "layout");
     revalidatePath("/", "layout");
     return { ok: true, contentId: created.id, areaSlug: area.slug };
@@ -95,7 +95,7 @@ export async function saveStructuredEntryAction(input: {
 /** Queues a fresh criteria check for one entry (author or admin; e.g. after a template change). */
 export async function reevaluateEntryAction(contentId: string): Promise<{ ok: boolean }> {
   const user = await assertUser();
-  const content = await getContent(contentId);
+  const content = await getContent(user.communityId, contentId);
   if (!content || !content.currentVersionId || !canEditContent(user, content)) return { ok: false };
   await enqueueEvaluation(content.id, content.currentVersionId);
   return { ok: true };

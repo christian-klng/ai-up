@@ -12,10 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { RestoreProtocolButton } from "@/components/meetings/restore-protocol-button";
 
 export default async function ProtocolHistoryPage({ params, searchParams }: PageProps<"/meetings/[slug]/[id]/history">) {
-  await requireUser();
+  const user = await requireUser();
   const { slug, id } = await params;
   const sp = await searchParams;
-  const [space, meeting] = await Promise.all([getSpaceBySlug(slug), getMeeting(id)]);
+  const [space, meeting] = await Promise.all([getSpaceBySlug(user.communityId, slug), getMeeting(user.communityId, id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
   const [t, format, versions] = await Promise.all([getTranslations("meetings.protocol"), getFormatter(), listProtocolVersions(meeting.id)]);
   const selectedId = typeof sp.v === "string" ? sp.v : versions[0]?.id;

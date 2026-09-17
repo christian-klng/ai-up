@@ -15,7 +15,7 @@ import { getLiveKitConfig } from "@/server/domain/integrations";
 import { getMeetingInvite, setInviteEnabled } from "@/server/domain/invites";
 import { db } from "@/server/db/client";
 import { auditLog } from "@/server/db/schema";
-import { loadAppSettings, updateAppSettings } from "@/server/domain/settings";
+import { ROOT_COMMUNITY_ID, loadCommunity, updateCommunity } from "@/server/domain/communities";
 import { getCurrentLandingVersion, isPageEnabled, listLandingMedia, listLandingVersions, pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
 import { LANDING_ICONS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
@@ -43,7 +43,7 @@ function require(auth: ApiAuth, scope: ApiScope) {
 }
 
 async function audit(auth: ApiAuth, action: string, targetId: string | null, details: Record<string, unknown> = {}, targetType = "workflow") {
-  await db.insert(auditLog).values({ actorId: auth.user.id, action, targetType, targetId, details: { ...details, via: "mcp", apiKeyId: auth.key.id } }).catch(() => {});
+  await db.insert(auditLog).values({ communityId: auth.community.id, actorId: auth.user.id, action, targetType, targetId, details: { ...details, via: "mcp", apiKeyId: auth.key.id } }).catch(() => {});
 }
 
 const MODEL_CAPABILITIES_DOC = `# Model capabilities
@@ -53,6 +53,10 @@ What each model can do. Most OpenAI-compatible providers report nothing about th
 reasoning stays off and models that cannot call tools cannot be filtered out.
 
 Rows are keyed by **model id alone** and apply to every provider offering that id.
+
+The table is **platform-wide**: every community reads the same entries, so only the installation's
+main community may write them. From a sub-community \`set_model_capabilities\` and
+\`delete_model_capabilities\` are refused – ask the operator instead of guessing a value.
 
 ## Fields
 
@@ -282,10 +286,12 @@ meeting it came through. Switching the link off keeps the URL (re-enabling makes
 and keeps members who already registered. Handle the URL like a credential: it creates active accounts.
 `;
 
-async function meetingsContext(): Promise<string> {
-  const [spaces, lk] = await Promise.all([listSpaces(), getLiveKitConfig()]);
+async function meetingsContext(cid: string): Promise<string> {
+  const [spaces, lk, community] = await Promise.all([listSpaces(cid), getLiveKitConfig(), loadCommunity(cid)]);
   return [
     "## Current context",
+    `- Community: ${community?.name ?? "?"} – the spaces and meetings below are its own`,
+    "- The call server is shared by every community on this installation and configured by the operator",
     `- Calls (audio/video meetings) available: ${lk?.enabled ? "yes" : "no – create protocol meetings only"}`,
     `- App URL: ${env.APP_URL}`,
     "- Meeting spaces:",
@@ -293,8 +299,8 @@ async function meetingsContext(): Promise<string> {
   ].join("\n");
 }
 
-async function collectionsContext(): Promise<string> {
-  const [settings, areas, templates, assignments] = await Promise.all([loadAppSettings(), listAreas(), listTemplates(), listAllAssignments()]);
+async function collectionsContext(cid: string): Promise<string> {
+  const [community, areas, templates, assignments] = await Promise.all([loadCommunity(cid), listAreas(cid), listTemplates(cid), listAllAssignments(cid)]);
   const templateLines = templates.map((t) => `- ${t.name} (id ${t.id}${t.systemKey ? `, systemKey "${t.systemKey}"` : ""}, v${t.version}${t.isSystem ? ", system" : ""})`);
   const areaLines = areas.map((a) => {
     const assigned = assignments.get(a.id);
@@ -302,20 +308,23 @@ async function collectionsContext(): Promise<string> {
     return `- ${a.name} (id ${a.id}, slug "${a.slug}", layout ${a.layout}, sort ${a.sortMode}, ${a.contentCount} entries, ${tpl}): ${a.purpose.slice(0, 200)}`;
   });
   return [
+    `## Community "${community?.name ?? "?"}"`,
+    `Everything below belongs to this community. Language: ${community?.defaultLocale ?? "de"}. Purpose: ${community?.purpose?.slice(0, 300) ?? "(none)"}`,
     "## Current templates",
     ...(templateLines.length ? templateLines : ["(none)"]),
+    "Templates marked *system* are shared by every community: usable everywhere, editable only by the operator.",
     "## Current collections",
-    `App language: ${settings.defaultLocale}. Community purpose: ${settings.purpose?.slice(0, 300) ?? "(none)"}`,
     ...(areaLines.length ? areaLines : ["(no collections yet)"]),
   ].join("\n");
 }
 
 /** Current app context appended to the pages doc so the calling LLM knows name, purpose and theme. */
-async function pagesContext(): Promise<string> {
-  const settings = await loadAppSettings();
+async function pagesContext(cid: string): Promise<string> {
+  const settings = await loadCommunity(cid);
+  if (!settings) return "## Current app context\n- community not found";
   const perPage = await Promise.all(
     SITE_PAGES.map(async (page) => {
-      const current = await getCurrentLandingVersion(page);
+      const current = await getCurrentLandingVersion(cid, page);
       return `- page "${page}": enabled ${isPageEnabled(settings, page)}, current version ${current?.version ?? "none (no content yet)"}`;
     }),
   );
@@ -332,11 +341,27 @@ async function pagesContext(): Promise<string> {
 }
 
 export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
+  // Every tool acts inside the community the key was created for – there is no way to address
+  // another one (see docs/communities.md §1.11).
+  const cid = auth.community.id;
+  /**
+   * Some data is shared by every community (the model capability table) and therefore belongs to the
+   * operator. A key from a sub-community may read it but never change it.
+   */
+  const requireRoot = (scope: ApiScope) => {
+    require(auth, scope);
+    if (cid !== ROOT_COMMUNITY_ID) throw new Error("This is maintained platform-wide and can only be changed from the main community.");
+  };
   await loadRegistry();
   const server = new McpServer(
     { name: "ai-up", version: "0.1.0" },
     {
       instructions:
+        `This key acts in the community "${auth.community.name}" (slug ${auth.community.slug}${cid === ROOT_COMMUNITY_ID ? ", the installation's main community" : ""}). ` +
+        "Everything you list, read or change belongs to it; other communities on this installation are invisible and unreachable from here. " +
+        (cid === ROOT_COMMUNITY_ID
+          ? ""
+          : "Two things belong to the operator rather than to this community and are read-only here: the integrations (call server, recording storage) and the platform-wide model capability table. ") +
         "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_cover / set_meeting_invite.",
     },
   );
@@ -349,7 +374,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "pages",
     "aiup://docs/pages",
     { title: "Site pages format & design rules", description: "Section schema, design rules and the current app context (name, purpose, theme) for the public pages: landing, imprint, privacy.", mimeType: "text/markdown" },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${PAGES_SCHEMA_DOC}\n${await pagesContext()}` }] }),
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${PAGES_SCHEMA_DOC}\n${await pagesContext(cid)}` }] }),
   );
 
   server.registerResource(
@@ -363,23 +388,23 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "collections",
     "aiup://docs/collections",
     { title: "Collections, templates & entries", description: "Template definition format, answer shapes and rules for content collections, plus the current templates and collections.", mimeType: "text/markdown" },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${COLLECTIONS_DOC}\n${await collectionsContext()}` }] }),
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${COLLECTIONS_DOC}\n${await collectionsContext(cid)}` }] }),
   );
 
   server.registerResource(
     "meetings",
     "aiup://docs/meetings",
     { title: "Meetings & invite links", description: "Meeting fields, rules for invite links and the current meeting spaces.", mimeType: "text/markdown" },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${MEETINGS_DOC}\n${await meetingsContext()}` }] }),
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: `${MEETINGS_DOC}\n${await meetingsContext(cid)}` }] }),
   );
 
   // ---- catalog -------------------------------------------------------------
   server.registerTool("list_triggers", { title: "Workflows - List triggers", description: "All trigger types with config fields, payload variables and a sample payload.", inputSchema: {} }, async () => {
-    const c = await getEditorCatalog();
+    const c = await getEditorCatalog(cid);
     return text(c.triggers.map((t) => ({ type: t.type, name: t.labels.name.en, description: t.labels.description.en, doc: t.doc, fields: t.fields.map(fieldDoc), payload: t.payloadDoc, samplePayload: t.samplePayload })));
   });
   server.registerTool("list_actions", { title: "Workflows - List actions", description: "All action types with config fields and output variables.", inputSchema: {} }, async () => {
-    const c = await getEditorCatalog();
+    const c = await getEditorCatalog(cid);
     return text(c.actions.map((a) => ({ type: a.type, name: a.labels.name.en, description: a.labels.description.en, doc: a.doc, fields: a.fields.map(fieldDoc), output: a.outputDoc })));
   });
   server.registerTool(
@@ -390,7 +415,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       if (!a) return fail(`unknown action "${type}"`);
       const base = { type: a.type, doc: a.doc, fields: a.fields.map(fieldDoc), output: a.outputDoc, timeoutMs: a.timeoutMs, templateKeys: a.templateKeys };
       if (type === "llm") {
-        const [providers, capsMap] = await Promise.all([listProviders(), getCapabilityMap()]);
+        const [providers, capsMap] = await Promise.all([listProviders(cid), getCapabilityMap()]);
         const p = providerId && providerId !== "default" ? providers.find((x) => x.id === providerId) : (providers.find((x) => x.isDefault) ?? providers[0]);
         if (!p) return text({ ...base, note: "No LLM provider configured yet (Admin → LLM)." });
         const m = model && model !== "default" ? model : p.defaultModel;
@@ -410,12 +435,12 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   // ---- LLM ------------------------------------------------------------------
   server.registerTool("list_llm_providers", { title: "LLM - List providers", description: "Configured OpenAI-compatible providers with enabled models (no secrets).", inputSchema: {} }, async () => {
     require(auth, "llm:read");
-    const providers = await listProviders();
+    const providers = await listProviders(cid);
     return text(providers.map((p) => ({ id: p.id, name: p.name, kind: p.kind, baseUrl: p.baseUrl, isDefault: p.isDefault, defaultModel: p.defaultModel, enabledModels: p.enabledModels, hasApiKey: p.hasApiKey })));
   });
   server.registerTool("list_llm_models", { title: "LLM - List models", description: "Models of a provider (enabled ones first) with capabilities.", inputSchema: { providerId: z.string().optional().describe("omit for the default provider"), onlyEnabled: z.boolean().optional() } }, async ({ providerId, onlyEnabled }) => {
     require(auth, "llm:read");
-    const providers = await listProviders();
+    const providers = await listProviders(cid);
     const p = providerId && providerId !== "default" ? providers.find((x) => x.id === providerId) : (providers.find((x) => x.isDefault) ?? providers[0]);
     if (!p) return fail("provider not found");
     const capsMap = await getCapabilityMap();
@@ -435,7 +460,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
     async ({ providerId }) => {
       require(auth, "llm:read");
-      const [rows, providers] = await Promise.all([listCapabilityRows(), listProviders()]);
+      const [rows, providers] = await Promise.all([listCapabilityRows(), listProviders(cid)]);
       const known = new Set(rows.map((r) => r.modelId));
       const scoped = providerId && providerId !== "default" ? providers.filter((p) => p.id === providerId) : providers;
       const missing: { modelId: string; provider: string }[] = [];
@@ -490,7 +515,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       },
     },
     async ({ source, models }) => {
-      require(auth, "llm:write");
+      requireRoot("llm:write");
       const results = await upsertCapabilities(models, source, auth.user.id);
       const counts = { created: 0, updated: 0, unchanged: 0 };
       for (const r of results) counts[r.result]++;
@@ -503,7 +528,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "delete_model_capabilities",
     { title: "LLM - Delete model capabilities", description: "Removes one model's entry (e.g. the model was discontinued). The app falls back to guessing for it again; re-adding is the only undo.", inputSchema: { modelId: z.string().trim().min(1) } },
     async ({ modelId }) => {
-      require(auth, "llm:write");
+      requireRoot("llm:write");
       const removed = await deleteCapabilityRow(modelId);
       if (!removed) return fail(`no entry for model "${modelId}"`);
       await audit(auth, "llm.capabilities.deleted", null, { modelId }, "llm_model_capabilities");
@@ -514,20 +539,20 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   // ---- workflows ------------------------------------------------------------
   server.registerTool("list_workflows", { title: "Workflows - List workflows", description: "All workflows with status, trigger, step count and run stats.", inputSchema: { status: z.enum(["draft", "active", "paused"]).optional() } }, async ({ status }) => {
     require(auth, "workflows:read");
-    const items = await listWorkflows();
+    const items = await listWorkflows(cid);
     return text(items.filter((w) => !status || w.status === status).map((w) => ({ id: w.id, name: w.name, description: w.description, status: w.status, version: w.version, trigger: w.trigger, steps: w.steps.map((s) => ({ id: s.id, action: s.action })), runCount: w.runCount, successCount: w.successCount, lastRunAt: w.lastRunAt, lastRunStatus: w.lastRunStatus, updatedAt: w.updatedAt })));
   });
   server.registerTool("get_workflow", { title: "Workflows - Get workflow", description: "Full definition of a workflow (trigger + steps with configs) plus version history.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
     require(auth, "workflows:read");
-    const w = await getWorkflow(id);
+    const w = await getWorkflow(cid, id);
     if (!w) return fail("workflow not found");
-    const versions = await listWorkflowVersions(id);
+    const versions = await listWorkflowVersions(cid, id);
     return text({ id: w.id, status: w.status, version: w.version, toastAudience: w.toastAudience, definition: toDefinition(w), versions: versions.map((v) => ({ version: v.version, source: v.source, changeNote: v.changeNote, createdAt: v.createdAt })), updatedAt: w.updatedAt, createdAt: w.createdAt });
   });
   server.registerTool("validate_workflow", { title: "Workflows - Validate workflow", description: "Dry-run validation of a definition (trigger/action configs, step references). Returns issues and warnings.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateDefinition(definition)));
   server.registerTool("create_workflow", { title: "Workflows - Create workflow", description: "Creates a workflow from a definition (see resource aiup://docs/workflow-schema). Starts as draft unless activate=true.", inputSchema: { definition: z.record(z.string(), z.unknown()), activate: z.boolean().optional(), changeNote: z.string().optional() } }, async ({ definition, activate, changeNote }) => {
     require(auth, "workflows:write");
-    const res = await createWorkflow(definition, auth.user.id, "mcp", { status: activate ? "active" : "draft", changeNote });
+    const res = await createWorkflow(cid, definition, auth.user.id, "mcp", { status: activate ? "active" : "draft", changeNote });
     if (!res.ok) return fail(JSON.stringify({ issues: res.issues }, null, 2));
     await audit(auth, "workflow.created", res.workflow.id, { name: res.workflow.name });
     return text({ id: res.workflow.id, status: res.workflow.status, version: res.workflow.version, warnings: res.warnings });
@@ -537,10 +562,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { title: "Workflows - Update workflow", description: "Replaces the definition (new version). Pass the full definition or a partial patch ({name?, description?, trigger?, steps?}) – partial patches are merged onto the current definition. To edit one step, fetch the workflow, modify the step and send the whole steps array.", inputSchema: { id: z.string().uuid(), definition: z.record(z.string(), z.unknown()).optional(), patch: z.record(z.string(), z.unknown()).optional(), changeNote: z.string().optional() } },
     async ({ id, definition, patch, changeNote }) => {
       require(auth, "workflows:write");
-      const existing = await getWorkflow(id);
+      const existing = await getWorkflow(cid, id);
       if (!existing) return fail("workflow not found");
       const next = definition ?? { ...toDefinition(existing), ...(patch ?? {}) };
-      const res = await updateWorkflow(id, next, auth.user.id, "mcp", { changeNote });
+      const res = await updateWorkflow(cid, id, next, auth.user.id, "mcp", { changeNote });
       if (!res.ok) return fail(JSON.stringify({ issues: res.issues }, null, 2));
       await audit(auth, "workflow.updated", id, { version: res.workflow.version });
       return text({ id, version: res.workflow.version, status: res.workflow.status, warnings: res.warnings });
@@ -548,15 +573,15 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
   server.registerTool("set_workflow_status", { title: "Workflows - Set status", description: "Activate or pause a workflow.", inputSchema: { id: z.string().uuid(), status: z.enum(["active", "paused", "draft"]) } }, async ({ id, status }) => {
     require(auth, "workflows:write");
-    const w = await setWorkflowStatus(id, status, auth.user.id);
+    const w = await setWorkflowStatus(cid, id, status, auth.user.id);
     if (!w) return fail("workflow not found");
     return text({ id, status: w.status });
   });
   server.registerTool("delete_workflow", { title: "Workflows - Delete workflow", description: "Deletes a workflow and its run history. Irreversible.", inputSchema: { id: z.string().uuid(), confirm: z.literal(true).describe("must be true") } }, async ({ id }) => {
     require(auth, "workflows:write");
-    const w = await getWorkflow(id);
+    const w = await getWorkflow(cid, id);
     if (!w) return fail("workflow not found");
-    await deleteWorkflow(id, auth.user.id);
+    await deleteWorkflow(cid, id, auth.user.id);
     await audit(auth, "workflow.deleted", id, { name: w.name });
     return text({ deleted: id });
   });
@@ -564,18 +589,18 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   // ---- runs -----------------------------------------------------------------
   server.registerTool("list_runs", { title: "Runs - List runs", description: "Recent runs, optionally filtered by workflow/status.", inputSchema: { workflowId: z.string().uuid().optional(), status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]).optional(), limit: z.number().int().min(1).max(200).optional(), sinceHours: z.number().min(0).optional() } }, async ({ workflowId, status, limit, sinceHours }) => {
     require(auth, "runs:read");
-    const runs = await listRuns({ workflowId, status, limit: limit ?? 50, since: sinceHours ? new Date(Date.now() - sinceHours * 3_600_000) : undefined });
+    const runs = await listRuns(cid, { workflowId, status, limit: limit ?? 50, since: sinceHours ? new Date(Date.now() - sinceHours * 3_600_000) : undefined });
     return text(runs.map((r) => ({ id: r.id, workflowId: r.workflowId, workflowName: r.workflowName, status: r.status, triggerType: r.triggerType, error: r.error, durationMs: r.durationMs, createdAt: r.createdAt, finishedAt: r.finishedAt })));
   });
   server.registerTool("get_run", { title: "Runs - Get run", description: "One run with trigger event and every step's input/output/usage.", inputSchema: { runId: z.string().uuid() } }, async ({ runId }) => {
     require(auth, "runs:read");
-    const run = await getRunWithSteps(runId);
+    const run = await getRunWithSteps(cid, runId);
     if (!run) return fail("run not found");
     return text(run);
   });
   server.registerTool("trigger_workflow", { title: "Runs - Trigger workflow", description: "Starts a run now. `input` becomes the trigger payload (for manual triggers: {{ trigger.input }}); omit to use the trigger's sample payload.", inputSchema: { id: z.string().uuid(), input: z.record(z.string(), z.unknown()).optional() } }, async ({ id, input }) => {
     require(auth, "runs:trigger");
-    const w = await getWorkflow(id);
+    const w = await getWorkflow(cid, id);
     if (!w) return fail("workflow not found");
     let payload: Record<string, unknown> = input ?? { ...(getTrigger(w.trigger.type)?.samplePayload ?? {}) };
     if (w.trigger.type === "manual") payload = { input: input ?? {}, startedBy: auth.user.id };
@@ -584,14 +609,15 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   });
   server.registerTool("get_workflow_stats", { title: "Runs - Workflow statistics", description: "Runs, success rate, durations, tokens and errors for one workflow (or all when id omitted).", inputSchema: { id: z.string().uuid().optional(), days: z.number().int().min(1).max(90).optional() } }, async ({ id, days }) => {
     require(auth, "runs:read");
-    return text(await workflowStats(id ?? null, days ?? 14));
+    return text(await workflowStats(cid, id ?? null, days ?? 14));
   });
 
   // ---- site pages (landing, imprint, privacy) -------------------------------
   const pageParam = z.enum(SITE_PAGES).describe("landing | imprint | privacy");
   server.registerTool("get_page", { title: "Pages - Get content", description: "Current definition, enabled state and version of one public page (landing at \"/\", imprint at /imprint, privacy at /privacy). Read resource aiup://docs/pages for the format and design rules.", inputSchema: { page: pageParam } }, async ({ page }) => {
     require(auth, "landing:read");
-    const [settings, current] = await Promise.all([loadAppSettings(), getCurrentLandingVersion(page)]);
+    const [settings, current] = await Promise.all([loadCommunity(cid), getCurrentLandingVersion(cid, page)]);
+    if (!settings) return fail("community not found");
     return text({ page, enabled: isPageEnabled(settings, page), version: current?.version ?? null, definition: current?.definition ?? null });
   });
   server.registerTool("validate_page", { title: "Pages - Validate", description: "Dry-run validation of a page definition against the shared section schema. Returns issues without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateLandingDefinition(definition)));
@@ -600,7 +626,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { title: "Pages - Update", description: "Validates and saves the full definition of one page as a new version (append-only history per page; restore is always possible). Does not change the enabled flag.", inputSchema: { page: pageParam, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
     async ({ page, definition, changeNote }) => {
       require(auth, "landing:write");
-      const res = await saveLandingVersion(page, definition, auth.user.id, "mcp", changeNote);
+      const res = await saveLandingVersion(cid, page, definition, auth.user.id, "mcp", changeNote);
       if (!res.ok) return fail(JSON.stringify({ issues: res.issues }, null, 2));
       await audit(auth, "landing.updated", res.row.id, { page, version: res.row.version }, "landing");
       return text({ page, version: res.row.version, warnings: res.warnings });
@@ -608,34 +634,34 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
   server.registerTool("list_page_versions", { title: "Pages - List versions", description: "Version history of one page (source ui/mcp, change notes).", inputSchema: { page: pageParam } }, async ({ page }) => {
     require(auth, "landing:read");
-    const versions = await listLandingVersions(page);
+    const versions = await listLandingVersions(cid, page);
     return text(versions.map((v) => ({ version: v.version, source: v.source, changeNote: v.changeNote, changedBy: v.changedByName, createdAt: v.createdAt })));
   });
   server.registerTool("restore_page_version", { title: "Pages - Restore version", description: "Copies an older version of one page forward as its new current version (history stays intact).", inputSchema: { page: pageParam, version: z.number().int().min(1) } }, async ({ page, version }) => {
     require(auth, "landing:write");
-    const row = await restoreLandingVersion(page, version, auth.user.id, "mcp");
+    const row = await restoreLandingVersion(cid, page, version, auth.user.id, "mcp");
     if (!row) return fail("version not found");
     await audit(auth, "landing.restored", row.id, { page, restored: version, newVersion: row.version }, "landing");
     return text({ page, version: row.version });
   });
   server.registerTool("set_page_enabled", { title: "Pages - Enable or disable", description: "Turns one public page on or off. Landing off: \"/\" redirects to login resp. the app home; imprint/privacy off: 404.", inputSchema: { page: pageParam, enabled: z.boolean() } }, async ({ page, enabled }) => {
     require(auth, "landing:write");
-    if (enabled && !(await getCurrentLandingVersion(page))) return fail(`no content for page "${page}" yet – create a version with update_page first`);
-    await updateAppSettings({ [pageEnabledColumn(page)]: enabled });
-    await audit(auth, "settings.page.toggled", "default", { page, enabled }, "settings");
+    if (enabled && !(await getCurrentLandingVersion(cid, page))) return fail(`no content for page "${page}" yet – create a version with update_page first`);
+    await updateCommunity(cid, { [pageEnabledColumn(page)]: enabled });
+    await audit(auth, "settings.page.toggled", cid, { page, enabled }, "settings");
     return text({ page, enabled });
   });
   server.registerTool("list_page_media", { title: "Pages - List media", description: "Publicly served images usable on all site pages (reference them as mediaId; one shared pool). Upload new ones under Admin → Web pages.", inputSchema: {} }, async () => {
     require(auth, "landing:read");
-    const media = await listLandingMedia();
+    const media = await listLandingMedia(cid);
     return text(media.map((m) => ({ id: m.id, name: m.originalName, mime: m.mime, width: m.width, height: m.height, size: m.size, url: `/api/files/${m.id}` })));
   });
 
   // ---- collections (knowledge areas, templates, entries) --------------------
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const resolveArea = async (idOrSlug: string): Promise<KnowledgeArea | undefined> => (UUID_RE.test(idOrSlug) ? getAreaById(idOrSlug) : getAreaBySlug(idOrSlug));
+  const resolveArea = async (idOrSlug: string): Promise<KnowledgeArea | undefined> => (UUID_RE.test(idOrSlug) ? getAreaById(cid, idOrSlug) : getAreaBySlug(cid, idOrSlug));
   const resolveTemplate = async (idOrKey: string): Promise<ContentTemplate | undefined> =>
-    UUID_RE.test(idOrKey) ? getTemplateById(idOrKey) : isSystemTemplateKey(idOrKey) ? getTemplateBySystemKey(idOrKey) : undefined;
+    UUID_RE.test(idOrKey) ? getTemplateById(cid, idOrKey) : isSystemTemplateKey(idOrKey) ? getTemplateBySystemKey(idOrKey) : undefined;
   const collectionInput = z.string().describe("collection id (uuid) or slug");
   const templateInput = z.string().describe("template id (uuid) or systemKey (text | image | link | video)");
   const httpUrl = z.string().trim().max(2000).regex(/^https?:\/\//i, "must be an http(s) URL");
@@ -676,7 +702,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
   server.registerTool("list_collections", { title: "Collections - List collections", description: "All collections with purpose, entry count and available templates. Read resource aiup://docs/collections for the template format.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
-    const [areas, assignments] = await Promise.all([listAreas(), listAllAssignments()]);
+    const [areas, assignments] = await Promise.all([listAreas(cid), listAllAssignments(cid)]);
     return text(
       areas.map((a) => {
         const assigned = assignments.get(a.id);
@@ -687,7 +713,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
   server.registerTool("list_templates", { title: "Templates - List templates", description: "All content templates with version and how many collections they are assigned to.", inputSchema: {} }, async () => {
     require(auth, "knowledge:read");
-    const templates = await listTemplates();
+    const templates = await listTemplates(cid);
     return text(
       templates.map((t) => ({
         id: t.id,
@@ -737,7 +763,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       if (!res.def) return fail(JSON.stringify({ issues: res.issues }, null, 2));
       const evaluated = evaluation ? normalizeEvaluation(evaluation) : undefined;
       if (evaluated && "issues" in evaluated) return fail(JSON.stringify({ issues: evaluated.issues }, null, 2));
-      const saved = await saveTemplate({ id, name, description: description || null, icon, definition: res.def, evaluation: evaluated }, auth.user.id, changeNote);
+      const saved = await saveTemplate(cid, { id, name, description: description || null, icon, definition: res.def, evaluation: evaluated }, auth.user.id, changeNote);
       if ("error" in saved) return fail(saved.error === "system" ? "system templates cannot be changed" : "template not found");
       if (evaluated) await deleteEvaluationsForTemplate(saved.id, evaluated.criteria.map((c) => c.key));
       return text({ id: saved.id, version: saved.version, criteriaCount: saved.evaluation.criteria.length, warnings: res.warnings });
@@ -758,7 +784,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       if (!t) return fail("template not found");
       const normalized = normalizeEvaluation(evaluation);
       if ("issues" in normalized) return fail(JSON.stringify({ issues: normalized.issues }, null, 2));
-      const saved = await setTemplateEvaluation(t.id, normalized, auth.user.id);
+      const saved = await setTemplateEvaluation(cid, t.id, normalized, auth.user.id);
       if (!saved) return fail("template not found");
       await deleteEvaluationsForTemplate(t.id, normalized.criteria.map((c) => c.key));
       let queued = 0;
@@ -774,7 +800,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
   server.registerTool("delete_template", { title: "Templates - Delete template", description: "Deletes a custom template and removes its collection assignments. Entries keep their snapshots. System templates cannot be deleted.", inputSchema: { id: z.string().uuid(), confirm: z.literal(true).describe("must be true") } }, async ({ id }) => {
     require(auth, "knowledge:write");
-    const res = await deleteTemplate(id, auth.user.id);
+    const res = await deleteTemplate(cid, id, auth.user.id);
     if (!res.ok) return fail(res.reason === "system" ? "system templates cannot be deleted" : "template not found");
     return text({ deleted: true, id });
   });
@@ -788,9 +814,9 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       if (!area) return fail("collection not found");
       const unique = [...new Set(templateIds)];
       for (const tplId of unique) {
-        if (!(await getTemplateById(tplId))) return fail(`template ${tplId} not found`);
+        if (!(await getTemplateById(cid, tplId))) return fail(`template ${tplId} not found`);
       }
-      await setAreaTemplates(area.id, unique, auth.user.id);
+      await setAreaTemplates(cid, area.id, unique, auth.user.id);
       return text({ collectionId: area.id, templateIds: unique.length ? unique : "system-defaults" });
     },
   );
@@ -802,16 +828,16 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       require(auth, "knowledge:read");
       const area = await resolveArea(collection);
       if (!area) return fail("collection not found");
-      const items = await listContents({ areaId: area.id, type, query, limit: limit ?? 50, offset });
+      const items = await listContents(cid, { areaId: area.id, type, query, limit: limit ?? 50, offset });
       return text(items.map((c) => ({ id: c.id, type: c.type, title: c.title, pinned: c.pinned, versionCount: c.versionCount, author: c.author?.name ?? null, structureVersion: c.version?.meta.structure?.structureVersion ?? null, hasImage: c.media?.kind === "image", updatedAt: c.updatedAt })));
     },
   );
 
   server.registerTool("get_entry", { title: "Collections - Get entry", description: "One entry with its markdown body; structured entries include the definition snapshot and the stored answers.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
     require(auth, "knowledge:read");
-    const c = await getContent(id);
+    const c = await getContent(cid, id);
     if (!c) return fail("entry not found");
-    const area = await getAreaById(c.areaId);
+    const area = await getAreaById(cid, c.areaId);
     const s = c.version?.meta.structure;
     return text({
       id: c.id,
@@ -893,7 +919,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
       const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, title, effectiveAnswers, { imageMediaId });
       if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: "answer keys/shapes must match the template definition" }, null, 2));
-      const content = await createContent(area.id, "structured", built.input, auth.user.id);
+      const content = await createContent(cid, area.id, "structured", built.input, auth.user.id);
       await audit(auth, "content.created", content.id, { collection: area.slug, type: "structured", templateId: tpl.id }, "content");
       return text({ id: content.id, type: "structured", href: `/knowledge/${area.slug}/${content.id}` });
     },
@@ -925,10 +951,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
     async ({ id, title, answers, upgrade, body, url, changeNote, image }) => {
       require(auth, "knowledge:write");
-      const c = await getContent(id);
+      const c = await getContent(cid, id);
       if (!c || !c.version) return fail("entry not found");
       const v = c.version;
-      const area = await getAreaById(c.areaId);
+      const area = await getAreaById(cid, c.areaId);
 
       const input: ContentVersionInput = { title: title ?? c.title, bodyMarkdown: v.bodyMarkdown, mediaId: v.mediaId, url: v.url, meta: v.meta, changeNote: changeNote ?? null };
       if (image && c.type !== "structured") return fail(`image is only supported on structured entries (type is "${c.type}")`);
@@ -950,7 +976,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         }
         let snapshot: Pick<typeof prev, "structureId" | "structureVersion" | "definition"> = prev;
         if (upgrade) {
-          const tpl = await getTemplateById(prev.structureId);
+          const tpl = await getTemplateById(cid, prev.structureId);
           if (!tpl) return fail("the entry's template no longer exists – it keeps its snapshot");
           if (tpl.version <= prev.structureVersion) return fail("entry already uses the template's current version");
           if (!answers) return fail("upgrade needs full `answers` for the template's current definition (call get_template)");
@@ -972,7 +998,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         if (c.type === "markdown" && !input.bodyMarkdown) return fail("markdown entries need a non-empty body");
       }
 
-      await addContentVersion(id, input, auth.user.id);
+      await addContentVersion(cid, id, input, auth.user.id);
       await audit(auth, "content.updated", id, { collection: area?.slug, type: c.type }, "content");
       return text({ id, versionNo: c.versionCount + 1, href: `/knowledge/${area?.slug ?? c.areaId}/${id}` });
     },
@@ -1016,7 +1042,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
   server.registerTool("list_meeting_spaces", { title: "Meetings - List spaces", description: "All meeting spaces with purpose, recording default and meeting counts. Spaces are created in the UI only.", inputSchema: {} }, async () => {
     require(auth, "meetings:read");
-    const spaces = await listSpaces();
+    const spaces = await listSpaces(cid);
     return text(spaces.map((s) => ({ id: s.id, slug: s.slug, name: s.name, purpose: s.purpose, description: s.description, recordingDefault: s.recordingDefault, meetingCount: s.meetingCount, liveCount: s.liveCount })));
   });
   server.registerTool(
@@ -1024,13 +1050,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { title: "Meetings - List meetings", description: "Meetings (live first, then upcoming, then past), optionally filtered by space or status.", inputSchema: { spaceId: z.string().uuid().optional(), status: z.enum(["scheduled", "live", "ended"]).optional(), limit: z.number().int().min(1).max(200).optional() } },
     async ({ spaceId, status, limit }) => {
       require(auth, "meetings:read");
-      const rows = await listMeetings({ spaceId, status, limit });
+      const rows = await listMeetings(cid, { spaceId, status, limit });
       return text(rows.map(meetingOut));
     },
   );
   server.registerTool("get_meeting", { title: "Meetings - Get meeting", description: "One meeting with protocol and transcript markdown; includes the invite link state when the key has meetings:invite.", inputSchema: { id: z.string().uuid() } }, async ({ id }) => {
     require(auth, "meetings:read");
-    const m = await getMeeting(id);
+    const m = await getMeeting(cid, id);
     if (!m) return fail("meeting not found");
     return text({ ...meetingOut(m), protocolMarkdown: m.protocolMarkdown, transcriptMarkdown: m.transcriptMarkdown, invite: await inviteOut(m.id) });
   });
@@ -1050,7 +1076,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
     async ({ spaceId, title, kind, description, startsAt, recordingEnabled }) => {
       require(auth, "meetings:write");
-      const spaces = await listSpaces();
+      const spaces = await listSpaces(cid);
       const space = spaces.find((s) => s.id === spaceId);
       if (!space) return fail("meeting space not found – use list_meeting_spaces");
       const k = kind ?? "protocol";
@@ -1064,9 +1090,9 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       } catch (err) {
         return fail((err as Error).message);
       }
-      const meeting = await createMeeting(spaceId, { title, description: description ?? null, kind: k, startsAt: when, recordingEnabled: recordingEnabled ?? space.recordingDefault }, auth.user.id);
+      const meeting = await createMeeting(cid, spaceId, { title, description: description ?? null, kind: k, startsAt: when, recordingEnabled: recordingEnabled ?? space.recordingDefault }, auth.user.id);
       await audit(auth, "meeting.created", meeting.id, { spaceId, kind: k }, "meeting");
-      const full = await getMeeting(meeting.id);
+      const full = await getMeeting(cid, meeting.id);
       return text(full ? meetingOut(full) : { id: meeting.id });
     },
   );
@@ -1086,7 +1112,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
     async ({ id, title, description, kind, startsAt, recordingEnabled }) => {
       require(auth, "meetings:write");
-      const existing = await getMeeting(id);
+      const existing = await getMeeting(cid, id);
       if (!existing) return fail("meeting not found");
       if (kind !== undefined && kind !== existing.kind && existing.status !== "scheduled") return fail("kind can only change while the meeting is scheduled");
       if (kind && kind !== "protocol") {
@@ -1099,9 +1125,9 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       } catch (err) {
         return fail((err as Error).message);
       }
-      await updateMeeting(id, { title, description, kind, startsAt: when, recordingEnabled }, auth.user.id);
+      await updateMeeting(cid, id, { title, description, kind, startsAt: when, recordingEnabled }, auth.user.id);
       await audit(auth, "meeting.updated", id, {}, "meeting");
-      const full = await getMeeting(id);
+      const full = await getMeeting(cid, id);
       return text(full ? meetingOut(full) : { id });
     },
   );
@@ -1114,10 +1140,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
     async ({ meetingId, imageUrl, remove }) => {
       require(auth, "meetings:write");
-      const meeting = await getMeeting(meetingId);
+      const meeting = await getMeeting(cid, meetingId);
       if (!meeting) return fail("meeting not found");
       if (remove) {
-        await updateMeeting(meetingId, { coverMediaId: null }, auth.user.id);
+        await updateMeeting(cid, meetingId, { coverMediaId: null }, auth.user.id);
         await audit(auth, "meeting.cover.removed", meetingId, {}, "meeting");
       } else {
         if (!imageUrl) return fail("pass imageUrl or remove=true");
@@ -1127,10 +1153,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         } catch (err) {
           return fail(`image import failed: ${(err as Error).message}`);
         }
-        await updateMeeting(meetingId, { coverMediaId: media.id }, auth.user.id);
+        await updateMeeting(cid, meetingId, { coverMediaId: media.id }, auth.user.id);
         await audit(auth, "meeting.cover.set", meetingId, { mediaId: media.id, width: media.width, height: media.height }, "meeting");
       }
-      const full = await getMeeting(meetingId);
+      const full = await getMeeting(cid, meetingId);
       return text(full ? meetingOut(full) : { id: meetingId });
     },
   );
@@ -1143,7 +1169,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     },
     async ({ meetingId, enabled }) => {
       require(auth, "meetings:invite");
-      const meeting = await getMeeting(meetingId);
+      const meeting = await getMeeting(cid, meetingId);
       if (!meeting) return fail("meeting not found");
       const inv = await setInviteEnabled(meeting.id, enabled, auth.user.id);
       await audit(auth, enabled ? "meeting.invite.enabled" : "meeting.invite.disabled", inv.id, { meetingId }, "meeting_invite");
@@ -1153,12 +1179,12 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
 
   server.registerTool("list_questions", { title: "Questions - List questions", description: "Questions created by ask_user steps with response counts.", inputSchema: { questionKey: z.string().optional(), limit: z.number().int().min(1).max(200).optional() } }, async ({ questionKey, limit }) => {
     require(auth, "questions:read");
-    const items = await listQuestions({ questionKey, limit });
+    const items = await listQuestions(cid, { questionKey, limit });
     return text(items.map((q) => ({ id: q.id, questionKey: q.questionKey, title: q.title, workflowName: q.workflowName, fields: q.fields, audience: q.audience, responseCount: q.responseCount, closedAt: q.closedAt, expiresAt: q.expiresAt, createdAt: q.createdAt })));
   });
   server.registerTool("get_question_results", { title: "Questions - Get results", description: "Distribution and individual answers for a question.", inputSchema: { questionId: z.string().uuid() } }, async ({ questionId }) => {
     require(auth, "questions:read");
-    const r = await getQuestionWithResponses(questionId);
+    const r = await getQuestionWithResponses(cid, questionId);
     if (!r) return fail("question not found");
     return text({ question: { id: r.question.id, questionKey: r.question.questionKey, title: r.question.title, fields: r.question.fields, open: r.open }, stats: r.stats, responses: r.responses.map((x) => ({ user: x.user.name, answers: x.answers, at: x.createdAt })) });
   });

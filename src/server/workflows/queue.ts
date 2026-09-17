@@ -13,6 +13,7 @@ import { scheduleToRepeat, type ScheduleConfig } from "./triggers";
  *  - { kind: "schedule", workflowId }        → repeatable job (job scheduler) → creates + executes a run
  *  - { kind: "evaluate", contentId, versionId } → LLM check of an entry against its template criteria
  *  - { kind: "agent-turn", threadId }        → one turn of an AI agent chat (tool loop, streams to the UI)
+ *  - { kind: "purge-communities" }           → daily sweep: deletes communities whose grace period ran out
  * Web enqueues; the worker consumes (see worker/index.ts).
  */
 export const WORKFLOW_QUEUE = "workflow-runs";
@@ -20,7 +21,8 @@ export type WorkflowJob =
   | { kind: "run"; runId: string }
   | { kind: "schedule"; workflowId: string }
   | { kind: "evaluate"; contentId: string; versionId: string }
-  | { kind: "agent-turn"; threadId: string };
+  | { kind: "agent-turn"; threadId: string }
+  | { kind: "purge-communities" };
 
 const g = globalThis as unknown as { __aiupQueue?: Queue<WorkflowJob>; __aiupQueueConn?: IORedis };
 
@@ -76,6 +78,8 @@ const schedulerId = (workflowId: string) => `wf-${workflowId}`;
  */
 export async function syncSchedules(): Promise<void> {
   const queue = getQueue();
+  // Deliberately across all communities: the scheduler is platform-wide and every job carries its
+  // own workflow id, from which the run takes the community again (see dispatch.ts / engine.ts).
   const active = await db.query.workflows.findMany({ where: eq(workflows.status, "active") });
   const wanted = new Map<string, ScheduleConfig>();
   for (const w of active) if (w.trigger.type === "schedule") wanted.set(w.id, w.trigger.config as ScheduleConfig);
@@ -95,6 +99,24 @@ export async function syncSchedules(): Promise<void> {
     await queue.upsertJobScheduler(schedulerId(wfId), repeat, { name: "schedule", data: { kind: "schedule", workflowId: wfId }, opts: { removeOnComplete: 100, removeOnFail: 100 } });
   }
   logger.debug({ count: wanted.size }, "schedules synced");
+}
+
+/** Grace period between deleting a community and it being gone for good (docs/communities.md 6.7). */
+export const COMMUNITY_PURGE_GRACE_DAYS = 14;
+
+const PURGE_SCHEDULER_ID = "sys-purge-communities";
+
+/**
+ * Registers the daily sweep that removes communities past their grace period. A job scheduler like
+ * the workflow ones, but owned by the system – the `sys-` prefix keeps `syncSchedules()` from
+ * treating it as an orphaned workflow and removing it.
+ */
+export async function ensureSystemSchedules(): Promise<void> {
+  await getQueue().upsertJobScheduler(
+    PURGE_SCHEDULER_ID,
+    { pattern: "17 3 * * *", tz: env.APP_TIMEZONE },
+    { name: "purge-communities", data: { kind: "purge-communities" }, opts: { removeOnComplete: 20, removeOnFail: 20 } },
+  );
 }
 
 export async function nextScheduledRun(workflowId: string): Promise<Date | null> {

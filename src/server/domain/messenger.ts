@@ -16,7 +16,6 @@ import {
 import { publishToUser, publishToUsers } from "@/server/realtime/publish";
 import { createNotification, localized, resolveNotifications } from "./notifications";
 import type { ChatMessageDto } from "@/lib/realtime-events";
-import { BOT_USER_ID } from "@/lib/bot";
 
 // ---------------------------------------------------------------------------
 // Contacts
@@ -30,22 +29,28 @@ export type ContactState =
   | { status: "declined"; requestId: string; byMe: boolean }
   | { status: "blocked"; requestId: string; byMe: boolean };
 
-/** Finds the (single) contact row between two users regardless of direction. */
-export async function findContactRow(a: string, b: string): Promise<ContactRequest | undefined> {
+/**
+ * Finds the (single) contact row between two users regardless of direction.
+ * Contacts are per community – the same two people may be connected here and strangers next door.
+ */
+export async function findContactRow(communityId: string, a: string, b: string): Promise<ContactRequest | undefined> {
   return db.query.contactRequests.findFirst({
-    where: or(and(eq(contactRequests.requesterId, a), eq(contactRequests.addresseeId, b)), and(eq(contactRequests.requesterId, b), eq(contactRequests.addresseeId, a))),
+    where: and(
+      eq(contactRequests.communityId, communityId),
+      or(and(eq(contactRequests.requesterId, a), eq(contactRequests.addresseeId, b)), and(eq(contactRequests.requesterId, b), eq(contactRequests.addresseeId, a))),
+    ),
   });
 }
 
-export async function getContactState(meId: string, otherId: string): Promise<ContactState> {
+export async function getContactState(communityId: string, meId: string, otherId: string): Promise<ContactState> {
   if (meId === otherId) return { status: "none" };
-  const row = await findContactRow(meId, otherId);
+  const row = await findContactRow(communityId, meId, otherId);
   if (!row) return { status: "none" };
   switch (row.status) {
     case "pending":
       return row.requesterId === meId ? { status: "pending_out", requestId: row.id } : { status: "pending_in", requestId: row.id, message: row.message };
     case "accepted": {
-      const conv = await findDirectConversation(meId, otherId);
+      const conv = await findDirectConversation(communityId, meId, otherId);
       return { status: "accepted", requestId: row.id, conversationId: conv?.id ?? null };
     }
     case "declined":
@@ -55,29 +60,29 @@ export async function getContactState(meId: string, otherId: string): Promise<Co
   }
 }
 
-export async function areContacts(a: string, b: string): Promise<boolean> {
-  const row = await findContactRow(a, b);
+export async function areContacts(communityId: string, a: string, b: string): Promise<boolean> {
+  const row = await findContactRow(communityId, a, b);
   return row?.status === "accepted";
 }
 
 async function publicUser(id: string) {
-  return db.query.users.findFirst({ where: eq(users.id, id), columns: { id: true, name: true, locale: true, avatarMediaId: true, status: true } });
+  return db.query.users.findFirst({ where: eq(users.id, id), columns: { id: true, name: true, locale: true, avatarMediaId: true, status: true, isBot: true } });
 }
 
 export type ContactError = "self" | "notFound" | "blocked" | "alreadyContacts" | "alreadyPending";
 
-export async function sendContactRequest(meId: string, otherId: string, message: string | null, me: Pick<User, "name">): Promise<{ ok: true } | { ok: false; error: ContactError }> {
+export async function sendContactRequest(communityId: string, meId: string, otherId: string, message: string | null, me: Pick<User, "name">): Promise<{ ok: true } | { ok: false; error: ContactError }> {
   if (meId === otherId) return { ok: false, error: "self" };
   const other = await publicUser(otherId);
   if (!other || other.status !== "active") return { ok: false, error: "notFound" };
-  const existing = await findContactRow(meId, otherId);
+  const existing = await findContactRow(communityId, meId, otherId);
   if (existing) {
     if (existing.status === "blocked") return { ok: false, error: "blocked" };
     if (existing.status === "accepted") return { ok: false, error: "alreadyContacts" };
     if (existing.status === "pending") {
       // The other side already asked us – accepting is the sensible interpretation.
       if (existing.requesterId === otherId) {
-        await respondContactRequest(meId, existing.id, "accept", me);
+        await respondContactRequest(communityId, meId, existing.id, "accept", me);
         return { ok: true };
       }
       return { ok: false, error: "alreadyPending" };
@@ -88,9 +93,10 @@ export async function sendContactRequest(meId: string, otherId: string, message:
       .set({ requesterId: meId, addresseeId: otherId, status: "pending", message, respondedAt: null, blockedBy: null })
       .where(eq(contactRequests.id, existing.id));
   } else {
-    await db.insert(contactRequests).values({ requesterId: meId, addresseeId: otherId, status: "pending", message });
+    await db.insert(contactRequests).values({ communityId, requesterId: meId, addresseeId: otherId, status: "pending", message });
   }
   await createNotification({
+    communityId,
     userId: otherId,
     type: "contact.request",
     title: localized(other.locale, { de: `${me.name} möchte Kontakt aufnehmen`, en: `${me.name} wants to connect` }),
@@ -101,19 +107,22 @@ export async function sendContactRequest(meId: string, otherId: string, message:
   return { ok: true };
 }
 
-export async function respondContactRequest(meId: string, requestId: string, decision: "accept" | "decline", me: Pick<User, "name">): Promise<{ ok: boolean; conversationId?: string }> {
-  const row = await db.query.contactRequests.findFirst({ where: and(eq(contactRequests.id, requestId), eq(contactRequests.addresseeId, meId), eq(contactRequests.status, "pending")) });
+export async function respondContactRequest(communityId: string, meId: string, requestId: string, decision: "accept" | "decline", me: Pick<User, "name">): Promise<{ ok: boolean; conversationId?: string }> {
+  const row = await db.query.contactRequests.findFirst({
+    where: and(eq(contactRequests.id, requestId), eq(contactRequests.communityId, communityId), eq(contactRequests.addresseeId, meId), eq(contactRequests.status, "pending")),
+  });
   if (!row) return { ok: false };
   const status = decision === "accept" ? "accepted" : "declined";
   await db.update(contactRequests).set({ status, respondedAt: new Date() }).where(eq(contactRequests.id, requestId));
-  await resolveNotifications(meId, "contact.request", "fromUserId", row.requesterId);
+  await resolveNotifications(meId, communityId, "contact.request", "fromUserId", row.requesterId);
   let conversationId: string | undefined;
   if (decision === "accept") {
-    const conv = await getOrCreateDirectConversation(meId, row.requesterId);
+    const conv = await getOrCreateDirectConversation(communityId, meId, row.requesterId);
     conversationId = conv.id;
     const requester = await publicUser(row.requesterId);
     if (requester) {
       await createNotification({
+        communityId,
         userId: requester.id,
         type: "contact.accepted",
         title: localized(requester.locale, { de: `${me.name} hat deine Kontaktanfrage angenommen`, en: `${me.name} accepted your contact request` }),
@@ -125,18 +134,18 @@ export async function respondContactRequest(meId: string, requestId: string, dec
   return { ok: true, conversationId };
 }
 
-export async function blockContact(meId: string, otherId: string): Promise<void> {
-  const existing = await findContactRow(meId, otherId);
+export async function blockContact(communityId: string, meId: string, otherId: string): Promise<void> {
+  const existing = await findContactRow(communityId, meId, otherId);
   if (existing) {
     await db.update(contactRequests).set({ status: "blocked", blockedBy: meId, respondedAt: new Date() }).where(eq(contactRequests.id, existing.id));
   } else {
-    await db.insert(contactRequests).values({ requesterId: meId, addresseeId: otherId, status: "blocked", blockedBy: meId, respondedAt: new Date() });
+    await db.insert(contactRequests).values({ communityId, requesterId: meId, addresseeId: otherId, status: "blocked", blockedBy: meId, respondedAt: new Date() });
   }
   await publishToUsers([meId, otherId], "contact.changed", { otherUserId: meId, status: "blocked" });
 }
 
-export async function unblockContact(meId: string, otherId: string): Promise<void> {
-  const existing = await findContactRow(meId, otherId);
+export async function unblockContact(communityId: string, meId: string, otherId: string): Promise<void> {
+  const existing = await findContactRow(communityId, meId, otherId);
   if (!existing || existing.status !== "blocked" || existing.blockedBy !== meId) return;
   // Unblocking removes the relation entirely; a new request is needed to chat again.
   await db.delete(contactRequests).where(eq(contactRequests.id, existing.id));
@@ -146,9 +155,13 @@ export async function unblockContact(meId: string, otherId: string): Promise<voi
 export type ContactUser = { id: string; name: string; avatarMediaId: string | null; bio: string | null; online: boolean; conversationId: string | null };
 
 /** Accepted contacts of a user, with the direct conversation id if one exists. */
-export async function listContacts(meId: string): Promise<ContactUser[]> {
+export async function listContacts(communityId: string, meId: string): Promise<ContactUser[]> {
   const rows = await db.query.contactRequests.findMany({
-    where: and(eq(contactRequests.status, "accepted"), or(eq(contactRequests.requesterId, meId), eq(contactRequests.addresseeId, meId))),
+    where: and(
+      eq(contactRequests.communityId, communityId),
+      eq(contactRequests.status, "accepted"),
+      or(eq(contactRequests.requesterId, meId), eq(contactRequests.addresseeId, meId)),
+    ),
   });
   const otherIds = rows.map((r) => (r.requesterId === meId ? r.addresseeId : r.requesterId));
   if (!otherIds.length) return [];
@@ -157,17 +170,17 @@ export async function listContacts(meId: string): Promise<ContactUser[]> {
     .from(users)
     .where(and(inArray(users.id, otherIds), eq(users.status, "active")))
     .orderBy(asc(users.name));
-  const convs = await listDirectConversationPartners(meId);
+  const convs = await listDirectConversationPartners(communityId, meId);
   return people.map((p) => ({ ...p, conversationId: convs.get(p.id) ?? null }));
 }
 
 /** Pending incoming requests (for the notification center / profile). */
-export async function listIncomingRequests(meId: string): Promise<(ContactRequest & { requester: { id: string; name: string; avatarMediaId: string | null } })[]> {
+export async function listIncomingRequests(communityId: string, meId: string): Promise<(ContactRequest & { requester: { id: string; name: string; avatarMediaId: string | null } })[]> {
   const rows = await db
     .select({ req: contactRequests, requester: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId } })
     .from(contactRequests)
     .innerJoin(users, eq(users.id, contactRequests.requesterId))
-    .where(and(eq(contactRequests.addresseeId, meId), eq(contactRequests.status, "pending")))
+    .where(and(eq(contactRequests.communityId, communityId), eq(contactRequests.addresseeId, meId), eq(contactRequests.status, "pending")))
     .orderBy(desc(contactRequests.createdAt));
   return rows.map((r) => ({ ...r.req, requester: r.requester }));
 }
@@ -179,32 +192,32 @@ export async function listIncomingRequests(meId: string): Promise<(ContactReques
 const cmA = alias(conversationMembers, "cm_a");
 const cmB = alias(conversationMembers, "cm_b");
 
-export async function findDirectConversation(a: string, b: string): Promise<Conversation | undefined> {
+export async function findDirectConversation(communityId: string, a: string, b: string): Promise<Conversation | undefined> {
   const rows = await db
     .select({ conv: conversations })
     .from(conversations)
     .innerJoin(cmA, and(eq(cmA.conversationId, conversations.id), eq(cmA.userId, a)))
     .innerJoin(cmB, and(eq(cmB.conversationId, conversations.id), eq(cmB.userId, b)))
-    .where(eq(conversations.kind, "direct"))
+    .where(and(eq(conversations.communityId, communityId), eq(conversations.kind, "direct")))
     .limit(1);
   return rows[0]?.conv;
 }
 
-async function listDirectConversationPartners(meId: string): Promise<Map<string, string>> {
+async function listDirectConversationPartners(communityId: string, meId: string): Promise<Map<string, string>> {
   const rows = await db
     .select({ conversationId: cmA.conversationId, otherId: cmB.userId })
     .from(cmA)
     .innerJoin(cmB, and(eq(cmB.conversationId, cmA.conversationId), ne(cmB.userId, meId)))
-    .innerJoin(conversations, and(eq(conversations.id, cmA.conversationId), eq(conversations.kind, "direct")))
+    .innerJoin(conversations, and(eq(conversations.id, cmA.conversationId), eq(conversations.communityId, communityId), eq(conversations.kind, "direct")))
     .where(eq(cmA.userId, meId));
   return new Map(rows.map((r) => [r.otherId, r.conversationId]));
 }
 
-export async function getOrCreateDirectConversation(a: string, b: string): Promise<Conversation> {
-  const existing = await findDirectConversation(a, b);
+export async function getOrCreateDirectConversation(communityId: string, a: string, b: string): Promise<Conversation> {
+  const existing = await findDirectConversation(communityId, a, b);
   if (existing) return existing;
   return db.transaction(async (tx) => {
-    const [conv] = await tx.insert(conversations).values({ kind: "direct" }).returning();
+    const [conv] = await tx.insert(conversations).values({ communityId, kind: "direct" }).returning();
     await tx.insert(conversationMembers).values([
       { conversationId: conv.id, userId: a },
       { conversationId: conv.id, userId: b },
@@ -223,7 +236,7 @@ export type ConversationListItem = {
   unreadCount: number;
 };
 
-export async function listConversations(meId: string): Promise<ConversationListItem[]> {
+export async function listConversations(communityId: string, meId: string): Promise<ConversationListItem[]> {
   const rows = await db
     .select({
       conv: conversations,
@@ -235,7 +248,7 @@ export async function listConversations(meId: string): Promise<ConversationListI
     .innerJoin(conversations, eq(conversations.id, cmA.conversationId))
     .leftJoin(cmB, and(eq(cmB.conversationId, cmA.conversationId), ne(cmB.userId, meId)))
     .leftJoin(users, eq(users.id, cmB.userId))
-    .where(eq(cmA.userId, meId))
+    .where(and(eq(cmA.userId, meId), eq(conversations.communityId, communityId)))
     .orderBy(desc(sql`coalesce(${conversations.lastMessageAt}, ${conversations.createdAt})`));
   return rows.map((r) => ({
     id: r.conv.id,
@@ -248,8 +261,8 @@ export async function listConversations(meId: string): Promise<ConversationListI
   }));
 }
 
-export async function getConversationForUser(meId: string, conversationId: string): Promise<(ConversationListItem & { members: { id: string; name: string; avatarMediaId: string | null; lastReadAt: Date | null }[] }) | undefined> {
-  const list = await listConversations(meId);
+export async function getConversationForUser(communityId: string, meId: string, conversationId: string): Promise<(ConversationListItem & { members: { id: string; name: string; avatarMediaId: string | null; lastReadAt: Date | null }[] }) | undefined> {
+  const list = await listConversations(communityId, meId);
   const item = list.find((c) => c.id === conversationId);
   if (!item) return undefined;
   const members = await db
@@ -260,15 +273,22 @@ export async function getConversationForUser(meId: string, conversationId: strin
   return { ...item, members };
 }
 
-/** Total unread messages across all conversations (topbar dot). */
-export async function unreadMessagesCount(meId: string): Promise<number> {
+/** Unread messages across the conversations of one community (topbar dot). */
+export async function unreadMessagesCount(communityId: string, meId: string): Promise<number> {
   const [row] = await db
     .select({
       count: sql<number>`coalesce(sum((select count(*) from ${messages} m where m.conversation_id = ${conversationMembers}."conversation_id" and m.deleted_at is null and m.sender_id is distinct from ${meId} and (${conversationMembers}."last_read_at" is null or m.created_at > ${conversationMembers}."last_read_at"))), 0)::int`,
     })
     .from(conversationMembers)
-    .where(eq(conversationMembers.userId, meId));
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, meId), eq(conversations.communityId, communityId)));
   return row?.count ?? 0;
+}
+
+/** The community a conversation belongs to – the anchor for counters and fan-out. */
+async function communityOfConversation(conversationId: string): Promise<string | undefined> {
+  const row = await db.query.conversations.findFirst({ where: eq(conversations.id, conversationId), columns: { communityId: true } });
+  return row?.communityId;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,11 +338,15 @@ async function memberIds(conversationId: string): Promise<string[]> {
 }
 
 export async function sendMessage(me: Pick<User, "id" | "name" | "avatarMediaId">, conversationId: string, body: string, attachments: MessageAttachment[] = []): Promise<ChatMessageDto | undefined> {
+  const communityId = await communityOfConversation(conversationId);
+  if (!communityId) return undefined;
   const ids = await memberIds(conversationId);
   if (!ids.includes(me.id)) return undefined;
   // The bot conversation is receive-only: workflows write, members read. Conversational work
-  // happens with the AI agent, so nothing may be sent *to* the bot (see domain/bot.ts).
-  if (me.id !== BOT_USER_ID && ids.includes(BOT_USER_ID)) return undefined;
+  // happens with the AI agent, so nothing may be sent *to* a bot (see domain/bot.ts). Every
+  // community has its own bot user, so this asks the flag rather than a fixed id.
+  const bots = await db.select({ id: users.id }).from(users).where(and(inArray(users.id, ids), eq(users.isBot, true)));
+  if (bots.length && !bots.some((b) => b.id === me.id)) return undefined;
   const preview = body.trim() ? body.trim().slice(0, 140) : attachments.length ? `📎 ${attachments[0].name}` : "";
   const dto = await db.transaction(async (tx) => {
     const [m] = await tx.insert(messages).values({ conversationId, senderId: me.id, body: body.trim(), attachments }).returning();
@@ -331,11 +355,13 @@ export async function sendMessage(me: Pick<User, "id" | "name" | "avatarMediaId"
     await tx.update(conversationMembers).set({ lastReadAt: m.createdAt }).where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, me.id)));
     return toDto(m, { id: me.id, name: me.name, avatarMediaId: me.avatarMediaId });
   });
-  await Promise.all(ids.map(async (uid) => publishToUser(uid, "message.created", { message: dto, unreadMessages: await unreadMessagesCount(uid) })));
+  await Promise.all(ids.map(async (uid) => publishToUser(uid, "message.created", { communityId, message: dto, unreadMessages: await unreadMessagesCount(communityId, uid) })));
   return dto;
 }
 
 export async function markConversationRead(meId: string, conversationId: string): Promise<void> {
+  const communityId = await communityOfConversation(conversationId);
+  if (!communityId) return;
   const now = new Date();
   // Only act when there is something unread – avoids event storms (page render → publish → refresh → …).
   const unread = await firstUnreadAt(meId, conversationId);
@@ -348,7 +374,7 @@ export async function markConversationRead(meId: string, conversationId: string)
     .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, meId)));
   const others = (await memberIds(conversationId)).filter((id) => id !== meId);
   await Promise.all([
-    publishToUser(meId, "message.count", { unreadMessages: await unreadMessagesCount(meId) }),
+    publishToUser(meId, "message.count", { communityId, unreadMessages: await unreadMessagesCount(communityId, meId) }),
     publishToUsers(others, "message.read", { conversationId, userId: meId, at: now.toISOString() }),
   ]);
 }

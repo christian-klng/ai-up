@@ -32,7 +32,7 @@ export async function saveSpaceAction(_prev: SpaceFormState, formData: FormData)
     return { status: "error", code: field === "purpose" ? "purposeRequired" : field === "name" ? "nameRequired" : "unexpected" };
   }
   const { id, ...input } = parsed.data;
-  const space = id ? await updateSpace(id, input, admin.id) : await createSpace(input, admin.id);
+  const space = id ? await updateSpace(admin.communityId, id, input, admin.id) : await createSpace(admin.communityId, input, admin.id);
   if (!space) return { status: "error", code: "unexpected" };
   revalidatePath("/", "layout");
   return { status: "saved", slug: space.slug };
@@ -40,13 +40,13 @@ export async function saveSpaceAction(_prev: SpaceFormState, formData: FormData)
 
 export async function deleteSpaceAction(id: string): Promise<{ ok: boolean; reason?: "notEmpty" }> {
   const admin = await assertAdmin();
-  const ok = await deleteSpace(id, admin.id);
+  const ok = await deleteSpace(admin.communityId, id, admin.id);
   if (ok) revalidatePath("/", "layout");
   return ok ? { ok } : { ok, reason: "notEmpty" };
 }
 
 export async function moveSpaceAction(id: string, direction: "up" | "down"): Promise<void> {
-  await assertAdmin();
-  await moveSpace(id, direction);
+  const admin = await assertAdmin();
+  await moveSpace(admin.communityId, id, direction);
   revalidatePath("/", "layout");
 }

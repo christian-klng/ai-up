@@ -4,11 +4,11 @@ import { access, unlink } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { EgressClient, EncodedFileOutput, EncodedFileType, S3Upload, type WebhookEvent } from "livekit-server-sdk";
 import { db } from "@/server/db/client";
-import { meetingRecordings, meetings, type Meeting } from "@/server/db/schema";
+import { meetingRecordings, meetingSpaces, meetings, type Meeting } from "@/server/db/schema";
 import { getLiveKitConfig, livekitHttpUrl, livekitS3, type LiveKitS3 } from "@/server/domain/integrations";
-import { getSpaceById } from "@/server/domain/meetings";
+import { communityOfMeeting } from "@/server/domain/meetings";
 import { emitDomainEvent } from "@/server/events/bus";
-import { publishBroadcast } from "@/server/realtime/publish";
+import { publishToCommunity } from "@/server/realtime/publish";
 import { storeFileFromPath } from "@/server/media/storage";
 import { logger } from "@/server/logger";
 
@@ -76,9 +76,15 @@ async function removeSource(s3: LiveKitS3 | null, key: string, localPath: string
   }
 }
 
+/** Egress callbacks have no session either – the meeting's space says which community to notify. */
+async function spaceOfMeeting(m: Meeting) {
+  return db.query.meetingSpaces.findFirst({ where: eq(meetingSpaces.id, m.spaceId) });
+}
+
 async function broadcast(m: Meeting) {
-  const space = await getSpaceById(m.spaceId);
-  await publishBroadcast("meeting.updated", { meetingId: m.id, spaceId: m.spaceId, spaceSlug: space?.slug ?? "", status: m.status, participantCount: m.participantCount, recordingStatus: m.recordingStatus });
+  const space = await spaceOfMeeting(m);
+  if (!space) return;
+  await publishToCommunity(space.communityId, "meeting.updated", { meetingId: m.id, spaceId: m.spaceId, spaceSlug: space.slug, status: m.status, participantCount: m.participantCount, recordingStatus: m.recordingStatus });
 }
 
 export async function startRecording(meeting: Meeting, opts: { manual?: boolean } = {}): Promise<{ ok: true; egressId: string } | { ok: false; error: string }> {
@@ -168,7 +174,7 @@ export async function handleEgressEvent(meeting: Meeting, ev: WebhookEvent): Pro
     const durationSeconds = file.duration ? Math.round(Number(file.duration) / 1e9) : null;
     let media: Awaited<ReturnType<typeof storeFileFromPath>>;
     try {
-      media = await storeFileFromPath({ sourcePath: source, mime: "audio/ogg", originalName: `${meeting.title.replace(/[^\w\-äöüÄÖÜß ]+/g, "").trim() || "meeting"}.ogg`, purpose: "recording", uploadedBy: meeting.hostId, durationSeconds });
+      media = await storeFileFromPath({ sourcePath: source, mime: "audio/ogg", originalName: `${meeting.title.replace(/[^\w\-äöüÄÖÜß ]+/g, "").trim() || "meeting"}.ogg`, purpose: "recording", communityId: await communityOfMeeting(meeting.id), uploadedBy: meeting.hostId, durationSeconds });
     } catch (err) {
       await fail(meeting, `recording import failed: ${(err as Error).message}`);
       return;
@@ -189,15 +195,17 @@ export async function handleEgressEvent(meeting: Meeting, ev: WebhookEvent): Pro
       .where(eq(meetings.id, meeting.id))
       .returning();
     await broadcast(m);
-    const space = await getSpaceById(m.spaceId);
-    emitDomainEvent("meeting.recording.available", {
-      meeting: { id: m.id, title: m.title, kind: m.kind, status: m.status, spaceId: m.spaceId, spaceSlug: space?.slug ?? "", spaceName: space?.name ?? "", hostId: m.hostId, href: `/meetings/${space?.slug ?? m.spaceId}/${m.id}` },
-      mediaId: media.id,
-      recordingUrl: `/api/files/${media.id}`,
-      durationSeconds,
-      actorId: null,
-      origin: { kind: "system" },
-    });
+    const space = await spaceOfMeeting(m);
+    if (space) {
+      emitDomainEvent("meeting.recording.available", space.communityId, {
+        meeting: { id: m.id, title: m.title, kind: m.kind, status: m.status, spaceId: m.spaceId, spaceSlug: space.slug, spaceName: space.name, hostId: m.hostId, href: `/meetings/${space.slug}/${m.id}` },
+        mediaId: media.id,
+        recordingUrl: `/api/files/${media.id}`,
+        durationSeconds,
+        actorId: null,
+        origin: { kind: "system" },
+      });
+    }
     logger.info({ meetingId: meeting.id, mediaId: media.id, durationSeconds }, "recording imported");
     return;
   }

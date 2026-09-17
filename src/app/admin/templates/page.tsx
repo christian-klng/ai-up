@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { TemplateList } from "./template-list";
 
 export default async function AdminTemplatesPage() {
-  await requireAdmin();
-  const [t, templates] = await Promise.all([getTranslations("admin.templates"), listTemplates()]);
+  const user = await requireAdmin();
+  const [t, templates] = await Promise.all([getTranslations("admin.templates"), listTemplates(user.communityId)]);
   return (
     <div className="max-w-4xl">
       <PageHeader

@@ -6,9 +6,9 @@ import { MeetingCall } from "@/components/meetings/meeting-call";
 
 /** Full-width call page; the token is minted client-side via joinMeetingAction (CallProvider). */
 export default async function MeetingCallPage({ params }: PageProps<"/meetings/[slug]/[id]/call">) {
-  await requireUser();
+  const user = await requireUser();
   const { slug, id } = await params;
-  const [space, meeting] = await Promise.all([getSpaceBySlug(slug), getMeeting(id)]);
+  const [space, meeting] = await Promise.all([getSpaceBySlug(user.communityId, slug), getMeeting(user.communityId, id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
   const backHref = `/meetings/${space.slug}/${meeting.id}`;
   if (meeting.kind === "protocol" || meeting.status === "ended") redirect(backHref);

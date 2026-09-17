@@ -15,13 +15,13 @@ export async function createApiKeyAction(input: { name: string; scopes: string[]
   const admin = await assertAdmin();
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
-  const { key, plaintext } = await createApiKey(admin.id, parsed.data.name, parsed.data.scopes as ApiScope[], parsed.data.expiresInDays > 0 ? new Date(Date.now() + parsed.data.expiresInDays * 86_400_000) : null);
+  const { key, plaintext } = await createApiKey(admin.communityId, admin.id, parsed.data.name, parsed.data.scopes as ApiScope[], parsed.data.expiresInDays > 0 ? new Date(Date.now() + parsed.data.expiresInDays * 86_400_000) : null);
   revalidatePath("/admin/api-keys");
   return { ok: true, plaintext, id: key.id };
 }
 
 export async function revokeApiKeyAction(id: string): Promise<void> {
   const admin = await assertAdmin();
-  await revokeApiKey(z.string().uuid().parse(id), admin.id);
+  await revokeApiKey(admin.communityId, z.string().uuid().parse(id), admin.id);
   revalidatePath("/admin/api-keys");
 }

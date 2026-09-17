@@ -7,7 +7,7 @@ import { AgentStart } from "@/components/agents/agent-start";
 export default async function AgentStartPage({ params }: PageProps<"/agents/[slug]">) {
   const me = await requireUser();
   const { slug } = await params;
-  const [agent, areas] = await Promise.all([getAgentBySlug(slug), listAreas()]);
+  const [agent, areas] = await Promise.all([getAgentBySlug(me.communityId, slug), listAreas(me.communityId)]);
   if (!agent || !agent.enabled || (agent.ownerId && agent.ownerId !== me.id)) notFound();
 
   return (

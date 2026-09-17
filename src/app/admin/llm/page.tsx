@@ -7,8 +7,8 @@ import { ProviderCard } from "./provider-card";
 import { CapabilityTable } from "./capability-table";
 
 export default async function AdminLlmPage() {
-  await requireAdmin();
-  const [t, providers] = await Promise.all([getTranslations("admin.llm"), listProviders()]);
+  const user = await requireAdmin();
+  const [t, providers] = await Promise.all([getTranslations("admin.llm"), listProviders(user.communityId)]);
   const presets = Object.entries(PROVIDER_PRESETS).map(([kind, p]) => ({ kind, label: p.label, baseUrl: p.baseUrl, hint: p.hint }));
   return (
     <div className="max-w-4xl">
@@ -40,7 +40,7 @@ export default async function AdminLlmPage() {
           ))}
         </div>
       )}
-      {providers.length > 0 && <CapabilityTable />}
+      {providers.length > 0 && <CapabilityTable communityId={user.communityId} />}
     </div>
   );
 }

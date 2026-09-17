@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { AppSettings } from "@/server/db/schema";
+import type { Community } from "@/server/db/schema";
 import { SITE_PAGES, type LandingDefinition, type SitePage } from "@/lib/landing-schema";
 import { LandingEditor } from "./landing-editor";
 
@@ -31,7 +31,7 @@ export type PageState = {
 
 const PAGE_URLS: Record<SitePage, string> = { landing: "/", imprint: "/imprint", privacy: "/privacy" };
 
-export function LandingAdmin({ pages, settings, media }: { pages: Record<SitePage, PageState>; settings: AppSettings; media: MediaRow[] }) {
+export function LandingAdmin({ pages, settings, media }: { pages: Record<SitePage, PageState>; settings: Community; media: MediaRow[] }) {
   const t = useTranslations("admin.landing");
   const tc = useTranslations("common");
   const format = useFormatter();

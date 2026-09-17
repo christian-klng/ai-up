@@ -6,8 +6,8 @@ import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
 
 export default async function AdminQuestionsPage() {
-  await requireAdmin();
-  const [t, format, items] = await Promise.all([getTranslations("admin.questions"), getFormatter(), listQuestions({ limit: 100 })]);
+  const user = await requireAdmin();
+  const [t, format, items] = await Promise.all([getTranslations("admin.questions"), getFormatter(), listQuestions(user.communityId, { limit: 100 })]);
   return (
     <div className="max-w-4xl">
       <PageHeader title={t("title")} description={t("intro")} />

@@ -12,9 +12,9 @@ import { ContactButton } from "@/components/messenger/contact-button";
 export default async function MemberProfilePage({ params }: PageProps<"/members/[userId]">) {
   const me = await requireUser();
   const { userId } = await params;
-  const member = await getPublicUser(userId);
+  const member = await getPublicUser(me.communityId, userId);
   if (!member || member.status !== "active") notFound();
-  const [t, tc, format, state] = await Promise.all([getTranslations("members"), getTranslations("common"), getFormatter(), getContactState(me.id, member.id)]);
+  const [t, tc, format, state] = await Promise.all([getTranslations("members"), getTranslations("common"), getFormatter(), getContactState(me.communityId, me.id, member.id)]);
   const isMe = me.id === member.id;
 
   return (

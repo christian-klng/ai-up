@@ -4,7 +4,11 @@ import type { RealtimeEvent, RealtimeEventMap, RealtimeEventType } from "@/lib/r
 
 export const CHANNEL_PREFIX = "aiup:rt:";
 export const userChannel = (userId: string) => `${CHANNEL_PREFIX}user:${userId}`;
-export const BROADCAST_CHANNEL = `${CHANNEL_PREFIX}broadcast`;
+/**
+ * Broadcasts are per community: a member of one community must not see the live dots, toasts or
+ * questions of another. Each SSE connection subscribes to its own community's channel only.
+ */
+export const communityChannel = (communityId: string) => `${CHANNEL_PREFIX}c:${communityId}`;
 
 async function publish(channel: string, event: RealtimeEvent): Promise<void> {
   try {
@@ -23,6 +27,7 @@ export function publishToUsers<T extends RealtimeEventType>(userIds: string[], t
   return Promise.all(userIds.map((id) => publishToUser(id, type, payload))).then(() => undefined);
 }
 
-export function publishBroadcast<T extends RealtimeEventType>(type: T, payload: RealtimeEventMap[T]): Promise<void> {
-  return publish(BROADCAST_CHANNEL, { type, payload, at: new Date().toISOString() });
+/** Sends to everyone currently connected *within one community*. */
+export function publishToCommunity<T extends RealtimeEventType>(communityId: string, type: T, payload: RealtimeEventMap[T]): Promise<void> {
+  return publish(communityChannel(communityId), { type, payload, at: new Date().toISOString() });
 }
