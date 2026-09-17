@@ -8,8 +8,8 @@ export default async function MessagesIndexPage({ searchParams }: PageProps<"/me
   const me = await requireUser();
   const sp = await searchParams;
   const withUser = typeof sp.with === "string" ? sp.with : null;
-  if (withUser && (await areContacts(me.id, withUser))) {
-    const conv = await getOrCreateDirectConversation(me.id, withUser);
+  if (withUser && (await areContacts(me.communityId, me.id, withUser))) {
+    const conv = await getOrCreateDirectConversation(me.communityId, me.id, withUser);
     redirect(`/messages/${conv.id}`);
   }
   const t = await getTranslations("messages");

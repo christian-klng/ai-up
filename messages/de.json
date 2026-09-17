@@ -77,6 +77,19 @@
       "sentBody": "Wir haben an {email} einen Anmeldelink geschickt, der dich direkt zum Meeting bringt. Er ist 15 Minuten gültig.",
       "invalidTitle": "Diese Einladung ist nicht mehr gültig",
       "invalidBody": "Der Link ist deaktiviert oder das Meeting existiert nicht mehr. Frag die Person, die dich eingeladen hat, nach einem neuen Link.",
+      "toLogin": "Zur Anmeldung",
+      "joinAndOpen": "Beitreten und zum Meeting"
+    },
+    "join": {
+      "intro": "Du wurdest zu {community} eingeladen. Melde dich mit Name und E-Mail an – du bist sofort dabei.",
+      "submit": "Beitreten",
+      "joinAsMember": "{community} beitreten",
+      "joinedToast": "Willkommen bei {community}.",
+      "suspended": "Dein Zugang zu dieser Community wurde gesperrt.",
+      "sentTitle": "E-Mail unterwegs",
+      "sentBody": "Wir haben dir einen Anmeldelink an {email} geschickt.",
+      "invalidTitle": "Dieser Link gilt nicht mehr",
+      "invalidBody": "Der Beitrittslink ist abgeschaltet oder war nie gültig. Frag die Person, die ihn dir geschickt hat.",
       "toLogin": "Zur Anmeldung"
     }
   },
@@ -153,7 +166,8 @@
       "apiKeys": "API-Schlüssel",
       "audit": "Audit-Log",
       "questions": "Fragen",
-      "templates": "Vorlagen"
+      "templates": "Vorlagen",
+      "communities": "Communities"
     },
     "general": {
       "title": "Allgemein & Branding",
@@ -172,7 +186,61 @@
       "modeDark": "Dunkel",
       "modeSystem": "System",
       "defaultLocale": "Standardsprache",
-      "preview": "Vorschau"
+      "preview": "Vorschau",
+      "deleteCommunity": {
+        "title": "Community löschen",
+        "intro": "Sammlungen, Meetings, Workflows, Nachrichten und Uploads verschwinden mit. {days} Tage lang kann der Betreiber die Community noch zurückholen, danach ist sie endgültig weg.",
+        "confirmLabel": "Tippe „{name}“, um zu bestätigen",
+        "submit": "Endgültig löschen",
+        "doneToast": "„{name}“ wurde gelöscht.",
+        "mismatch": "Der eingegebene Name stimmt nicht.",
+        "notRoot": "Die Haupt-Community kann nicht gelöscht werden."
+      },
+      "address": {
+        "title": "Adresse",
+        "intro": "Unter dieser Adresse ist die Community erreichbar. Wer den Link öffnet, landet hier – unabhängig davon, wo er vorher war.",
+        "copy": "Kopieren",
+        "copied": "Adresse kopiert.",
+        "copyFailed": "Kopieren fehlgeschlagen."
+      },
+      "domains": {
+        "title": "Eigene Domain",
+        "intro": "Die Community kann zusätzlich unter einer eigenen Domain erscheinen. Damit das erlaubt wird, muss ein DNS-Eintrag beweisen, dass die Domain dir gehört.",
+        "addLabel": "Domain hinzufügen",
+        "addPlaceholder": "community.verein-xy.de",
+        "add": "Hinzufügen",
+        "addHint": "Ohne „https://“ und ohne Pfad. Subdomains dieser Installation sind hier nicht möglich – die vergibt der Kurzname der Community.",
+        "added": "Domain eingetragen. Jetzt den DNS-Eintrag setzen und prüfen lassen.",
+        "check": "Jetzt prüfen",
+        "makePrimary": "Als Hauptadresse",
+        "primarySet": "Diese Domain ist jetzt die Hauptadresse.",
+        "remove": "Entfernen",
+        "copied": "Kopiert.",
+        "copyFailed": "Kopieren fehlgeschlagen.",
+        "verified": "Domain bestätigt.",
+        "proofIntro": "Lege bei deinem DNS-Anbieter einen TXT-Eintrag an:",
+        "proofTxtName": "Name",
+        "proofTxtValue": "Wert",
+        "proofOr": "Oder – falls die Domain ohnehin auf uns zeigen soll – genügt ein CNAME:",
+        "proofCname": "CNAME-Ziel",
+        "state": {
+          "verified": "Bestätigt",
+          "pending": "Wartet auf DNS",
+          "primary": "Hauptadresse"
+        },
+        "error": {
+          "invalid": "Das sieht nicht nach einer Domain aus.",
+          "ownDomain": "Adressen dieser Installation werden über den Kurznamen der Community vergeben.",
+          "taken": "Diese Domain ist bereits vergeben.",
+          "limit": "Mehr Domains sind für eine Community nicht vorgesehen."
+        },
+        "verifyError": {
+          "notFound": "Die Domain gibt es nicht mehr.",
+          "tooSoon": "Gerade erst geprüft – bitte einen Moment warten.",
+          "noRecord": "Es ist noch kein passender Eintrag sichtbar. DNS-Änderungen brauchen oft einige Minuten.",
+          "wrongValue": "Ein Eintrag ist da, aber der Wert stimmt nicht."
+        }
+      }
     },
     "purpose": {
       "title": "Zweck der Community",
@@ -240,7 +308,23 @@
       "roleChanged": "Rolle von {name} geändert.",
       "cannotChangeSelf": "Du kannst dein eigenes Konto hier nicht ändern.",
       "registeredAt": "Registriert am {date}",
-      "invitedVia": "Eingeladen zu"
+      "invitedVia": "Eingeladen zu",
+      "remove": "Aus Community entfernen",
+      "removeConfirm": "{name} wirklich aus dieser Community entfernen? Das Konto bleibt bestehen.",
+      "removed": "{name} wurde aus der Community entfernt.",
+      "lastAdmin": "Das ist die letzte Administratorin bzw. der letzte Administrator dieser Community.",
+      "joinLink": {
+        "title": "Beitrittslink",
+        "intro": "Wer diesen Link öffnet, wird sofort aktives Mitglied – ohne Freigabe. Behandle ihn wie ein Passwort.",
+        "enabled": "Link aktiv",
+        "uses": "{count, plural, =0 {Noch niemand beigetreten} one {# Beitritt} other {# Beitritte}}",
+        "copy": "Kopieren",
+        "copied": "Link kopiert.",
+        "copyFailed": "Kopieren fehlgeschlagen.",
+        "enabledToast": "Beitrittslink ist aktiv.",
+        "disabledToast": "Beitrittslink ist abgeschaltet.",
+        "disabledHint": "Solange der Link aus ist, funktioniert er nicht. Beim Wiedereinschalten gilt dieselbe Adresse erneut."
+      }
     },
     "knowledge": {
       "title": "Sammlungen",
@@ -594,6 +678,27 @@
           "recordingsPathRequired": "Bitte gib das Aufzeichnungs-Verzeichnis an.",
           "s3EndpointInvalid": "Der S3-Endpunkt muss mit https:// beginnen. Lass das Feld leer, wenn du keine Übergabe über S3 nutzt."
         }
+      }
+    },
+    "communities": {
+      "title": "Communities",
+      "intro": "Unter-Communities dieser Installation. Sie teilen sich Call-Server und Speicher, verwalten aber alles andere selbst.",
+      "empty": "Noch keine Unter-Communities.",
+      "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
+      "createdAt": "Angelegt am {date}",
+      "purgeAt": "wird endgültig gelöscht am {date}",
+      "deleted": "Gelöscht",
+      "delete": "Löschen",
+      "deleteConfirm": "„{name}“ löschen? Die Community verschwindet sofort und wird nach Ablauf der Frist endgültig entfernt.",
+      "deletedToast": "„{name}“ wurde gelöscht.",
+      "restore": "Wiederherstellen",
+      "restoredToast": "„{name}“ ist wieder da.",
+      "allow": {
+        "title": "Unter-Communities erlauben",
+        "intro": "Wenn aktiv, dürfen alle Mitglieder eigene Unter-Communities anlegen. Administratorinnen und Administratoren dürfen es immer.",
+        "label": "Mitglieder dürfen Communities anlegen",
+        "enabledToast": "Mitglieder dürfen jetzt Communities anlegen.",
+        "disabledToast": "Nur Admins dürfen jetzt Communities anlegen."
       }
     }
   },
@@ -1000,7 +1105,7 @@
     "create": "Neues Meeting",
     "createSubmit": "Meeting anlegen",
     "edit": "Meeting bearbeiten",
-    "dialogIntro": "Art, Titel und optional ein Termin. Protokolle lassen sich jederzeit schreiben; Calls starten die Teilnehmenden selbst.",
+    "dialogIntro": "Art, Titel und optional ein Termin. Den Call starten die Teilnehmenden selbst; das Protokoll entsteht auf der Meeting-Seite.",
     "kind": "Art",
     "kinds": {
       "protocol": "Protokoll",
@@ -1143,6 +1248,26 @@
       "uploading": "Lädt hoch …",
       "tooLarge": "Das Bild ist zu groß.",
       "unsupported": "Nur JPEG, PNG, WebP oder GIF."
+    }
+  },
+  "communities": {
+    "switch": "Community wechseln",
+    "switchIntro": "Du bist in mehreren Communities. Wähle aus, in welcher du arbeiten möchtest.",
+    "createNew": "Neue Community anlegen",
+    "create": {
+      "title": "Neue Community",
+      "intro": "Du wirst Administratorin bzw. Administrator der neuen Community und kannst sie danach vollständig einrichten.",
+      "nameLabel": "Name",
+      "namePlaceholder": "Lesekreis",
+      "slugLabel": "Kurzname für Links",
+      "slugHelp": "Kleinbuchstaben, Ziffern und Bindestriche. Er steht später in geteilten Links und kann nicht mehr geändert werden.",
+      "purposeLabel": "Zweck",
+      "purposePlaceholder": "Wofür ist diese Community da? Wer gehört dazu, worum geht es?",
+      "purposeHelp": "Der Zweck steht den Mitgliedern und fließt in die Anweisungen der KI-Agenten ein.",
+      "submit": "Community anlegen",
+      "errorSlugTaken": "Dieser Kurzname ist schon vergeben.",
+      "errorSlugInvalid": "Dieser Kurzname geht nicht: nur Kleinbuchstaben, Ziffern und Bindestriche, 3 bis 40 Zeichen, und einige Namen sind reserviert.",
+      "errorNotAllowed": "Du darfst derzeit keine Community anlegen."
     }
   }
 }

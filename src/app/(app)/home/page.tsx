@@ -2,11 +2,10 @@ import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { ArrowRight, CalendarClock } from "lucide-react";
 import { redirect } from "next/navigation";
-import { requireUser } from "@/server/auth/session";
+import { requireCommunity, requireUser } from "@/server/auth/session";
 import { markInviteLanded, pendingInviteRedirect } from "@/server/domain/invites";
 import { listUpcomingMeetings } from "@/server/domain/meetings";
-import { getAppSettings } from "@/server/domain/settings";
-import { countUsersByStatus } from "@/server/domain/users";
+import { countMembersByStatus } from "@/server/domain/users";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/common/page-header";
@@ -16,13 +15,13 @@ import { MeetingKindIcon, MeetingStatusBadge } from "@/components/meetings/meeti
 export default async function HomePage() {
   const user = await requireUser();
   // Members who registered through a meeting invite land on that meeting once.
-  const inviteHref = await pendingInviteRedirect(user);
+  const inviteHref = await pendingInviteRedirect(user.membership);
   if (inviteHref) {
-    await markInviteLanded(user.id);
+    await markInviteLanded(user.communityId, user.id);
     redirect(inviteHref);
   }
-  const [t, tm, format, settings, upcoming] = await Promise.all([getTranslations("home"), getTranslations("meetings"), getFormatter(), getAppSettings(), listUpcomingMeetings(6)]);
-  const counts = user.role === "admin" ? await countUsersByStatus() : null;
+  const [t, tm, format, settings, upcoming] = await Promise.all([getTranslations("home"), getTranslations("meetings"), getFormatter(), requireCommunity(), listUpcomingMeetings(user.communityId, 6)]);
+  const counts = user.role === "admin" ? await countMembersByStatus(user.communityId) : null;
 
   return (
     <div className="mx-auto max-w-3xl">

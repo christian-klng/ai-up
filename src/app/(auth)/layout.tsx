@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { getAppSettings } from "@/server/domain/settings";
+import { getPublicCommunity } from "@/server/auth/session";
 import { LocaleSwitcher } from "@/components/shell/locale-switcher";
 import { BrandLogo } from "@/components/shell/brand-logo";
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
-  const settings = await getAppSettings();
+  const settings = await getPublicCommunity();
   const t = await getTranslations("common");
   return (
     <div className="min-h-svh flex flex-col bg-muted/40">

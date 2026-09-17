@@ -63,6 +63,11 @@ export type StoreFileInput = {
   mime: string;
   originalName: string;
   purpose: MediaPurpose;
+  /**
+   * Which community may read the file. null = platform-wide, used for generated account avatars,
+   * which follow the person into every community they belong to.
+   */
+  communityId?: string | null;
   uploadedBy?: string | null;
   width?: number | null;
   height?: number | null;
@@ -97,6 +102,7 @@ export async function storeFile(input: StoreFileInput): Promise<MediaFile> {
       durationSeconds: input.durationSeconds ?? null,
       variants: input.variants ?? {},
       purpose: input.purpose,
+      communityId: input.communityId ?? null,
       uploadedBy: input.uploadedBy ?? null,
     })
     .returning();
@@ -132,7 +138,7 @@ export async function readMediaFile(media: MediaFile, variant?: string): Promise
  * Imports an existing file from disk (e.g. a recording written by LiveKit egress) into the media store
  * without buffering it in memory. The source file is left untouched.
  */
-export async function storeFileFromPath(input: { sourcePath: string; mime: string; originalName: string; purpose: MediaPurpose; uploadedBy?: string | null; durationSeconds?: number | null }): Promise<MediaFile> {
+export async function storeFileFromPath(input: { sourcePath: string; mime: string; originalName: string; purpose: MediaPurpose; communityId?: string | null; uploadedBy?: string | null; durationSeconds?: number | null }): Promise<MediaFile> {
   const { createReadStream, createWriteStream } = await import("node:fs");
   const { pipeline } = await import("node:stream/promises");
   const { stat } = await import("node:fs/promises");
@@ -154,7 +160,24 @@ export async function storeFileFromPath(input: { sourcePath: string; mime: strin
   const size = (await stat(abs)).size;
   const [row] = await db
     .insert(mediaFiles)
-    .values({ id, kind: kindForMime(input.mime), storagePath, originalName: input.originalName.slice(0, 255), mime: input.mime, size, sha256: hash.digest("hex"), durationSeconds: input.durationSeconds ?? null, purpose: input.purpose, uploadedBy: input.uploadedBy ?? null })
+    .values({ id, kind: kindForMime(input.mime), storagePath, originalName: input.originalName.slice(0, 255), mime: input.mime, size, sha256: hash.digest("hex"), durationSeconds: input.durationSeconds ?? null, purpose: input.purpose, communityId: input.communityId ?? null, uploadedBy: input.uploadedBy ?? null })
     .returning();
   return row;
+}
+
+/**
+ * Removes a stored file and its variants from disk. The database row is expected to go away with
+ * its owner (cascade); this only deals with the bytes, which nothing else would ever clean up.
+ * Missing files are not an error – a purge must not stall on a file somebody already removed.
+ */
+export async function deleteStoredFile(media: Pick<MediaFile, "storagePath" | "variants">): Promise<void> {
+  const { unlink } = await import("node:fs/promises");
+  const paths = [media.storagePath, ...Object.values(media.variants ?? {})];
+  for (const rel of paths) {
+    try {
+      await unlink(absolutePath(rel));
+    } catch {
+      /* already gone */
+    }
+  }
 }

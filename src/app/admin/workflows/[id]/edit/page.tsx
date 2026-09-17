@@ -9,9 +9,9 @@ import { PageHeader } from "@/components/common/page-header";
 import { WorkflowEditor } from "@/components/workflows/workflow-editor";
 
 export default async function EditWorkflowPage({ params }: PageProps<"/admin/workflows/[id]/edit">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const { id } = await params;
-  const [t, catalog, wf] = await Promise.all([getTranslations("admin.workflows"), getEditorCatalog(), getWorkflow(id)]);
+  const [t, catalog, wf] = await Promise.all([getTranslations("admin.workflows"), getEditorCatalog(user.communityId), getWorkflow(user.communityId, id)]);
   if (!wf) notFound();
   return (
     <div className="max-w-4xl">

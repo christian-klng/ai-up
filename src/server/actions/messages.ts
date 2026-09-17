@@ -42,7 +42,7 @@ export async function sendMessageAction(input: { conversationId: string; body: s
 export async function markConversationReadAction(conversationId: string): Promise<{ unreadMessages: number }> {
   const me = await assertUser();
   await markConversationRead(me.id, z.string().uuid().parse(conversationId));
-  return { unreadMessages: await unreadMessagesCount(me.id) };
+  return { unreadMessages: await unreadMessagesCount(me.communityId, me.id) };
 }
 
 export async function typingAction(conversationId: string): Promise<void> {
@@ -60,7 +60,7 @@ export async function loadOlderMessagesAction(conversationId: string, beforeIso:
 /** Opens (or creates) the direct conversation with a contact and returns its id. */
 export async function openDirectConversationAction(otherUserId: string): Promise<{ ok: true; conversationId: string } | { ok: false }> {
   const me = await assertUser();
-  if (!(await areContacts(me.id, otherUserId))) return { ok: false };
-  const conv = await getOrCreateDirectConversation(me.id, otherUserId);
+  if (!(await areContacts(me.communityId, me.id, otherUserId))) return { ok: false };
+  const conv = await getOrCreateDirectConversation(me.communityId, me.id, otherUserId);
   return { ok: true, conversationId: conv.id };
 }

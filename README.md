@@ -5,6 +5,7 @@ Selbst gehostete Community-Plattform nach dem Vorbild von Circle.so – mit eine
 ## Was die App kann
 
 - **Mitglieder & Login** – Registrierung mit Freigabe durch einen Admin, Login ausschließlich per Magic Link, Profile mit Foto oder zufälligem Avatar, Mitgliederübersicht.
+- **Unter-Communities** – ein Konto kann in mehreren Communities Mitglied sein und pro Community eine eigene Rolle haben; oben links wird gewechselt. Wenn der Betreiber es erlaubt, legen Mitglieder eigene Communities an und verwalten sie vollständig selbst – mit eigenen Sammlungen, Meetings, Workflows, KI-Agenten und LLM-Zugängen. Geteilt werden nur Call-Server und Speicher, die dem Betreiber gehören. Beitritt über einen Link, Löschen mit 14 Tagen Rückholfrist.
 - **Sammlungen** – vom Admin angelegte Kategorien mit Zweck; jede Änderung versioniert mit Verlauf und Wiederherstellen. Inhalte entstehen über **Vorlagen**: vom Admin separat verwaltete, visuell zusammengestellte Formulare (Texte, Bilder, Links, Videos, Fragen, Chips, Dropdowns, Checkboxen, Frage-Antwort-Paare, editierbares Prozessdiagramm mit Verzweigungen), die pro Sammlung zugewiesen werden – ohne Zuweisung gelten nicht löschbare Standard-Vorlagen (einfacher Text, Bild, Link, Video). Mitglieder wählen beim Anlegen aus der Vorlagen-Liste; wird eine Vorlage aktualisiert, können Einträge beim Bearbeiten auf die neue Fassung gehoben werden. Jeder Eintrag wird deterministisch zu Markdown (inkl. Mermaid-Flowchart) und ist als `.md` exportierbar – z. B. als Rohmaterial für System Prompts oder Skill-Dateien.
 - **Messenger & Benachrichtigungen** – Kontaktanfrage → bestätigen → chatten (live, mit Gelesen-Status, Tipp-Indikator, Bild-Anhängen), Notification-Center, Zähler an Nachrichten- und Glocken-Icon.
 - **Meetings** – Meeting-Bereiche mit Zweck; Meetings als Protokoll (versioniertes Markdown, gemeinsam schreibbar), **Audio- oder Video-Call direkt in der App** (selbst gehosteter LiveKit-Server, Screen-Share, Chat), grün blinkender Live-Punkt im Menü, Teilnehmerliste, automatischer **Audio-Mitschnitt** als Player am Meeting.
@@ -15,7 +16,7 @@ Selbst gehostete Community-Plattform nach dem Vorbild von Circle.so – mit eine
 - **MCP-Server** – API-Schlüssel für Admins; Workflows und Landing Page per Claude Code einsehen, anlegen, ändern, starten.
 - **Zweisprachig** (Deutsch/Englisch), Branding (Name, Logo, Favicon, Farbschema) durch den Admin.
 
-Läuft produktiv auf zwei VPS: die App auf dem einen, der Media-Server für Calls und Aufzeichnungen auf dem anderen. Offen: Lasttest mit 30 Teilnehmenden sowie Härtung, Tests und Sicherheits-Review (siehe [PLAN.md](PLAN.md), Phasen 4f und 7).
+Läuft produktiv auf zwei VPS: die App auf dem einen, der Media-Server für Calls und Aufzeichnungen auf dem anderen. Offen: Lasttest mit 30 Teilnehmenden, eigene Domains je Unter-Community sowie Härtung, Tests und Sicherheits-Review (siehe [PLAN.md](PLAN.md), Phasen 4f, 7 und 8).
 
 ## Stack
 
@@ -40,6 +41,7 @@ Magic-Link-Mails landen lokal in Mailpit. Der erste Admin ist die Adresse aus `S
 - [docs/workflows.md](docs/workflows.md) – Workflow-Engine, Trigger/Aktionen, LLM-Provider, MCP-Server
 - [docs/meetings-livekit.md](docs/meetings-livekit.md) – Media-Server (LiveKit) auf Coolify einrichten, Webhook/Aufzeichnungen, Spike & Lasttest
 - [PLAN.md](PLAN.md) – Architektur- und Umsetzungsplan mit Phasen
+- [docs/communities.md](docs/communities.md) – Unter-Communities: Datenmodell, Rechte, Beitritt, eigene Domains
 
 ## Lizenz
 

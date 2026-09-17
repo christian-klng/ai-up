@@ -8,8 +8,8 @@ import { CreateKeyDialog } from "./create-key-dialog";
 import { RevokeKeyButton } from "./revoke-button";
 
 export default async function AdminApiKeysPage() {
-  await requireAdmin();
-  const [t, format, keys] = await Promise.all([getTranslations("admin.apiKeys"), getFormatter(), listApiKeys()]);
+  const user = await requireAdmin();
+  const [t, format, keys] = await Promise.all([getTranslations("admin.apiKeys"), getFormatter(), listApiKeys(user.communityId)]);
   const mcpUrl = `${env.APP_URL.replace(/\/$/, "")}/api/mcp`;
   return (
     <div className="max-w-4xl">

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { RoomServiceClient } from "livekit-server-sdk";
-import { assertAdmin } from "@/server/auth/session";
+import { assertRootAdmin } from "@/server/auth/session";
 import { getLiveKitConfig, livekitHttpUrl, recordIntegrationTest, saveIntegration } from "@/server/domain/integrations";
 
 const schema = z.object({
@@ -45,7 +45,7 @@ function errorCodeFor(field: PropertyKey | undefined): LiveKitErrorCode {
 }
 
 export async function saveLiveKitAction(_prev: LiveKitFormState, formData: FormData): Promise<LiveKitFormState> {
-  const admin = await assertAdmin();
+  const admin = await assertRootAdmin();
   const parsed = schema.safeParse({
     enabled: formData.get("enabled") === "on",
     url: formData.get("url"),
@@ -88,7 +88,7 @@ export async function saveLiveKitAction(_prev: LiveKitFormState, formData: FormD
 }
 
 export async function testLiveKitAction(): Promise<{ ok: true; rooms: number; ms: number } | { ok: false; error: string }> {
-  await assertAdmin();
+  await assertRootAdmin();
   const cfg = await getLiveKitConfig();
   if (!cfg) return { ok: false, error: "not configured" };
   const started = Date.now();

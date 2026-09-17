@@ -112,13 +112,16 @@ export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, agents, isAd
         {knowledgeAreas.map((a) => item(`/knowledge/${a.slug}`, undefined, a.name, false, a.icon))}
       </NavSection>
 
-      <NavSection title={labels.agents}>
-        {agents.map((a) => (
-          <NavItem key={a.slug} href={`/agents/${a.slug}`} avatarMediaId={a.avatarMediaId} active={isActivePath(pathname, `/agents/${a.slug}`)} onNavigate={onNavigate}>
-            {a.name}
-          </NavItem>
-        ))}
-      </NavSection>
+      {/* No agents (or the section switched off via AGENTS_IN_NAV) – no empty heading either. */}
+      {agents.length > 0 && (
+        <NavSection title={labels.agents}>
+          {agents.map((a) => (
+            <NavItem key={a.slug} href={`/agents/${a.slug}`} avatarMediaId={a.avatarMediaId} active={isActivePath(pathname, `/agents/${a.slug}`)} onNavigate={onNavigate}>
+              {a.name}
+            </NavItem>
+          ))}
+        </NavSection>
+      )}
 
       <NavSection title={labels.meetings}>
         {meetingSpaces.length === 0 && <p className="px-2.5 py-1 text-xs text-muted-foreground">{labels.noSpacesYet}</p>}

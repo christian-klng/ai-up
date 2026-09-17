@@ -2,7 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { contentVersions, contents } from "@/server/db/schema";
 import { DEFAULT_AGENT_SYSTEM_PROMPT } from "@/server/domain/agents";
-import { loadAppSettings } from "@/server/domain/settings";
+import { loadCommunity } from "@/server/domain/communities";
 import type { AiAgent } from "@/server/db/schema";
 import { MAX_INSTRUCTION_CHARS, instructionBlockChars } from "@/lib/agent-instructions";
 
@@ -40,8 +40,9 @@ function fillPlaceholders(prompt: string, appName: string, purpose: string): str
 }
 
 export async function buildSystemPrompt(agent: AiAgent, instructionContentIds: string[]): Promise<{ prompt: string; docs: InstructionDoc[]; truncated: boolean }> {
-  const settings = await loadAppSettings();
-  const base = fillPlaceholders(agent.systemPrompt.trim() || DEFAULT_AGENT_SYSTEM_PROMPT, settings.name, settings.purpose ?? "");
+  // The agent knows its community, so {{ app.name }} / {{ app.purpose }} describe the right one.
+  const community = await loadCommunity(agent.communityId);
+  const base = fillPlaceholders(agent.systemPrompt.trim() || DEFAULT_AGENT_SYSTEM_PROMPT, community?.name ?? "AI-Up", community?.purpose ?? "");
   const docs = await loadInstructionDocs(instructionContentIds);
   if (!docs.length) return { prompt: base, docs, truncated: false };
 

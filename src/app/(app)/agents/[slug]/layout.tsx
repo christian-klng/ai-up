@@ -7,7 +7,7 @@ import { AgentShell } from "@/components/agents/agent-shell";
 export default async function AgentLayout({ children, params }: LayoutProps<"/agents/[slug]">) {
   const me = await requireUser();
   const { slug } = await params;
-  const agent = await getAgentBySlug(slug);
+  const agent = await getAgentBySlug(me.communityId, slug);
   if (!agent || !agent.enabled || (agent.ownerId && agent.ownerId !== me.id)) notFound();
   const threads = await listThreads(me.id, agent.id);
 

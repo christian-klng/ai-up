@@ -7,8 +7,8 @@ import { PageHeader } from "@/components/common/page-header";
 import { StructureEditor } from "@/components/structures/structure-editor";
 
 export default async function NewTemplatePage() {
-  await requireAdmin();
-  const [t, providers] = await Promise.all([getTranslations("admin.templates"), listProviderOptions()]);
+  const user = await requireAdmin();
+  const [t, providers] = await Promise.all([getTranslations("admin.templates"), listProviderOptions(user.communityId)]);
   return (
     <div>
       <Link href="/admin/templates" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">

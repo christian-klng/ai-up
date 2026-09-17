@@ -2,12 +2,14 @@ import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { requireAdmin } from "@/server/auth/session";
 import { inviteSourcesForUsers } from "@/server/domain/invites";
-import { countUsersByStatus, listUsers } from "@/server/domain/users";
+import { countMembersByStatus, listMembers } from "@/server/domain/users";
+import { getCommunityInvite } from "@/server/domain/community-invites";
 import { PageHeader } from "@/components/common/page-header";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { MemberActions } from "./member-actions";
+import { JoinLinkCard } from "./join-link-card";
 
 const STATUSES = ["pending", "active", "suspended"] as const;
 type Status = (typeof STATUSES)[number];
@@ -16,20 +18,23 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
   const admin = await requireAdmin();
   const params = await searchParams;
   const status: Status = STATUSES.includes(params.status as Status) ? (params.status as Status) : "pending";
-  const [t, tRole, format, counts, members] = await Promise.all([
+  const [t, tRole, format, counts, members, joinLink] = await Promise.all([
     getTranslations("admin.members"),
     getTranslations("role"),
     getFormatter(),
-    countUsersByStatus(),
-    listUsers({ status }),
+    countMembersByStatus(admin.communityId),
+    listMembers(admin.communityId, { status }),
+    getCommunityInvite(admin.communityId),
   ]);
-  const inviteSources = await inviteSourcesForUsers(members.filter((m) => m.invitedViaId).map((m) => m.id));
+  const inviteSources = await inviteSourcesForUsers(admin.communityId, members.filter((m) => m.membership.invitedViaId).map((m) => m.id));
 
   const tabLabel: Record<Status, string> = { pending: t("tabPending"), active: t("tabActive"), suspended: t("tabSuspended") };
 
   return (
     <div>
       <PageHeader title={t("title")} description={t("intro")} />
+
+      <JoinLinkCard initial={{ url: joinLink?.enabled ? joinLink.url : null, enabled: joinLink?.enabled ?? false, useCount: joinLink?.useCount ?? 0 }} />
 
       <div className="mb-4 flex gap-1 border-b">
         {STATUSES.map((s) => (
@@ -63,7 +68,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
                 </div>
                 <div className="text-sm text-muted-foreground">{m.email}</div>
                 <div className="text-xs text-muted-foreground">
-                  {t("registeredAt", { date: format.dateTime(m.createdAt, { dateStyle: "medium", timeStyle: "short" }) })}
+                  {t("registeredAt", { date: format.dateTime(m.joinedAt, { dateStyle: "medium", timeStyle: "short" }) })}
                   {inviteSources.has(m.id) && (
                     <>
                       {" · "}
@@ -77,7 +82,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
                 {status === "pending" && (
                   <p className="mt-1 text-sm">
                     <span className="text-muted-foreground">{t("registrationMessage")}: </span>
-                    {m.registrationMessage ? <span className="whitespace-pre-line">{m.registrationMessage}</span> : <span className="text-muted-foreground">{t("noMessage")}</span>}
+                    {m.membership.registrationMessage ? <span className="whitespace-pre-line">{m.membership.registrationMessage}</span> : <span className="text-muted-foreground">{t("noMessage")}</span>}
                   </p>
                 )}
               </div>

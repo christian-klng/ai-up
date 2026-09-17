@@ -77,6 +77,19 @@
       "sentBody": "We sent a sign-in link to {email} that takes you straight to the meeting. It is valid for 15 minutes.",
       "invalidTitle": "This invitation is no longer valid",
       "invalidBody": "The link is disabled or the meeting no longer exists. Ask the person who invited you for a new link.",
+      "toLogin": "Go to sign-in",
+      "joinAndOpen": "Join and open the meeting"
+    },
+    "join": {
+      "intro": "You have been invited to {community}. Sign up with your name and e-mail – you are in right away.",
+      "submit": "Join",
+      "joinAsMember": "Join {community}",
+      "joinedToast": "Welcome to {community}.",
+      "suspended": "Your access to this community has been blocked.",
+      "sentTitle": "Check your inbox",
+      "sentBody": "We sent a sign-in link to {email}.",
+      "invalidTitle": "This link is no longer valid",
+      "invalidBody": "The join link is switched off or never existed. Ask whoever sent it to you.",
       "toLogin": "Go to sign-in"
     }
   },
@@ -153,7 +166,8 @@
       "apiKeys": "API keys",
       "audit": "Audit log",
       "questions": "Questions",
-      "templates": "Templates"
+      "templates": "Templates",
+      "communities": "Communities"
     },
     "general": {
       "title": "General & branding",
@@ -172,7 +186,61 @@
       "modeDark": "Dark",
       "modeSystem": "System",
       "defaultLocale": "Default language",
-      "preview": "Preview"
+      "preview": "Preview",
+      "deleteCommunity": {
+        "title": "Delete community",
+        "intro": "Collections, meetings, workflows, messages and uploads go with it. The operator can bring it back for {days} days; after that it is gone for good.",
+        "confirmLabel": "Type “{name}” to confirm",
+        "submit": "Delete permanently",
+        "doneToast": "“{name}” was deleted.",
+        "mismatch": "That name does not match.",
+        "notRoot": "The main community cannot be deleted."
+      },
+      "address": {
+        "title": "Address",
+        "intro": "The community is reachable at this address. Opening the link lands here, wherever the reader was before.",
+        "copy": "Copy",
+        "copied": "Address copied.",
+        "copyFailed": "Could not copy."
+      },
+      "domains": {
+        "title": "Own domain",
+        "intro": "This community can also appear under a domain of its own. Before it is allowed, a DNS record has to prove the domain is yours.",
+        "addLabel": "Add a domain",
+        "addPlaceholder": "community.example.org",
+        "add": "Add",
+        "addHint": "No “https://” and no path. Sub-domains of this installation cannot be entered here – the community's short name governs those.",
+        "added": "Domain added. Set the DNS record, then run the check.",
+        "check": "Check now",
+        "makePrimary": "Make main address",
+        "primarySet": "This domain is the main address now.",
+        "remove": "Remove",
+        "copied": "Copied.",
+        "copyFailed": "Copying failed.",
+        "verified": "Domain confirmed.",
+        "proofIntro": "Create a TXT record at your DNS provider:",
+        "proofTxtName": "Name",
+        "proofTxtValue": "Value",
+        "proofOr": "Or – if the domain is meant to point at us anyway – a CNAME is enough:",
+        "proofCname": "CNAME target",
+        "state": {
+          "verified": "Confirmed",
+          "pending": "Waiting for DNS",
+          "primary": "Main address"
+        },
+        "error": {
+          "invalid": "That does not look like a domain.",
+          "ownDomain": "Addresses of this installation are handed out through the community's short name.",
+          "taken": "That domain is already taken.",
+          "limit": "A community is not meant to hold more domains than this."
+        },
+        "verifyError": {
+          "notFound": "That domain is gone.",
+          "tooSoon": "Just checked – give it a moment.",
+          "noRecord": "No matching record is visible yet. DNS changes often take a few minutes.",
+          "wrongValue": "A record is there, but the value does not match."
+        }
+      }
     },
     "purpose": {
       "title": "Community purpose",
@@ -240,7 +308,23 @@
       "roleChanged": "Role of {name} changed.",
       "cannotChangeSelf": "You cannot change your own account here.",
       "registeredAt": "Registered on {date}",
-      "invitedVia": "Invited to"
+      "invitedVia": "Invited to",
+      "remove": "Remove from community",
+      "removeConfirm": "Really remove {name} from this community? The account itself stays.",
+      "removed": "{name} was removed from the community.",
+      "lastAdmin": "This is the last admin of this community.",
+      "joinLink": {
+        "title": "Join link",
+        "intro": "Anyone opening this link becomes an active member right away – no approval. Treat it like a password.",
+        "enabled": "Link active",
+        "uses": "{count, plural, =0 {Nobody has joined yet} one {# person joined} other {# people joined}}",
+        "copy": "Copy",
+        "copied": "Link copied.",
+        "copyFailed": "Could not copy.",
+        "enabledToast": "Join link is active.",
+        "disabledToast": "Join link is off.",
+        "disabledHint": "While the link is off it does not work. Switching it back on revives the same address."
+      }
     },
     "knowledge": {
       "title": "Collections",
@@ -594,6 +678,27 @@
           "recordingsPathRequired": "Enter the recordings directory.",
           "s3EndpointInvalid": "The S3 endpoint must start with https://. Leave it empty if you are not using the S3 handover."
         }
+      }
+    },
+    "communities": {
+      "title": "Communities",
+      "intro": "Sub-communities of this installation. They share the call server and storage but run everything else themselves.",
+      "empty": "No sub-communities yet.",
+      "members": "{count, plural, =0 {No members} one {# member} other {# members}}",
+      "createdAt": "Created {date}",
+      "purgeAt": "will be removed for good on {date}",
+      "deleted": "Deleted",
+      "delete": "Delete",
+      "deleteConfirm": "Delete “{name}”? It disappears right away and is removed for good once the grace period ends.",
+      "deletedToast": "“{name}” was deleted.",
+      "restore": "Restore",
+      "restoredToast": "“{name}” is back.",
+      "allow": {
+        "title": "Allow sub-communities",
+        "intro": "When on, every member may start their own sub-community. Admins always may.",
+        "label": "Members may create communities",
+        "enabledToast": "Members may now create communities.",
+        "disabledToast": "Only admins may create communities now."
       }
     }
   },
@@ -1000,7 +1105,7 @@
     "create": "New meeting",
     "createSubmit": "Create meeting",
     "edit": "Edit meeting",
-    "dialogIntro": "Kind, title and an optional date. Minutes can be written any time; calls are started by the participants.",
+    "dialogIntro": "Kind, title and an optional date. Participants start the call themselves; the minutes are written on the meeting page.",
     "kind": "Kind",
     "kinds": {
       "protocol": "Minutes",
@@ -1143,6 +1248,26 @@
       "uploading": "Uploading …",
       "tooLarge": "The image is too large.",
       "unsupported": "Only JPEG, PNG, WebP or GIF."
+    }
+  },
+  "communities": {
+    "switch": "Switch community",
+    "switchIntro": "You belong to several communities. Pick the one you want to work in.",
+    "createNew": "Create a community",
+    "create": {
+      "title": "New community",
+      "intro": "You become the admin of the new community and can set it up completely afterwards.",
+      "nameLabel": "Name",
+      "namePlaceholder": "Reading group",
+      "slugLabel": "Short name for links",
+      "slugHelp": "Lowercase letters, digits and hyphens. It appears in shared links later and cannot be changed afterwards.",
+      "purposeLabel": "Purpose",
+      "purposePlaceholder": "What is this community for? Who belongs to it, what is it about?",
+      "purposeHelp": "The purpose is shown to members and goes into the AI agents' instructions.",
+      "submit": "Create community",
+      "errorSlugTaken": "That short name is already taken.",
+      "errorSlugInvalid": "That short name does not work: lowercase letters, digits and hyphens only, 3 to 40 characters, and a few names are reserved.",
+      "errorNotAllowed": "You are not allowed to create a community right now."
     }
   }
 }

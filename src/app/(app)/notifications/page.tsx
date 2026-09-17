@@ -9,7 +9,7 @@ import { NotificationList, type NotificationItem } from "./notification-list";
 
 export default async function NotificationsPage() {
   const user = await requireUser();
-  const [t, format, items, incoming] = await Promise.all([getTranslations("notifications"), getFormatter(), listNotifications(user.id), listIncomingRequests(user.id)]);
+  const [t, format, items, incoming] = await Promise.all([getTranslations("notifications"), getFormatter(), listNotifications(user.id, user.communityId), listIncomingRequests(user.communityId, user.id)]);
   const hasUnread = items.some((n) => !n.readAt);
   const pendingByRequester = new Map(incoming.map((r) => [r.requesterId, r.id]));
 

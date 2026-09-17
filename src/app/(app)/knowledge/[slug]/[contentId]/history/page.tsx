@@ -15,7 +15,7 @@ export default async function ContentHistoryPage({ params, searchParams }: PageP
   const user = await requireUser();
   const { slug, contentId } = await params;
   const sp = await searchParams;
-  const [area, content] = await Promise.all([getAreaBySlug(slug), getContent(contentId)]);
+  const [area, content] = await Promise.all([getAreaBySlug(user.communityId, slug), getContent(user.communityId, contentId)]);
   if (!area || !content || content.areaId !== area.id) notFound();
   const [t, format, versions] = await Promise.all([getTranslations("knowledge"), getFormatter(), listContentVersions(content.id)]);
   const editable = canEditContent(user, content);

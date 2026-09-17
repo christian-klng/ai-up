@@ -35,7 +35,7 @@ export async function saveAreaAction(_prev: AreaFormState, formData: FormData): 
     return { status: "error", code: field === "purpose" ? "purposeRequired" : field === "name" ? "nameRequired" : "unexpected" };
   }
   const { id, ...input } = parsed.data;
-  const area = id ? await updateArea(id, input, admin.id) : await createArea(input, admin.id);
+  const area = id ? await updateArea(admin.communityId, id, input, admin.id) : await createArea(admin.communityId, input, admin.id);
   if (!area) return { status: "error", code: "unexpected" };
   revalidatePath("/", "layout");
   return { status: "saved", slug: area.slug };
@@ -43,13 +43,13 @@ export async function saveAreaAction(_prev: AreaFormState, formData: FormData): 
 
 export async function deleteAreaAction(id: string): Promise<{ ok: boolean; reason?: "notEmpty" }> {
   const admin = await assertAdmin();
-  const ok = await deleteArea(id, admin.id);
+  const ok = await deleteArea(admin.communityId, id, admin.id);
   if (ok) revalidatePath("/", "layout");
   return ok ? { ok } : { ok, reason: "notEmpty" };
 }
 
 export async function moveAreaAction(id: string, direction: "up" | "down"): Promise<void> {
-  await assertAdmin();
-  await moveArea(id, direction);
+  const admin = await assertAdmin();
+  await moveArea(admin.communityId, id, direction);
   revalidatePath("/", "layout");
 }

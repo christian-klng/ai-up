@@ -13,13 +13,13 @@ import { instructionBlockChars } from "@/lib/agent-instructions";
 export default async function AgentThreadPage({ params }: PageProps<"/agents/[slug]/[threadId]">) {
   const me = await requireUser();
   const { slug, threadId } = await params;
-  const [agent, thread] = await Promise.all([getAgentBySlug(slug), getOwnedThread(threadId, me.id)]);
+  const [agent, thread] = await Promise.all([getAgentBySlug(me.communityId, slug), getOwnedThread(threadId, me.id)]);
   if (!agent || !thread || thread.agentId !== agent.id) notFound();
 
   const [messages, config, areas, running, locale] = await Promise.all([
     listMessages(thread.id),
     getThreadConfig(thread.id),
-    listAreas(),
+    listAreas(me.communityId),
     hasRunningTurn(thread.id),
     getLocale(),
   ]);

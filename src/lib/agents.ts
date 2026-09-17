@@ -6,3 +6,8 @@ export const SYSTEM_AGENT_SLUG = "assistent";
 export const TREE_ENTRY_LIMIT = 200;
 /** Writes per answer. A single chat sentence must not be able to rewrite a whole collection. */
 export const MAX_WRITES_PER_TURN = 10;
+/**
+ * Whether the sidebar lists the agents. Off while the feature is not used productively – the routes
+ * (/agents/…) and the admin page stay reachable, only the menu entry is gone. Flip to `true` to bring it back.
+ */
+export const AGENTS_IN_NAV = false;

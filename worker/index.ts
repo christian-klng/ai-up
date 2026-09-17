@@ -7,10 +7,12 @@ import { Worker, type Job } from "bullmq";
 import IORedis from "ioredis";
 import { eq } from "drizzle-orm";
 import { env } from "@/server/env";
+import { listCommunitiesToPurge } from "@/server/domain/communities";
+import { purgeCommunity } from "@/server/domain/community-setup";
 import { logger } from "@/server/logger";
 import { db, pool } from "@/server/db/client";
 import { workflows } from "@/server/db/schema";
-import { WORKFLOW_QUEUE, getQueue, syncSchedules, type WorkflowJob } from "@/server/workflows/queue";
+import { COMMUNITY_PURGE_GRACE_DAYS, WORKFLOW_QUEUE, ensureSystemSchedules, getQueue, syncSchedules, type WorkflowJob } from "@/server/workflows/queue";
 import { createRun, executeRun } from "@/server/workflows/engine";
 import { loadRegistry } from "@/server/workflows/registry";
 import { evaluateContentVersion } from "@/server/domain/evaluation";
@@ -34,6 +36,16 @@ async function processJob(job: Job<WorkflowJob>): Promise<void> {
     if (result.status === "error") logger.warn({ threadId: data.threadId, error: result.error }, "agent turn ended with an error");
     return;
   }
+  if (data.kind === "purge-communities") {
+    // Deleted communities are kept for a grace period so an accidental deletion can be undone.
+    const due = await listCommunitiesToPurge(COMMUNITY_PURGE_GRACE_DAYS);
+    for (const c of due) {
+      const { files } = await purgeCommunity(c.id);
+      logger.info({ communityId: c.id, name: c.name, files }, "community purged after grace period");
+    }
+    if (due.length) logger.info({ count: due.length }, "purge sweep finished");
+    return;
+  }
   if (data.kind === "schedule") {
     const wf = await db.query.workflows.findFirst({ where: eq(workflows.id, data.workflowId) });
     if (!wf || wf.status !== "active" || wf.trigger.type !== "schedule") {
@@ -52,6 +64,7 @@ async function main() {
 
   await loadRegistry();
   await syncSchedules();
+  await ensureSystemSchedules();
   // Re-sync periodically in case a web instance changed schedules while we were down.
   const resync = setInterval(() => void syncSchedules().catch((err) => logger.warn({ err }, "schedule resync failed")), 5 * 60_000);
 

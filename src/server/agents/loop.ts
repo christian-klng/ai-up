@@ -1,5 +1,6 @@
-import { getAgentById } from "@/server/domain/agents";
+import { loadAgent } from "@/server/domain/agents";
 import { getUserById } from "@/server/domain/users";
+import { getMembership } from "@/server/domain/communities";
 import { getContent } from "@/server/domain/knowledge";
 import { enqueueEvaluation } from "@/server/workflows/queue";
 import { logger } from "@/server/logger";
@@ -14,6 +15,15 @@ import { getBudgetStatus, weighUsage } from "./usage";
 import { buildHistory, toDto } from "./history";
 import { addMessage, failStaleMessages, getMessage, getThread, getThreadConfig, hasPendingApproval, listMessages, renameThread, updateMessage } from "./threads";
 import { getTool, listTools, toolDefinitions, type AgentToolContext } from "./tools";
+
+/**
+ * What the acting user may do *here*. Tools act in the user's name, so they must never inherit an
+ * admin role the person only holds in another community.
+ */
+async function roleInCommunity(communityId: string, userId: string): Promise<"member" | "admin"> {
+  const membership = await getMembership(communityId, userId);
+  return membership?.status === "active" ? membership.role : "member";
+}
 
 /**
  * The agentic loop: one turn = model call → tool calls → model call → … until the model answers
@@ -83,8 +93,10 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
   await clearCancel(threadId);
   await failStaleMessages(threadId, "The previous turn did not finish.");
 
-  const [agent, owner] = await Promise.all([getAgentById(thread.agentId), getUserById(userId)]);
+  // The worker has no session: the agent row says which community this turn acts in.
+  const [agent, owner] = await Promise.all([loadAgent(thread.agentId), getUserById(userId)]);
   if (!agent) return finish({ status: "error", error: "agent not found" });
+  const communityId = agent.communityId;
   if (!owner || owner.status !== "active") return finish({ status: "error", error: "user not active" });
 
   try {
@@ -92,8 +104,9 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
     const { prompt } = await buildSystemPrompt(agent, config.instructionContentIds);
     const tools = listTools(thread.mode === "curate" ? "write" : "read");
     const toolCtx: AgentToolContext = {
+      communityId,
       userId,
-      userRole: owner?.role ?? "member",
+      userRole: await roleInCommunity(communityId, userId),
       threadId,
       agentId: agent.id,
       readAreaIds: config.readAreaIds,
@@ -101,7 +114,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
       written: new Set<string>(),
     };
 
-    const { provider, model, caps } = await resolveModel(agent.providerId, agent.model);
+    const { provider, model, caps } = await resolveModel(communityId, agent.providerId, agent.model);
     const cfg = await clientConfigFor(provider);
 
     const stored = await listMessages(threadId);
@@ -113,7 +126,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
 
     // Read once per turn, then keep adding this turn's own consumption: a query per step would
     // cost more than it protects.
-    const budget = await getBudgetStatus(userId);
+    const budget = await getBudgetStatus(communityId, userId);
     if (budget.exceeded) return finish({ status: "quota", error: null });
 
     let usage: ChatUsage = {};
@@ -169,7 +182,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
           return finish({ status: "cancelled", error: null });
         }
         const message = explainLlmError(err);
-        await reportLlmError(err, { provider, model, source: "agent", sourceId: threadId, actorId: userId, origin: { kind: "agent", threadId, agentId: agent.id, userId } });
+        await reportLlmError(err, { communityId, provider, model, source: "agent", sourceId: threadId, actorId: userId, origin: { kind: "agent", threadId, agentId: agent.id, userId } });
         const saved = await updateMessage(assistant.id, { status: "error", error: message });
         if (saved) await publishToUser(userId, "agent.message.saved", { threadId, message: toDto(saved) });
         logger.warn({ err, threadId, agentId: agent.id }, "agent turn failed");
@@ -261,7 +274,7 @@ export async function runTurn(threadId: string): Promise<TurnResult> {
  */
 async function queueWrittenEvaluations(ctx: AgentToolContext): Promise<void> {
   for (const contentId of ctx.written) {
-    const entry = await getContent(contentId);
+    const entry = await getContent(ctx.communityId, contentId);
     if (entry?.type === "structured" && entry.currentVersionId) await enqueueEvaluation(contentId, entry.currentVersionId);
   }
   ctx.written.clear();
@@ -287,7 +300,7 @@ export async function resolveToolCall(messageId: string, approve: boolean, userI
   if (!message || message.status !== "awaiting_approval") return { ok: false, continued: false };
   const thread = await getThread(message.threadId);
   if (!thread || thread.userId !== userId) return { ok: false, continued: false };
-  const agent = await getAgentById(thread.agentId);
+  const agent = await loadAgent(thread.agentId);
   const owner = await getUserById(userId);
   if (!agent || !owner) return { ok: false, continued: false };
 
@@ -300,8 +313,9 @@ export async function resolveToolCall(messageId: string, approve: boolean, userI
   } else {
     const config = await getThreadConfig(thread.id);
     const ctx: AgentToolContext = {
+      communityId: agent.communityId,
       userId,
-      userRole: owner.role,
+      userRole: await roleInCommunity(agent.communityId, userId),
       threadId: thread.id,
       agentId: agent.id,
       readAreaIds: config.readAreaIds,

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/session";
-import { getAppSettings } from "@/server/domain/settings";
+import { getCurrentUser, getPublicCommunity } from "@/server/auth/session";
 import { getCurrentLandingVersion } from "@/server/domain/landing";
 import { LandingView } from "@/components/landing/landing-view";
 
@@ -12,9 +11,9 @@ import { LandingView } from "@/components/landing/landing-view";
  */
 
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getAppSettings();
+  const settings = await getPublicCommunity();
   if (!settings.landingEnabled) return {};
-  const landing = await getCurrentLandingVersion("landing");
+  const landing = await getCurrentLandingVersion(settings.id, "landing");
   return {
     title: { absolute: landing?.definition.meta.title ?? settings.name },
     description: landing?.definition.meta.description ?? settings.tagline ?? undefined,
@@ -22,8 +21,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function LandingPage() {
-  const [settings, user] = await Promise.all([getAppSettings(), getCurrentUser()]);
-  const landing = settings.landingEnabled ? await getCurrentLandingVersion("landing") : undefined;
+  const [settings, user] = await Promise.all([getPublicCommunity(), getCurrentUser()]);
+  const landing = settings.landingEnabled ? await getCurrentLandingVersion(settings.id, "landing") : undefined;
   if (!landing) {
     // Disabled or never written: never show an empty landing page.
     redirect(user ? (user.status === "active" ? "/home" : "/pending") : "/login");

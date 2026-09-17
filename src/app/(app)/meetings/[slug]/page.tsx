@@ -14,9 +14,9 @@ import type { MeetingListItem } from "@/server/domain/meetings";
 export default async function MeetingSpacePage({ params }: PageProps<"/meetings/[slug]">) {
   const user = await requireUser();
   const { slug } = await params;
-  const space = await getSpaceBySlug(slug);
+  const space = await getSpaceBySlug(user.communityId, slug);
   if (!space) notFound();
-  const [t, items, lk] = await Promise.all([getTranslations("meetings"), listMeetings({ spaceId: space.id }), getLiveKitConfig()]);
+  const [t, items, lk] = await Promise.all([getTranslations("meetings"), listMeetings(user.communityId, { spaceId: space.id }), getLiveKitConfig()]);
   const callsAvailable = !!lk?.enabled;
   const live = items.filter((m) => m.status === "live");
   const upcoming = items.filter((m) => m.status === "scheduled");

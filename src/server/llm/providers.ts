@@ -1,9 +1,9 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { auditLog, llmModelCapabilities, llmProviders, type LlmModelCapabilityRow, type LlmModelInfo, type LlmProvider, type ReasoningLevel } from "@/server/db/schema";
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto";
 import { env } from "@/server/env";
-import { loadAppSettings } from "@/server/domain/settings";
+import { loadCommunity } from "@/server/domain/communities";
 import { chatCompletion, listModels, type ChatRequest, type LlmClientConfig, type ProviderKind } from "./client";
 import { capabilityFingerprint, mergeCapabilities, mergeCapabilityInput, statedReasoningLevels, statedToolSupport, type CapabilityInput, type ResolvedCapabilities } from "./capabilities";
 
@@ -29,17 +29,25 @@ export function toView(p: LlmProvider): ProviderView {
   return { ...rest, apiKeyMasked: masked, hasApiKey: !!apiKeyEncrypted };
 }
 
-export async function listProviders(): Promise<ProviderView[]> {
-  const rows = await db.query.llmProviders.findMany({ orderBy: [asc(llmProviders.createdAt)] });
+export async function listProviders(communityId: string): Promise<ProviderView[]> {
+  const rows = await db.query.llmProviders.findMany({ where: eq(llmProviders.communityId, communityId), orderBy: [asc(llmProviders.createdAt)] });
   return rows.map(toView);
 }
 
-export async function getProvider(id: string): Promise<LlmProvider | undefined> {
-  return db.query.llmProviders.findFirst({ where: eq(llmProviders.id, id) });
+export async function getProvider(communityId: string, id: string): Promise<LlmProvider | undefined> {
+  return db.query.llmProviders.findFirst({ where: and(eq(llmProviders.communityId, communityId), eq(llmProviders.id, id)) });
 }
 
-export async function getDefaultProvider(): Promise<LlmProvider | undefined> {
-  return (await db.query.llmProviders.findFirst({ where: eq(llmProviders.isDefault, true) })) ?? (await db.query.llmProviders.findFirst({ orderBy: [asc(llmProviders.createdAt)] }));
+/**
+ * A community's default provider. There is deliberately **no** inheritance from the parent: a
+ * sub-community that has not connected an LLM has none, rather than silently spending the
+ * operator's tokens (see docs/communities.md §1.4).
+ */
+export async function getDefaultProvider(communityId: string): Promise<LlmProvider | undefined> {
+  return (
+    (await db.query.llmProviders.findFirst({ where: and(eq(llmProviders.communityId, communityId), eq(llmProviders.isDefault, true)) })) ??
+    (await db.query.llmProviders.findFirst({ where: eq(llmProviders.communityId, communityId), orderBy: [asc(llmProviders.createdAt)] }))
+  );
 }
 
 export type ProviderInput = {
@@ -51,11 +59,12 @@ export type ProviderInput = {
   extraHeaders?: Record<string, string>;
 };
 
-export async function createProvider(input: ProviderInput, actorId: string): Promise<LlmProvider> {
-  const count = (await db.query.llmProviders.findMany({ columns: { id: true } })).length;
+export async function createProvider(communityId: string, input: ProviderInput, actorId: string): Promise<LlmProvider> {
+  const count = (await db.query.llmProviders.findMany({ where: eq(llmProviders.communityId, communityId), columns: { id: true } })).length;
   const [row] = await db
     .insert(llmProviders)
     .values({
+      communityId,
       name: input.name.trim(),
       kind: input.kind,
       baseUrl: input.baseUrl.trim().replace(/\/+$/, ""),
@@ -64,11 +73,11 @@ export async function createProvider(input: ProviderInput, actorId: string): Pro
       isDefault: count === 0,
     })
     .returning();
-  await db.insert(auditLog).values({ actorId, action: "llm_provider.created", targetType: "llm_provider", targetId: row.id, details: { name: row.name, kind: row.kind } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "llm_provider.created", targetType: "llm_provider", targetId: row.id, details: { name: row.name, kind: row.kind } });
   return row;
 }
 
-export async function updateProvider(id: string, input: ProviderInput, actorId: string): Promise<LlmProvider | undefined> {
+export async function updateProvider(communityId: string, id: string, input: ProviderInput, actorId: string): Promise<LlmProvider | undefined> {
   const patch: Partial<typeof llmProviders.$inferInsert> = {
     name: input.name.trim(),
     kind: input.kind,
@@ -76,30 +85,37 @@ export async function updateProvider(id: string, input: ProviderInput, actorId: 
     extraHeaders: input.extraHeaders ?? {},
   };
   if (input.apiKey !== undefined) patch.apiKeyEncrypted = input.apiKey ? encryptSecret(input.apiKey.trim()) : null;
-  const [row] = await db.update(llmProviders).set(patch).where(eq(llmProviders.id, id)).returning();
-  if (row) await db.insert(auditLog).values({ actorId, action: "llm_provider.updated", targetType: "llm_provider", targetId: id, details: { name: row.name } });
+  const [row] = await db
+    .update(llmProviders)
+    .set(patch)
+    .where(and(eq(llmProviders.communityId, communityId), eq(llmProviders.id, id)))
+    .returning();
+  if (row) await db.insert(auditLog).values({ communityId, actorId, action: "llm_provider.updated", targetType: "llm_provider", targetId: id, details: { name: row.name } });
   return row;
 }
 
-export async function deleteProvider(id: string, actorId: string): Promise<void> {
-  await db.delete(llmProviders).where(eq(llmProviders.id, id));
-  await db.insert(auditLog).values({ actorId, action: "llm_provider.deleted", targetType: "llm_provider", targetId: id });
+export async function deleteProvider(communityId: string, id: string, actorId: string): Promise<void> {
+  await db.delete(llmProviders).where(and(eq(llmProviders.communityId, communityId), eq(llmProviders.id, id)));
+  await db.insert(auditLog).values({ communityId, actorId, action: "llm_provider.deleted", targetType: "llm_provider", targetId: id });
 }
 
-export async function setDefaultProvider(id: string): Promise<void> {
+export async function setDefaultProvider(communityId: string, id: string): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx.update(llmProviders).set({ isDefault: false });
-    await tx.update(llmProviders).set({ isDefault: true }).where(eq(llmProviders.id, id));
+    await tx.update(llmProviders).set({ isDefault: false }).where(eq(llmProviders.communityId, communityId));
+    await tx.update(llmProviders).set({ isDefault: true }).where(and(eq(llmProviders.communityId, communityId), eq(llmProviders.id, id)));
   });
 }
 
-export async function setEnabledModels(id: string, enabledModels: string[], defaultModel: string | null): Promise<void> {
-  await db.update(llmProviders).set({ enabledModels, defaultModel: defaultModel && enabledModels.includes(defaultModel) ? defaultModel : enabledModels[0] ?? null }).where(eq(llmProviders.id, id));
+export async function setEnabledModels(communityId: string, id: string, enabledModels: string[], defaultModel: string | null): Promise<void> {
+  await db
+    .update(llmProviders)
+    .set({ enabledModels, defaultModel: defaultModel && enabledModels.includes(defaultModel) ? defaultModel : enabledModels[0] ?? null })
+    .where(and(eq(llmProviders.communityId, communityId), eq(llmProviders.id, id)));
 }
 
 /** Adds manually entered model ids (generic endpoints without /models). */
-export async function addManualModels(id: string, ids: string[]): Promise<void> {
-  const p = await getProvider(id);
+export async function addManualModels(communityId: string, id: string, ids: string[]): Promise<void> {
+  const p = await getProvider(communityId, id);
   if (!p) return;
   const existing = new Map(p.availableModels.map((m) => [m.id, m]));
   for (const mid of ids.map((s) => s.trim()).filter(Boolean)) if (!existing.has(mid)) existing.set(mid, { id: mid });
@@ -109,20 +125,21 @@ export async function addManualModels(id: string, ids: string[]): Promise<void> 
 }
 
 export async function clientConfigFor(p: LlmProvider): Promise<LlmClientConfig> {
-  const settings = await loadAppSettings();
+  // The provider knows its community, so the referrer headers name the right one.
+  const community = await loadCommunity(p.communityId);
   return {
     kind: p.kind,
     baseUrl: p.baseUrl,
     apiKey: p.apiKeyEncrypted ? decryptSecret(p.apiKeyEncrypted) : null,
     extraHeaders: p.extraHeaders,
-    appName: settings.name,
+    appName: community?.name ?? "AI-Up",
     appUrl: env.APP_URL,
   };
 }
 
 /** Fetches /models and stores the list (keeps enabled selection where still available). */
-export async function syncProviderModels(id: string): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
-  const p = await getProvider(id);
+export async function syncProviderModels(communityId: string, id: string): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const p = await getProvider(communityId, id);
   if (!p) return { ok: false, error: "provider not found" };
   try {
     const models = await listModels(await clientConfigFor(p));
@@ -200,11 +217,16 @@ export async function resolveModelCapabilities(modelId: string, info: LlmModelIn
   return mergeCapabilities(await getCapabilityRow(modelId), info, kind);
 }
 
+/**
+ * Resolves provider + model *within one community*. "default" picks that community's default
+ * provider; an explicit id must belong to the same community, otherwise nothing is found.
+ */
 export async function resolveModel(
+  communityId: string,
   providerId: string | undefined | null,
   model: string | undefined | null,
 ): Promise<{ provider: LlmProvider; model: string; info: LlmModelInfo | undefined; caps: ResolvedCapabilities }> {
-  const provider = providerId && providerId !== "default" ? await getProvider(providerId) : await getDefaultProvider();
+  const provider = providerId && providerId !== "default" ? await getProvider(communityId, providerId) : await getDefaultProvider(communityId);
   if (!provider) throw new Error("No LLM provider configured. Add one under Admin → LLM.");
   const chosen = model && model !== "default" ? model : provider.defaultModel ?? provider.enabledModels[0];
   if (!chosen) throw new Error(`Provider "${provider.name}" has no enabled models.`);
@@ -213,8 +235,8 @@ export async function resolveModel(
   return { provider, model: chosen, info, caps: await resolveModelCapabilities(chosen, info, provider.kind) };
 }
 
-export async function runChat(providerId: string | undefined | null, req: ChatRequest) {
-  const { provider, model } = await resolveModel(providerId, req.model);
+export async function runChat(communityId: string, providerId: string | undefined | null, req: ChatRequest) {
+  const { provider, model } = await resolveModel(communityId, providerId, req.model);
   return chatCompletion(await clientConfigFor(provider), { ...req, model });
 }
 
@@ -223,7 +245,7 @@ export async function runChat(providerId: string | undefined | null, req: ChatRe
  * `supportsTools` is tri-state: undefined while nobody has stated it and the provider reports
  * nothing – the agent picker warns about those instead of hiding them.
  */
-export async function listProviderOptions(): Promise<
+export async function listProviderOptions(communityId: string): Promise<
   {
     id: string;
     name: string;
@@ -234,7 +256,7 @@ export async function listProviderOptions(): Promise<
     models: { id: string; name?: string; supportsTools?: boolean; reasoningLevels?: ReasoningLevel[] }[];
   }[]
 > {
-  const [providers, caps] = await Promise.all([listProviders(), getCapabilityMap()]);
+  const [providers, caps] = await Promise.all([listProviders(communityId), getCapabilityMap()]);
   return providers.map((p) => ({
     id: p.id,
     name: p.name,

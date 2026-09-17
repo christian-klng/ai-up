@@ -1,7 +1,7 @@
-import type { AppSettings } from "@/server/db/schema";
+import type { Community } from "@/server/db/schema";
 
 /** Logo from settings, or a monogram fallback derived from the app name. */
-export function BrandLogo({ settings, size = 32 }: { settings: Pick<AppSettings, "name" | "logoMediaId">; size?: number }) {
+export function BrandLogo({ settings, size = 32 }: { settings: Pick<Community, "name" | "logoMediaId">; size?: number }) {
   if (settings.logoMediaId) {
     return (
       // eslint-disable-next-line @next/next/no-img-element

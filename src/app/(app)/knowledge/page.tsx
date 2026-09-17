@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 
 export default async function KnowledgeIndexPage() {
   const user = await requireUser();
-  const [t, tc, tAdmin, areas] = await Promise.all([getTranslations("knowledge"), getTranslations("common"), getTranslations("admin.knowledge"), listAreas()]);
+  const [t, tc, tAdmin, areas] = await Promise.all([getTranslations("knowledge"), getTranslations("common"), getTranslations("admin.knowledge"), listAreas(user.communityId)]);
 
   return (
     <div>

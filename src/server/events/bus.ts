@@ -89,6 +89,12 @@ export type QuestionAnsweredPayload = {
 export type DomainEventType = keyof DomainEventMap;
 export type DomainEvent<T extends DomainEventType = DomainEventType> = {
   type: T;
+  /**
+   * The community the event happened in. It lives in the envelope rather than in every payload so
+   * the dispatcher can filter without knowing the payload shape – and so TypeScript forces every
+   * call site to say which tenant it means.
+   */
+  communityId: string;
   payload: DomainEventMap[T];
   at: string;
 };
@@ -105,9 +111,9 @@ export function onDomainEvent<T extends DomainEventType>(type: T, handler: Handl
 }
 
 /** Emits an event; handlers run asynchronously and never block or fail the caller. */
-export function emitDomainEvent<T extends DomainEventType>(type: T, payload: DomainEventMap[T]): void {
-  const event: DomainEvent<T> = { type, payload, at: new Date().toISOString() };
-  logger.debug({ event: type, payload }, "domain event");
+export function emitDomainEvent<T extends DomainEventType>(type: T, communityId: string, payload: DomainEventMap[T]): void {
+  const event: DomainEvent<T> = { type, communityId, payload, at: new Date().toISOString() };
+  logger.debug({ event: type, communityId, payload }, "domain event");
   const set = handlers.get(type);
   if (set) {
     for (const h of set) {

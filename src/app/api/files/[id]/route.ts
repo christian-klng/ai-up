@@ -2,16 +2,18 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { NextRequest } from "next/server";
-import { getCurrentUser } from "@/server/auth/session";
+import { getAccount } from "@/server/auth/session";
+import { getMembership } from "@/server/domain/communities";
 import { absolutePath, getMedia } from "@/server/media/storage";
+import { PUBLIC_MEDIA_PURPOSES, mediaAccess } from "@/lib/media-access";
 
 export const dynamic = "force-dynamic";
 
-const PUBLIC_PURPOSES = new Set(["logo", "favicon", "avatar", "landing", "meeting"]);
-
 /**
  * Serves stored media. Branding assets, avatars, site-page images and meeting covers are public (login page, e-mails, OpenGraph);
- * everything else requires an active session. Supports `?v=thumb` variants and HTTP Range for video/audio.
+ * everything else requires an active session **and** membership in the file's community – without
+ * that check any member of any community could read every upload by its id.
+ * Supports `?v=thumb` variants and HTTP Range for video/audio.
  */
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">) {
   const { id } = await ctx.params;
@@ -20,9 +22,12 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">
   const media = await getMedia(id);
   if (!media) return new Response("not found", { status: 404 });
 
-  if (!PUBLIC_PURPOSES.has(media.purpose)) {
-    const user = await getCurrentUser();
-    if (!user || user.status !== "active") return new Response("unauthorized", { status: 401 });
+  if (!PUBLIC_MEDIA_PURPOSES.has(media.purpose)) {
+    const user = await getAccount();
+    const membership = user && media.communityId ? await getMembership(media.communityId, user.id) : undefined;
+    const access = mediaAccess(media, user ? { signedIn: true, active: user.status === "active", memberOfCommunity: membership?.status === "active" } : { signedIn: false });
+    if (access === "unauthorized") return new Response("unauthorized", { status: 401 });
+    if (access === "notFound") return new Response("not found", { status: 404 });
   }
 
   const variant = req.nextUrl.searchParams.get("v") ?? undefined;
@@ -34,7 +39,7 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">
   const mime = variant && media.variants[variant] ? "image/webp" : media.mime;
   const headers = new Headers({
     "Content-Type": mime,
-    "Cache-Control": PUBLIC_PURPOSES.has(media.purpose) ? "public, max-age=31536000, immutable" : "private, max-age=3600",
+    "Cache-Control": PUBLIC_MEDIA_PURPOSES.has(media.purpose) ? "public, max-age=31536000, immutable" : "private, max-age=3600",
     "Content-Disposition": `inline; filename="${encodeURIComponent(media.originalName)}"`,
     "X-Content-Type-Options": "nosniff",
     "Accept-Ranges": "bytes",

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { landingPageVersions, mediaFiles, users, type AppSettings, type LandingPageVersion, type MediaFile } from "@/server/db/schema";
+import { landingPageVersions, mediaFiles, users, type Community, type LandingPageVersion, type MediaFile } from "@/server/db/schema";
 import { validateLandingDefinition, collectLandingMediaIds, type LandingDefinition, type LandingValidationIssue, type SitePage } from "@/lib/landing-schema";
 
 /**
@@ -13,25 +13,30 @@ export type LandingVersionListItem = Pick<LandingPageVersion, "id" | "version" |
   changedByName: string | null;
 };
 
-/** Whether a page is publicly served, from the per-page flags on app_settings. */
-export function isPageEnabled(settings: Pick<AppSettings, "landingEnabled" | "imprintEnabled" | "privacyEnabled">, page: SitePage): boolean {
+/** Whether a page is publicly served, from the per-page flags on the community. */
+export function isPageEnabled(settings: Pick<Community, "landingEnabled" | "imprintEnabled" | "privacyEnabled">, page: SitePage): boolean {
   return page === "landing" ? settings.landingEnabled : page === "imprint" ? settings.imprintEnabled : settings.privacyEnabled;
 }
 
-/** The app_settings column holding the enabled flag for a page. */
+/** The communities column holding the enabled flag for a page. */
 export function pageEnabledColumn(page: SitePage): "landingEnabled" | "imprintEnabled" | "privacyEnabled" {
   return page === "landing" ? "landingEnabled" : page === "imprint" ? "imprintEnabled" : "privacyEnabled";
 }
 
-export async function getCurrentLandingVersion(page: SitePage): Promise<LandingPageVersion | undefined> {
-  return db.query.landingPageVersions.findFirst({ where: eq(landingPageVersions.page, page), orderBy: desc(landingPageVersions.version) });
+export async function getCurrentLandingVersion(communityId: string, page: SitePage): Promise<LandingPageVersion | undefined> {
+  return db.query.landingPageVersions.findFirst({
+    where: and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, page)),
+    orderBy: desc(landingPageVersions.version),
+  });
 }
 
-export async function getLandingVersion(page: SitePage, version: number): Promise<LandingPageVersion | undefined> {
-  return db.query.landingPageVersions.findFirst({ where: and(eq(landingPageVersions.page, page), eq(landingPageVersions.version, version)) });
+export async function getLandingVersion(communityId: string, page: SitePage, version: number): Promise<LandingPageVersion | undefined> {
+  return db.query.landingPageVersions.findFirst({
+    where: and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, page), eq(landingPageVersions.version, version)),
+  });
 }
 
-export async function listLandingVersions(page: SitePage, limit = 50): Promise<LandingVersionListItem[]> {
+export async function listLandingVersions(communityId: string, page: SitePage, limit = 50): Promise<LandingVersionListItem[]> {
   const rows = await db
     .select({
       id: landingPageVersions.id,
@@ -43,7 +48,7 @@ export async function listLandingVersions(page: SitePage, limit = 50): Promise<L
     })
     .from(landingPageVersions)
     .leftJoin(users, eq(users.id, landingPageVersions.changedBy))
-    .where(eq(landingPageVersions.page, page))
+    .where(and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, page)))
     .orderBy(desc(landingPageVersions.version))
     .limit(limit);
   return rows;
@@ -52,7 +57,7 @@ export async function listLandingVersions(page: SitePage, limit = 50): Promise<L
 export type LandingMediaItem = Pick<MediaFile, "id" | "originalName" | "mime" | "size" | "width" | "height" | "createdAt">;
 
 /** Publicly served images usable on any site page (purpose "landing" – one shared pool). */
-export async function listLandingMedia(): Promise<LandingMediaItem[]> {
+export async function listLandingMedia(communityId: string): Promise<LandingMediaItem[]> {
   return db
     .select({
       id: mediaFiles.id,
@@ -64,7 +69,7 @@ export async function listLandingMedia(): Promise<LandingMediaItem[]> {
       createdAt: mediaFiles.createdAt,
     })
     .from(mediaFiles)
-    .where(eq(mediaFiles.purpose, "landing"))
+    .where(and(eq(mediaFiles.communityId, communityId), eq(mediaFiles.purpose, "landing")))
     .orderBy(desc(mediaFiles.createdAt))
     .limit(100);
 }
@@ -75,6 +80,7 @@ export type SaveLandingResult =
 
 /** Validates and appends a new version for one page (hard gate for UI and MCP alike). */
 export async function saveLandingVersion(
+  communityId: string,
   page: SitePage,
   definition: unknown,
   actorId: string,
@@ -84,31 +90,32 @@ export async function saveLandingVersion(
   const validated = validateLandingDefinition(definition);
   if (!validated.ok) return { ok: false, issues: validated.issues };
   const warnings = await mediaWarnings(validated.definition);
-  const row = await insertNextVersion(page, validated.definition, actorId, source, changeNote ?? null);
+  const row = await insertNextVersion(communityId, page, validated.definition, actorId, source, changeNote ?? null);
   return { ok: true, row, warnings };
 }
 
 /** Restores an older version by copying it forward as a new version (history stays intact). */
 export async function restoreLandingVersion(
+  communityId: string,
   page: SitePage,
   version: number,
   actorId: string,
   source: "ui" | "mcp",
   note?: string | null,
 ): Promise<LandingPageVersion | undefined> {
-  const v = await getLandingVersion(page, version);
+  const v = await getLandingVersion(communityId, page, version);
   if (!v) return undefined;
-  return insertNextVersion(page, v.definition, actorId, source, note ?? `restored version ${version}`);
+  return insertNextVersion(communityId, page, v.definition, actorId, source, note ?? `restored version ${version}`);
 }
 
-async function insertNextVersion(page: SitePage, definition: LandingDefinition, actorId: string, source: "ui" | "mcp", changeNote: string | null) {
-  // The unique index on (page, version) catches concurrent writers; one retry is enough for this low-traffic table.
+async function insertNextVersion(communityId: string, page: SitePage, definition: LandingDefinition, actorId: string, source: "ui" | "mcp", changeNote: string | null) {
+  // The unique index on (community, page, version) catches concurrent writers; one retry is enough here.
   for (let attempt = 0; ; attempt++) {
-    const current = await getCurrentLandingVersion(page);
+    const current = await getCurrentLandingVersion(communityId, page);
     try {
       const [row] = await db
         .insert(landingPageVersions)
-        .values({ page, version: (current?.version ?? 0) + 1, definition, source, changeNote, changedBy: actorId })
+        .values({ communityId, page, version: (current?.version ?? 0) + 1, definition, source, changeNote, changedBy: actorId })
         .returning();
       return row;
     } catch (err) {

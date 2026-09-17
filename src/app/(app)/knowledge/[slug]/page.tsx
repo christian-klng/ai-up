@@ -20,10 +20,10 @@ const TYPES: ContentType[] = ["markdown", "image", "video", "link", "structured"
 const TYPE_TEMPLATE_ICONS: Record<ContentType, string> = { markdown: "file-text", image: "image", video: "video", link: "link-2", structured: "list-checks" };
 
 export default async function AreaPage({ params, searchParams }: PageProps<"/knowledge/[slug]">) {
-  await requireUser();
+  const user = await requireUser();
   const { slug } = await params;
   const sp = await searchParams;
-  const area = await getAreaBySlug(slug);
+  const area = await getAreaBySlug(user.communityId, slug);
   if (!area) notFound();
   const type = TYPES.includes(sp.type as ContentType) ? (sp.type as ContentType) : undefined;
   const q = typeof sp.q === "string" ? sp.q : "";
@@ -31,7 +31,7 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
     getTranslations("knowledge"),
     getTranslations("common"),
     getFormatter(),
-    listContents({ areaId: area.id, type, query: q || undefined, sort: area.sortMode }),
+    listContents(user.communityId, { areaId: area.id, type, query: q || undefined, sort: area.sortMode }),
     countContentsByType(area.id),
   ]);
   const availableTypes = TYPES.filter((tp) => (typeCounts[tp] ?? 0) > 0);

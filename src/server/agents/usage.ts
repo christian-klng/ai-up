@@ -1,7 +1,7 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { agentMessages, agentThreads, users } from "@/server/db/schema";
-import { loadAppSettings } from "@/server/domain/settings";
+import { agentMessages, agentThreads, aiAgents, users } from "@/server/db/schema";
+import { loadCommunity } from "@/server/domain/communities";
 import { env } from "@/server/env";
 import { nextWeekStart, weekStart } from "@/lib/week";
 
@@ -50,9 +50,14 @@ async function sumUsage(userId: string, since: Date, outputWeight: number): Prom
   return { promptTokens, completionTokens, cost: Number(row?.cost ?? 0), weighted: weighted(promptTokens, completionTokens, outputWeight) };
 }
 
-export async function getBudgetStatus(userId: string): Promise<BudgetStatus> {
-  const settings = await loadAppSettings();
+/** The weekly quota is configured per community, so it is checked per community too. */
+export async function getBudgetStatus(communityId: string, userId: string): Promise<BudgetStatus> {
+  const settings = await loadCommunity(communityId);
   const now = new Date();
+  // A vanished community has no quota to enforce – the caller fails on the missing community anyway.
+  if (!settings) {
+    return { ...ZERO, budget: 0, outputWeight: 1, percent: 0, exceeded: false, resetsAt: nextWeekStart(now, env.APP_TIMEZONE) };
+  }
   const since = weekStart(now, env.APP_TIMEZONE);
   const totals = settings.agentWeeklyTokenBudget > 0 ? await sumUsage(userId, since, settings.agentOutputTokenWeight) : ZERO;
   const budget = settings.agentWeeklyTokenBudget;
@@ -77,8 +82,8 @@ export function weighUsage(promptTokens: number, completionTokens: number, outpu
 export type MemberUsage = { userId: string; name: string; email: string } & UsageTotals;
 
 /** Admin overview: this week's consumption per member, biggest first. */
-export async function listWeeklyUsage(): Promise<{ since: Date; budget: number; outputWeight: number; rows: MemberUsage[] }> {
-  const settings = await loadAppSettings();
+export async function listWeeklyUsage(communityId: string): Promise<{ since: Date; budget: number; outputWeight: number; rows: MemberUsage[] }> {
+  const settings = await loadCommunity(communityId);
   const since = weekStart(new Date(), env.APP_TIMEZONE);
   const rows = await db
     .select({
@@ -92,18 +97,20 @@ export async function listWeeklyUsage(): Promise<{ since: Date; budget: number; 
     .from(agentMessages)
     .innerJoin(agentThreads, eq(agentThreads.id, agentMessages.threadId))
     .innerJoin(users, eq(users.id, agentThreads.userId))
-    .where(gte(agentMessages.createdAt, since))
+    .innerJoin(aiAgents, eq(aiAgents.id, agentThreads.agentId))
+    .where(and(gte(agentMessages.createdAt, since), eq(aiAgents.communityId, communityId)))
     .groupBy(users.id, users.name, users.email);
 
+  const outputWeight = settings?.agentOutputTokenWeight ?? 1;
   return {
     since,
-    budget: settings.agentWeeklyTokenBudget,
-    outputWeight: settings.agentOutputTokenWeight,
+    budget: settings?.agentWeeklyTokenBudget ?? 0,
+    outputWeight,
     rows: rows
       .map((r) => {
         const promptTokens = Number(r.promptTokens);
         const completionTokens = Number(r.completionTokens);
-        return { userId: r.userId, name: r.name, email: r.email, promptTokens, completionTokens, cost: Number(r.cost), weighted: weighted(promptTokens, completionTokens, settings.agentOutputTokenWeight) };
+        return { userId: r.userId, name: r.name, email: r.email, promptTokens, completionTokens, cost: Number(r.cost), weighted: weighted(promptTokens, completionTokens, outputWeight) };
       })
       .sort((a, b) => b.weighted - a.weighted),
   };

@@ -9,14 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
 export default async function MembersPage({ searchParams }: PageProps<"/members">) {
-  await requireUser();
+  const user = await requireUser();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q : "";
   const [t, tCommon, format, members] = await Promise.all([
     getTranslations("members"),
     getTranslations("common"),
     getFormatter(),
-    listActiveMembers(q || undefined),
+    listActiveMembers(user.communityId, q || undefined),
   ]);
 
   return (

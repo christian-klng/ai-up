@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import type { TemplateEvaluation } from "@/lib/structures/evaluation";
@@ -48,24 +48,27 @@ export const users = pgTable(
     emailVerified: boolean("email_verified").notNull().default(false),
     image: text("image"),
     // --- AI-Up extensions ---
+    /**
+     * @deprecated Never read for authorization – what someone may do is decided per community by
+     * `community_members.role`. The column is kept so the migration is reversible and Better Auth's
+     * additionalFields keep matching; remove it once no installation needs to roll back.
+     */
     role: userRoleEnum("role").notNull().default("member"),
+    /**
+     * Account status, *not* membership: `active` = may sign in at all, `suspended` = locked out
+     * platform-wide, `pending` = not approved anywhere yet. Per-community approval lives in
+     * `community_members.status`.
+     */
     status: userStatusEnum("status").notNull().default("pending"),
     locale: localeEnum("locale").notNull().default("de"),
     bio: text("bio"),
     avatarMediaId: uuid("avatar_media_id"),
-    registrationMessage: text("registration_message"),
-    approvedAt: timestamp("approved_at", { withTimezone: true }),
-    approvedBy: text("approved_by"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
-    /** System bot (workflow messages); hidden from member lists, cannot log in */
+    /** System bot (workflow messages); hidden from member lists, cannot log in. One per community. */
     isBot: boolean("is_bot").notNull().default(false),
-    /** Meeting invite link this account was created through (null = regular registration) */
-    invitedViaId: uuid("invited_via_id").references((): AnyPgColumn => meetingInvites.id, { onDelete: "set null" }),
-    /** Set once the invited member has been taken to the meeting page (one-time redirect from /home) */
-    inviteLandedAt: timestamp("invite_landed_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("users_email_idx").on(t.email), index("users_status_idx").on(t.status), index("users_invited_via_idx").on(t.invitedViaId)],
+  (t) => [uniqueIndex("users_email_idx").on(t.email), index("users_status_idx").on(t.status)],
 );
 
 export const sessions = pgTable(
@@ -118,7 +121,8 @@ export const verifications = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// App settings (singleton row, id = "default")
+// Communities (tenants). The root community is the installation itself (id = ROOT_COMMUNITY_ID);
+// members may create sub-communities when the root allows it (see docs/communities.md).
 // ---------------------------------------------------------------------------
 
 export type ThemeSettings = {
@@ -130,31 +134,170 @@ export type ThemeSettings = {
   mode: "light" | "dark" | "system";
 };
 
-export const appSettings = pgTable("app_settings", {
-  id: text("id").primaryKey().default("default"),
-  name: text("name").notNull().default("AI-Up"),
-  tagline: text("tagline"),
-  purpose: text("purpose"),
-  logoMediaId: uuid("logo_media_id"),
-  faviconMediaId: uuid("favicon_media_id"),
-  theme: jsonb("theme").$type<ThemeSettings>().notNull().default({ primaryColor: "#2563eb", radius: 0.5, mode: "system" }),
-  defaultLocale: localeEnum("default_locale").notNull().default("de"),
-  /** @deprecated Seed source for the system agent's name; the live name lives in ai_agents. */
-  botName: text("bot_name").notNull().default("Assistent"),
-  /** Weekly agent token quota per member (weighted, see src/server/agents/usage.ts). 0 = no limit. */
-  agentWeeklyTokenBudget: integer("agent_weekly_token_budget").notNull().default(0),
-  /** Output tokens cost several times what input costs – this factor makes one comparable number. */
-  agentOutputTokenWeight: integer("agent_output_token_weight").notNull().default(4),
-  /** Serve the public landing page at "/"; when false, "/" redirects to /login resp. /home. */
-  landingEnabled: boolean("landing_enabled").notNull().default(false),
-  /** Serve the public imprint page at /imprint (404 when disabled). */
-  imprintEnabled: boolean("imprint_enabled").notNull().default(false),
-  /** Serve the public privacy page at /privacy (404 when disabled). */
-  privacyEnabled: boolean("privacy_enabled").notNull().default(false),
-  /** Encrypted JSON blobs for integrations are stored in dedicated tables later; keep generic extras here. */
-  extra: jsonb("extra").$type<Record<string, unknown>>().notNull().default({}),
-  ...timestamps,
+/**
+ * The installation's own community. It owns everything that existed before communities were
+ * introduced, is never deletable, and is the only one whose landing page is served on the main
+ * domain. Kept as the literal "default" so the pre-existing app_settings row carries over.
+ */
+export const ROOT_COMMUNITY_ID = "default";
+
+/**
+ * One community. Was `app_settings` (a singleton) until 16.09.2026 – every column up to
+ * `extra` is unchanged, which is why the migration renames the table instead of recreating it.
+ *
+ * Sub-communities (`parent_id` set) have all features of a normal community except
+ * *Integrationen*: LiveKit and the storage layer are shared with the root (see domain/integrations.ts).
+ */
+export const communities = pgTable(
+  "communities",
+  {
+    id: text("id").primaryKey().default(ROOT_COMMUNITY_ID),
+    /** url segment for /c/<slug>/… and the sub-domain label; unique across the platform */
+    slug: text("slug").notNull(),
+    /** null = the root community; exactly one level is allowed (see domain/communities.ts) */
+    parentId: text("parent_id").references((): AnyPgColumn => communities.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default("AI-Up"),
+    tagline: text("tagline"),
+    purpose: text("purpose"),
+    logoMediaId: uuid("logo_media_id"),
+    faviconMediaId: uuid("favicon_media_id"),
+    theme: jsonb("theme").$type<ThemeSettings>().notNull().default({ primaryColor: "#2563eb", radius: 0.5, mode: "system" }),
+    defaultLocale: localeEnum("default_locale").notNull().default("de"),
+    /** @deprecated Seed source for the system agent's name; the live name lives in ai_agents. */
+    botName: text("bot_name").notNull().default("Assistent"),
+    /** Weekly agent token quota per member (weighted, see src/server/agents/usage.ts). 0 = no limit. */
+    agentWeeklyTokenBudget: integer("agent_weekly_token_budget").notNull().default(0),
+    /** Output tokens cost several times what input costs – this factor makes one comparable number. */
+    agentOutputTokenWeight: integer("agent_output_token_weight").notNull().default(4),
+    /** Serve the public landing page at "/"; when false, "/" redirects to /login resp. /home. */
+    landingEnabled: boolean("landing_enabled").notNull().default(false),
+    /** Serve the public imprint page at /imprint (404 when disabled). */
+    imprintEnabled: boolean("imprint_enabled").notNull().default(false),
+    /** Serve the public privacy page at /privacy (404 when disabled). */
+    privacyEnabled: boolean("privacy_enabled").notNull().default(false),
+    /** Root community only: may members create sub-communities? */
+    allowMemberSubcommunities: boolean("allow_member_subcommunities").notNull().default(false),
+    /** Is the public registration form open for this community? Sub-communities start closed. */
+    allowRegistration: boolean("allow_registration").notNull().default(true),
+    /** Encrypted JSON blobs for integrations are stored in dedicated tables later; keep generic extras here. */
+    extra: jsonb("extra").$type<Record<string, unknown>>().notNull().default({}),
+    createdBy: text("created_by"),
+    /** Soft delete: blocked immediately, purged by a worker job after the grace period. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("communities_slug_idx").on(t.slug), index("communities_parent_idx").on(t.parentId)],
+);
+
+/**
+ * `community_id` for everything that belongs to exactly one community. A factory (not a shared
+ * object) because each table needs its own column builders.
+ */
+const communityScope = () => ({
+  communityId: text("community_id")
+    .notNull()
+    .references(() => communities.id, { onDelete: "cascade" }),
 });
+
+/** Same, but `null` means "belongs to the platform, not to a community" (account avatars, …). */
+const optionalCommunityScope = () => ({
+  communityId: text("community_id").references(() => communities.id, { onDelete: "cascade" }),
+});
+
+export const memberRoleEnum = pgEnum("member_role", ["member", "admin"]);
+export const memberStatusEnum = pgEnum("member_status", ["pending", "active", "suspended"]);
+
+/**
+ * Membership of one account in one community. This – not `users.role` – decides what someone may
+ * do: the same account can be an admin in one community and a pending applicant in another.
+ * The approval workflow (registration message, approver) lives here for the same reason.
+ */
+export const communityMembers = pgTable(
+  "community_members",
+  {
+    communityId: text("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: memberRoleEnum("role").notNull().default("member"),
+    status: memberStatusEnum("status").notNull().default("pending"),
+    registrationMessage: text("registration_message"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedBy: text("approved_by"),
+    /** Meeting invite link this membership was created through (null = regular registration) */
+    invitedViaId: uuid("invited_via_id").references((): AnyPgColumn => meetingInvites.id, { onDelete: "set null" }),
+    /** Set once the invited member has been taken to the meeting page (one-time redirect from /home) */
+    inviteLandedAt: timestamp("invite_landed_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.communityId, t.userId] }),
+    index("community_members_user_idx").on(t.userId),
+    index("community_members_status_idx").on(t.communityId, t.status),
+  ],
+);
+
+/**
+ * The shareable join link of a community (one per community, admins only, off by default).
+ * Mirrors `meeting_invites`: anyone holding an enabled link becomes an active member right away –
+ * the admin vouches by switching it on.
+ */
+export const communityInvites = pgTable(
+  "community_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: text("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** URL-safe random secret; the public URL is /join/<token> */
+    token: text("token").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    useCount: integer("use_count").notNull().default(0),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("community_invites_token_idx").on(t.token), uniqueIndex("community_invites_community_idx").on(t.communityId)],
+);
+
+/**
+ * A community's own domain (stage B, docs/communities.md §7). Only *custom* hosts live here – a
+ * sub-domain of the app host is the community's slug and needs no row (§7.2, deviation noted there).
+ *
+ * A host is worthless until `verified_at` is set: it is proof that whoever entered it controls the
+ * DNS. Without that proof anyone could claim a foreign domain, and the proxy would ask a certificate
+ * authority for a certificate in its name. Unverified rows are therefore ignored everywhere except
+ * in the admin screen that shows the visitor what to configure.
+ */
+export const communityDomains = pgTable(
+  "community_domains",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: text("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** Lowercase, no port, no trailing dot – exactly what a `Host:` header carries. */
+    host: text("host").notNull(),
+    /** Random value the owner publishes as TXT `_aiup-verify.<host>`; regenerated on every re-add. */
+    verifyToken: text("verify_token").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    /** Throttles the DNS lookup – checking is cheap for us and noisy for the resolver. */
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    /** The host links to this community are built with. At most one per community. */
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("community_domains_host_idx").on(t.host),
+    index("community_domains_community_idx").on(t.communityId),
+    // One primary per community, enforced by the database rather than by whoever writes next.
+    uniqueIndex("community_domains_primary_idx").on(t.communityId).where(sql`${t.isPrimary}`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Landing page (singleton like app_settings; append-only versions, current = max version)
@@ -164,6 +307,7 @@ export const landingPageVersions = pgTable(
   "landing_page_versions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     /** Which public page this version belongs to: landing | imprint | privacy */
     page: text("page").notNull().default("landing"),
     version: integer("version").notNull(),
@@ -174,7 +318,7 @@ export const landingPageVersions = pgTable(
     changedBy: text("changed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("landing_page_versions_page_version_idx").on(t.page, t.version)],
+  (t) => [uniqueIndex("landing_page_versions_page_version_idx").on(t.communityId, t.page, t.version)],
 );
 
 // ---------------------------------------------------------------------------
@@ -187,6 +331,7 @@ export const mediaFiles = pgTable(
   "media_files",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...optionalCommunityScope(),
     kind: mediaKindEnum("kind").notNull(),
     storagePath: text("storage_path").notNull(),
     originalName: text("original_name").notNull(),
@@ -203,7 +348,7 @@ export const mediaFiles = pgTable(
     uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("media_files_uploaded_by_idx").on(t.uploadedBy), index("media_files_sha_idx").on(t.sha256)],
+  (t) => [index("media_files_uploaded_by_idx").on(t.uploadedBy), index("media_files_sha_idx").on(t.sha256), index("media_files_community_idx").on(t.communityId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -214,6 +359,7 @@ export const apiKeys = pgTable(
   "api_keys",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -237,6 +383,7 @@ export const notifications = pgTable(
   "notifications",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...optionalCommunityScope(),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -266,6 +413,7 @@ export const contactRequests = pgTable(
   "contact_requests",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     requesterId: text("requester_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -280,7 +428,7 @@ export const contactRequests = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex("contact_requests_pair_idx").on(t.requesterId, t.addresseeId),
+    uniqueIndex("contact_requests_pair_idx").on(t.communityId, t.requesterId, t.addresseeId),
     index("contact_requests_addressee_idx").on(t.addresseeId, t.status),
     index("contact_requests_requester_idx").on(t.requesterId, t.status),
   ],
@@ -292,6 +440,7 @@ export const conversations = pgTable(
   "conversations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     kind: conversationKindEnum("kind").notNull().default("direct"),
     title: text("title"),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
@@ -361,6 +510,7 @@ export const workflows = pgTable(
   "workflows",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     name: text("name").notNull(),
     description: text("description"),
     status: workflowStatusEnum("status").notNull().default("draft"),
@@ -403,6 +553,7 @@ export const workflowRuns = pgTable(
   "workflow_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     workflowId: uuid("workflow_id")
       .notNull()
       .references(() => workflows.id, { onDelete: "cascade" }),
@@ -471,6 +622,7 @@ export const llmProviders = pgTable(
   "llm_providers",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     name: text("name").notNull(),
     kind: llmProviderKindEnum("kind").notNull().default("generic"),
     baseUrl: text("base_url").notNull(),
@@ -534,6 +686,7 @@ export const aiAgents = pgTable(
   "ai_agents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     /** url segment: /agents/<slug> */
     slug: text("slug").notNull(),
     name: text("name").notNull(),
@@ -559,7 +712,12 @@ export const aiAgents = pgTable(
     enabled: boolean("enabled").notNull().default(true),
     ...timestamps,
   },
-  (t) => [uniqueIndex("ai_agents_slug_idx").on(t.slug), index("ai_agents_owner_idx").on(t.ownerId)],
+  (t) => [
+    uniqueIndex("ai_agents_slug_idx").on(t.communityId, t.slug),
+    index("ai_agents_owner_idx").on(t.ownerId),
+    // One system agent per community (partial index: only is_system rows take part).
+    uniqueIndex("ai_agents_system_idx").on(t.communityId).where(sql`${t.isSystem}`),
+  ],
 );
 
 /** Work mode of a thread: read-only assistance vs. curating the collections (write tools). */
@@ -666,6 +824,7 @@ export const questions = pgTable(
   "questions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     /** Stable key from the ask_user step config – the `question.answered` trigger filters on it */
     questionKey: text("question_key").notNull(),
     workflowId: uuid("workflow_id").references(() => workflows.id, { onDelete: "set null" }),
@@ -723,6 +882,7 @@ export const meetingSpaces = pgTable(
   "meeting_spaces",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     purpose: text("purpose").notNull(),
@@ -734,7 +894,7 @@ export const meetingSpaces = pgTable(
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("meeting_spaces_slug_idx").on(t.slug), index("meeting_spaces_sort_idx").on(t.sortOrder)],
+  (t) => [uniqueIndex("meeting_spaces_slug_idx").on(t.communityId, t.slug), index("meeting_spaces_sort_idx").on(t.communityId, t.sortOrder)],
 );
 
 export const meetingKindEnum = pgEnum("meeting_kind", ["protocol", "audio", "video"]);
@@ -876,6 +1036,7 @@ export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...optionalCommunityScope(),
     actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
     action: text("action").notNull(),
     targetType: text("target_type"),
@@ -895,6 +1056,7 @@ export const knowledgeAreas = pgTable(
   "knowledge_areas",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     /** Required: what this area is for. Shown to members and embedded into LLM prompts. */
@@ -910,7 +1072,7 @@ export const knowledgeAreas = pgTable(
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("knowledge_areas_slug_idx").on(t.slug), index("knowledge_areas_sort_idx").on(t.sortOrder)],
+  (t) => [uniqueIndex("knowledge_areas_slug_idx").on(t.communityId, t.slug), index("knowledge_areas_sort_idx").on(t.communityId, t.sortOrder)],
 );
 
 export const contentTypeEnum = pgEnum("content_type", ["markdown", "image", "video", "link", "structured"]);
@@ -928,6 +1090,7 @@ export const contentTemplates = pgTable(
   "content_templates",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...optionalCommunityScope(),
     name: text("name").notNull(),
     description: text("description"),
     /** lucide icon key, same set as collection icons */
@@ -1126,7 +1289,28 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   notifications: many(notifications),
   avatar: one(mediaFiles, { fields: [users.avatarMediaId], references: [mediaFiles.id] }),
-  invitedVia: one(meetingInvites, { fields: [users.invitedViaId], references: [meetingInvites.id] }),
+  memberships: many(communityMembers),
+}));
+
+export const communitiesRelations = relations(communities, ({ one, many }) => ({
+  parent: one(communities, { fields: [communities.parentId], references: [communities.id], relationName: "parent" }),
+  children: many(communities, { relationName: "parent" }),
+  members: many(communityMembers),
+  logo: one(mediaFiles, { fields: [communities.logoMediaId], references: [mediaFiles.id] }),
+}));
+
+export const communityMembersRelations = relations(communityMembers, ({ one }) => ({
+  community: one(communities, { fields: [communityMembers.communityId], references: [communities.id] }),
+  user: one(users, { fields: [communityMembers.userId], references: [users.id] }),
+  invitedVia: one(meetingInvites, { fields: [communityMembers.invitedViaId], references: [meetingInvites.id] }),
+}));
+
+export const communityInvitesRelations = relations(communityInvites, ({ one }) => ({
+  community: one(communities, { fields: [communityInvites.communityId], references: [communities.id] }),
+}));
+
+export const communityDomainsRelations = relations(communityDomains, ({ one }) => ({
+  community: one(communities, { fields: [communityDomains.communityId], references: [communities.id] }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -1189,7 +1373,7 @@ export const meetingParticipantsRelations = relations(meetingParticipants, ({ on
 export const meetingInvitesRelations = relations(meetingInvites, ({ one, many }) => ({
   meeting: one(meetings, { fields: [meetingInvites.meetingId], references: [meetings.id] }),
   creator: one(users, { fields: [meetingInvites.createdBy], references: [users.id] }),
-  members: many(users),
+  members: many(communityMembers),
 }));
 
 export const messagesRelations = relations(messages, ({ one }) => ({
@@ -1200,7 +1384,13 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 // Convenience types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type AppSettings = typeof appSettings.$inferSelect;
+export type Community = typeof communities.$inferSelect;
+export type NewCommunity = typeof communities.$inferInsert;
+export type CommunityMember = typeof communityMembers.$inferSelect;
+export type MemberRole = CommunityMember["role"];
+export type MemberStatus = CommunityMember["status"];
+export type CommunityInvite = typeof communityInvites.$inferSelect;
+export type CommunityDomain = typeof communityDomains.$inferSelect;
 export type LandingPageVersion = typeof landingPageVersions.$inferSelect;
 export type MediaFile = typeof mediaFiles.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;

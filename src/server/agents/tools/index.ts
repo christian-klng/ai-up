@@ -20,6 +20,8 @@ import { MAX_WRITES_PER_TURN } from "@/lib/agents";
  */
 
 export type AgentToolContext = {
+  /** The community the thread lives in – every tool reads and writes only inside it. */
+  communityId: string;
   userId: string;
   userRole: "member" | "admin";
   threadId: string;
@@ -77,7 +79,7 @@ const MAX_ENTRY_CHARS = 20_000;
 /** Resolves the collection the model named (id or slug) and checks it against the thread's scope. */
 async function resolveArea(ref: string | undefined, ctx: AgentToolContext): Promise<{ id: string; name: string } | undefined> {
   if (!ref) return undefined;
-  const area = (await getAreaBySlug(ref)) ?? (/^[0-9a-f-]{36}$/i.test(ref) ? await getAreaById(ref) : undefined);
+  const area = (await getAreaBySlug(ctx.communityId, ref)) ?? (/^[0-9a-f-]{36}$/i.test(ref) ? await getAreaById(ctx.communityId, ref) : undefined);
   if (!area) return undefined;
   if (ctx.readAreaIds.length && !ctx.readAreaIds.includes(area.id) && !ctx.writeAreaIds.includes(area.id)) return undefined;
   return { id: area.id, name: area.name };
@@ -104,7 +106,7 @@ register({
   schema: z.object({}),
   access: "read",
   async run(_input, ctx) {
-    const areas = await listAreas();
+    const areas = await listAreas(ctx.communityId);
     const allowed = allowedAreaIds(ctx);
     const visible = allowed.length ? areas.filter((a) => allowed.includes(a.id)) : areas;
     if (!visible.length) return "No collections available in this conversation.";
@@ -124,7 +126,7 @@ register({
   async run(input, ctx) {
     const area = await resolveArea(input.collection, ctx);
     if (!area) return `Collection "${input.collection}" does not exist or is not part of this conversation.`;
-    const items = await listContents({ areaId: area.id, limit: input.limit ?? 25, sort: "updated" });
+    const items = await listContents(ctx.communityId, { areaId: area.id, limit: input.limit ?? 25, sort: "updated" });
     if (!items.length) return `Collection "${area.name}" has no entries yet.`;
     return items.map((c) => `- ${c.title} (id: ${c.id}${c.pinned ? ", pinned" : ""}, updated: ${c.updatedAt.toISOString().slice(0, 10)})`).join("\n");
   },
@@ -148,7 +150,7 @@ register({
       if (!area) return `Collection "${input.collection}" does not exist or is not part of this conversation.`;
       areaId = area.id;
     }
-    const items = await listContents({ areaId, query: input.query, limit: input.limit ?? 15 });
+    const items = await listContents(ctx.communityId, { areaId, query: input.query, limit: input.limit ?? 15 });
     const allowed = allowedAreaIds(ctx);
     const visible = allowed.length ? items.filter((c) => allowed.includes(c.areaId)) : items;
     if (!visible.length) return `No entry matches "${input.query}".`;
@@ -163,7 +165,7 @@ register({
   schema: z.object({ id: z.string().describe("entry id from list_entries or search_entries") }),
   access: "read",
   async run(input, ctx) {
-    const entry = await getContent(input.id);
+    const entry = await getContent(ctx.communityId, input.id);
     if (!entry) return `No entry with id ${input.id}.`;
     const allowed = allowedAreaIds(ctx);
     if (allowed.length && !allowed.includes(entry.areaId)) return "This entry belongs to a collection that is not part of this conversation.";
@@ -200,8 +202,8 @@ register({
   labels: { de: "Vorlage ansehen", en: "Read template" },
   schema: z.object({ templateId: z.string().describe("template id from list_templates") }),
   access: "write",
-  async run(input) {
-    const tpl = await getTemplateById(input.templateId);
+  async run(input, ctx) {
+    const tpl = await getTemplateById(ctx.communityId, input.templateId);
     if (!tpl) return `No template with id ${input.templateId}.`;
     return describeStructure(tpl.name, tpl.definition);
   },
@@ -224,13 +226,13 @@ register({
     const area = await resolveArea(input.collection, ctx);
     if (!area) return `Collection "${input.collection}" does not exist or is not part of this conversation.`;
     if (!mayWrite(area.id, ctx)) return `Collection "${area.name}" is read-only in this conversation. The user can allow writing in the panel on the right.`;
-    const tpl = await getTemplateById(input.templateId);
+    const tpl = await getTemplateById(ctx.communityId, input.templateId);
     if (!tpl) return `No template with id ${input.templateId}.`;
     if (!(await isTemplateAvailableForArea(area.id, tpl.id))) return `Template "${tpl.name}" is not available in collection "${area.name}".`;
 
     const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, input.title, input.answers);
     if (!built.ok) return `The answers do not fit the template:\n${built.issues.map((i) => `- ${i.key}: ${i.code}${i.count === undefined ? "" : ` (${i.count})`}`).join("\n")}`;
-    const content = await createContent(area.id, "structured", built.input, ctx.userId, agentOrigin(ctx));
+    const content = await createContent(ctx.communityId, area.id, "structured", built.input, ctx.userId, agentOrigin(ctx));
     ctx.written.add(content.id);
     return `Created "${content.title}" in ${area.name} (id: ${content.id}).`;
   },
@@ -250,7 +252,7 @@ register({
   access: "write",
   async run(input, ctx) {
     if (ctx.written.size >= MAX_WRITES_PER_TURN) return `Write limit of ${MAX_WRITES_PER_TURN} entries per answer reached. Tell the user what is still missing.`;
-    const entry = await getContent(input.id);
+    const entry = await getContent(ctx.communityId, input.id);
     if (!entry || !entry.version) return `No entry with id ${input.id}.`;
     if (!mayWrite(entry.areaId, ctx)) return "This entry belongs to a collection that is read-only in this conversation.";
     // The agent acts for the user, so the app's own rule decides (docs/ki-agenten.md 1.4).
@@ -265,7 +267,7 @@ register({
       { changeNote: input.changeNote ?? null, prevEnrichment: snapshot.enrichment, imageMediaId: entry.version.mediaId },
     );
     if (!built.ok) return `The answers do not fit the entry's template:\n${built.issues.map((i) => `- ${i.key}: ${i.code}${i.count === undefined ? "" : ` (${i.count})`}`).join("\n")}`;
-    const updated = await addContentVersion(entry.id, { ...built.input, meta: { ...entry.version.meta, ...built.input.meta } }, ctx.userId, agentOrigin(ctx));
+    const updated = await addContentVersion(ctx.communityId, entry.id, { ...built.input, meta: { ...entry.version.meta, ...built.input.meta } }, ctx.userId, agentOrigin(ctx));
     if (!updated) return `Entry ${input.id} could not be updated.`;
     ctx.written.add(updated.id);
     return `Updated "${updated.title}" (version ${updated.versionCount}).`;

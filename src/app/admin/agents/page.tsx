@@ -3,7 +3,7 @@ import { requireAdmin } from "@/server/auth/session";
 import { ensureSystemAgent, DEFAULT_AGENT_SYSTEM_PROMPT } from "@/server/domain/agents";
 import { listProviderOptions } from "@/server/llm/providers";
 import { listWeeklyUsage } from "@/server/agents/usage";
-import { getAppSettings } from "@/server/domain/settings";
+import { requireCommunity } from "@/server/auth/session";
 import { getFormatter } from "next-intl/server";
 import { PageHeader } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
@@ -11,13 +11,13 @@ import { AgentForm } from "./agent-form";
 import { QuotaForm } from "./quota-form";
 
 export default async function AdminAgentsPage() {
-  await requireAdmin();
+  const user = await requireAdmin();
   const [t, agent, providers, settings, usage, format] = await Promise.all([
     getTranslations("admin.agents"),
-    ensureSystemAgent(),
-    listProviderOptions(),
-    getAppSettings(),
-    listWeeklyUsage(),
+    ensureSystemAgent(user.communityId),
+    listProviderOptions(user.communityId),
+    requireCommunity(),
+    listWeeklyUsage(user.communityId),
     getFormatter(),
   ]);
 

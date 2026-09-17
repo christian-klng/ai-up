@@ -12,9 +12,9 @@ import { StatsPanel } from "./stats-panel";
 import { WorkflowRowActions } from "./row-actions";
 
 export default async function AdminWorkflowsPage() {
-  await requireAdmin();
+  const user = await requireAdmin();
   await loadRegistry();
-  const [t, tw, format, locale, items, stats] = await Promise.all([getTranslations("admin.workflows"), getTranslations("workflows"), getFormatter(), getLocale(), listWorkflows(), workflowStats(null, 14)]);
+  const [t, tw, format, locale, items, stats] = await Promise.all([getTranslations("admin.workflows"), getTranslations("workflows"), getFormatter(), getLocale(), listWorkflows(user.communityId), workflowStats(user.communityId, null, 14)]);
   const loc = locale === "en" ? "en" : "de";
 
   return (

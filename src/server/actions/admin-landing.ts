@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { assertAdmin } from "@/server/auth/session";
-import { updateAppSettings } from "@/server/domain/settings";
+// The public pages belong to whoever owns a host: the root always, every community once
+// sub-domains are switched on (see canManagePublicPages).
+import { assertPagesAdmin } from "@/server/auth/session";
+import { updateCommunity } from "@/server/domain/communities";
 import { pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
 import { SITE_PAGES, type SitePage } from "@/lib/landing-schema";
 import { db } from "@/server/db/client";
@@ -15,10 +17,10 @@ const pageSchema = z.enum(SITE_PAGES);
 
 export async function setPageEnabledAction(page: SitePage, enabled: boolean): Promise<AdminFormState> {
   try {
-    const admin = await assertAdmin();
+    const admin = await assertPagesAdmin();
     const p = pageSchema.parse(page);
-    await updateAppSettings({ [pageEnabledColumn(p)]: enabled });
-    await db.insert(auditLog).values({ actorId: admin.id, action: "settings.page.toggled", targetType: "settings", targetId: "default", details: { page: p, enabled } });
+    await updateCommunity(admin.communityId, { [pageEnabledColumn(p)]: enabled });
+    await db.insert(auditLog).values({ communityId: admin.communityId, actorId: admin.id, action: "settings.page.toggled", targetType: "settings", targetId: "default", details: { page: p, enabled } });
     revalidatePath("/", "layout");
     return { status: "saved" };
   } catch (err) {
@@ -29,11 +31,11 @@ export async function setPageEnabledAction(page: SitePage, enabled: boolean): Pr
 
 export async function restoreLandingVersionAction(page: SitePage, version: number): Promise<AdminFormState> {
   try {
-    const admin = await assertAdmin();
+    const admin = await assertPagesAdmin();
     const p = pageSchema.parse(page);
-    const row = await restoreLandingVersion(p, version, admin.id, "ui");
+    const row = await restoreLandingVersion(admin.communityId, p, version, admin.id, "ui");
     if (!row) return { status: "error", message: "version not found" };
-    await db.insert(auditLog).values({ actorId: admin.id, action: "landing.restored", targetType: "landing", targetId: row.id, details: { page: p, restored: version, newVersion: row.version } });
+    await db.insert(auditLog).values({ communityId: admin.communityId, actorId: admin.id, action: "landing.restored", targetType: "landing", targetId: row.id, details: { page: p, restored: version, newVersion: row.version } });
     revalidatePath("/", "layout");
     return { status: "saved" };
   } catch (err) {
@@ -47,11 +49,11 @@ export type InlineSaveResult = { ok: true; version: number } | { ok: false; issu
 /** Saves a definition edited in the admin inline editor as a new version (source "ui"). */
 export async function saveLandingInlineAction(page: SitePage, definition: unknown): Promise<InlineSaveResult> {
   try {
-    const admin = await assertAdmin();
+    const admin = await assertPagesAdmin();
     const p = pageSchema.parse(page);
-    const res = await saveLandingVersion(p, definition, admin.id, "ui", "inline edit");
+    const res = await saveLandingVersion(admin.communityId, p, definition, admin.id, "ui", "inline edit");
     if (!res.ok) return { ok: false, issues: res.issues };
-    await db.insert(auditLog).values({ actorId: admin.id, action: "landing.updated", targetType: "landing", targetId: res.row.id, details: { page: p, version: res.row.version, via: "inline-editor" } });
+    await db.insert(auditLog).values({ communityId: admin.communityId, actorId: admin.id, action: "landing.updated", targetType: "landing", targetId: res.row.id, details: { page: p, version: res.row.version, via: "inline-editor" } });
     revalidatePath("/", "layout");
     return { ok: true, version: res.row.version };
   } catch (err) {

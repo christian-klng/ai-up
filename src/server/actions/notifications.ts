@@ -6,14 +6,14 @@ import { markAllNotificationsRead, markNotificationRead } from "@/server/domain/
 
 export async function markAllNotificationsReadAction(): Promise<void> {
   const user = await assertUser();
-  await markAllNotificationsRead(user.id);
+  await markAllNotificationsRead(user.id, user.communityId);
   revalidatePath("/notifications");
   revalidatePath("/", "layout");
 }
 
 export async function markNotificationReadAction(id: string): Promise<void> {
   const user = await assertUser();
-  await markNotificationRead(user.id, id);
+  await markNotificationRead(user.id, user.communityId, id);
   revalidatePath("/notifications");
   revalidatePath("/", "layout");
 }

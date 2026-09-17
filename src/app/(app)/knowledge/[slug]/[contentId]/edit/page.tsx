@@ -13,7 +13,7 @@ import { StructureFillForm } from "@/components/structures/structure-fill-form";
 export default async function EditContentPage({ params }: PageProps<"/knowledge/[slug]/[contentId]/edit">) {
   const user = await requireUser();
   const { slug, contentId } = await params;
-  const [area, content] = await Promise.all([getAreaBySlug(slug), getContent(contentId)]);
+  const [area, content] = await Promise.all([getAreaBySlug(user.communityId, slug), getContent(user.communityId, contentId)]);
   if (!area || !content || content.areaId !== area.id) notFound();
   if (!canEditContent(user, content)) redirect(`/knowledge/${slug}/${contentId}`);
   const v = content.version;
@@ -24,7 +24,7 @@ export default async function EditContentPage({ params }: PageProps<"/knowledge/
     if (!structureMeta) notFound();
     // The upgrade offer compares against the entry's OWN template — a deleted
     // template simply means the entry keeps its snapshot forever.
-    const [ts, template] = await Promise.all([getTranslations("knowledge.structured"), getTemplateById(structureMeta.structureId)]);
+    const [ts, template] = await Promise.all([getTranslations("knowledge.structured"), getTemplateById(user.communityId, structureMeta.structureId)]);
     const upgradeTo = template && template.version > structureMeta.structureVersion ? { version: template.version, definition: template.definition } : undefined;
     return (
       <div className="mx-auto max-w-3xl">

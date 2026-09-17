@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertAdmin } from "@/server/auth/session";
 import { getAgentById, updateAgent } from "@/server/domain/agents";
-import { updateAppSettings } from "@/server/domain/settings";
+import { updateCommunity } from "@/server/domain/communities";
 import { getCapabilityRow } from "@/server/llm/providers";
 import { statedReasoningLevels } from "@/server/llm/capabilities";
 import { REASONING_LEVELS } from "@/server/db/schema";
@@ -42,7 +42,7 @@ export async function saveAgentAction(agentId: string, _prev: AdminFormState, fo
     reasoningEffort: formData.get("reasoningEffort") ?? "none",
   });
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message };
-  const agent = await getAgentById(agentId);
+  const agent = await getAgentById(admin.communityId, agentId);
   if (!agent) return { status: "error", message: "not found" };
   const d = parsed.data;
 
@@ -55,6 +55,7 @@ export async function saveAgentAction(agentId: string, _prev: AdminFormState, fo
   }
 
   await updateAgent(
+    admin.communityId,
     agentId,
     {
       name: d.name,
@@ -70,7 +71,7 @@ export async function saveAgentAction(agentId: string, _prev: AdminFormState, fo
     admin.id,
   );
   // The bot user mirrors name and avatar of the system agent.
-  if (agent.isSystem) await ensureBotUser().catch((err) => logger.warn({ err }, "bot sync after agent update failed"));
+  if (agent.isSystem) await ensureBotUser(admin.communityId).catch((err) => logger.warn({ err }, "bot sync after agent update failed"));
   revalidatePath("/", "layout");
   return { status: "saved" };
 }
@@ -86,12 +87,13 @@ export async function uploadAgentAvatarAction(agentId: string, _prev: AdminFormS
       buffer: Buffer.from(await file.arrayBuffer()),
       originalName: file.name,
       purpose: "avatar",
+      communityId: admin.communityId,
       uploadedBy: admin.id,
       maxEdge: 512,
       square: true,
       thumbEdge: 96,
     });
-    await setAgentAvatar(agentId, media.id, admin.id);
+    await setAgentAvatar(admin.communityId, agentId, media.id, admin.id);
     return { status: "saved" };
   } catch (err) {
     logger.error({ err, agentId }, "agent avatar upload failed");
@@ -103,14 +105,14 @@ export async function uploadAgentAvatarAction(agentId: string, _prev: AdminFormS
 export async function rerollAgentAvatarAction(agentId: string): Promise<void> {
   const admin = await assertAdmin();
   const media = await generateRandomAvatar({ seed: agentId, salt: crypto.randomUUID(), uploadedBy: admin.id });
-  await setAgentAvatar(agentId, media.id, admin.id);
+  await setAgentAvatar(admin.communityId, agentId, media.id, admin.id);
 }
 
-async function setAgentAvatar(agentId: string, mediaId: string, actorId: string): Promise<void> {
-  const agent = await getAgentById(agentId);
+async function setAgentAvatar(communityId: string, agentId: string, mediaId: string, actorId: string): Promise<void> {
+  const agent = await getAgentById(communityId, agentId);
   if (!agent) return;
-  await updateAgent(agentId, { avatarMediaId: mediaId }, actorId);
-  if (agent.isSystem) await ensureBotUser().catch((err) => logger.warn({ err }, "bot sync after avatar change failed"));
+  await updateAgent(communityId, agentId, { avatarMediaId: mediaId }, actorId);
+  if (agent.isSystem) await ensureBotUser(communityId).catch((err) => logger.warn({ err }, "bot sync after avatar change failed"));
   revalidatePath("/", "layout");
 }
 
@@ -121,13 +123,13 @@ const quotaSchema = z.object({
 
 /** Weekly quota per member. 0 turns the limit off; the numbers keep being recorded either way. */
 export async function saveAgentQuotaAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await assertAdmin();
+  const admin = await assertAdmin();
   const parsed = quotaSchema.safeParse({
     agentWeeklyTokenBudget: formData.get("agentWeeklyTokenBudget"),
     agentOutputTokenWeight: formData.get("agentOutputTokenWeight"),
   });
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message };
-  await updateAppSettings(parsed.data);
+  await updateCommunity(admin.communityId, parsed.data);
   revalidatePath("/admin/agents");
   return { status: "saved" };
 }

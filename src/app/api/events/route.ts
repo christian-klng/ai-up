@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/server/auth/session";
 import { touchLastSeen } from "@/server/domain/users";
 import { createSubscriber } from "@/server/redis";
-import { BROADCAST_CHANNEL, userChannel } from "@/server/realtime/publish";
+import { communityChannel, userChannel } from "@/server/realtime/publish";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,14 @@ const PRESENCE_MS = 60_000;
 
 /**
  * Server-Sent Events stream per signed-in user.
- * Subscribes to the user's Redis channel + broadcast channel and forwards events as `data:` frames.
+ * Subscribes to the user's Redis channel + the channel of the community they are acting in, and
+ * forwards events as `data:` frames. Switching community reloads the page, so the stream is rebuilt.
  * Heartbeats keep proxies (Traefik/Coolify) from closing idle connections; presence is refreshed while connected.
  */
 export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user || user.status !== "active") return new Response("unauthorized", { status: 401 });
+  const communityId = user.communityId;
 
   const encoder = new TextEncoder();
   const sub = createSubscriber();
@@ -52,7 +54,7 @@ export async function GET(req: Request) {
       sub.on("message", (_channel, raw) => send(`data: ${raw}\n\n`));
       sub.on("error", () => cleanup());
       try {
-        await sub.subscribe(userChannel(user.id), BROADCAST_CHANNEL);
+        await sub.subscribe(userChannel(user.id), communityChannel(communityId));
       } catch (err) {
         logger.error({ err }, "sse: subscribe failed");
         cleanup();

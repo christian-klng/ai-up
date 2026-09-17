@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 
 export default async function MeetingsIndexPage() {
   const user = await requireUser();
-  const [t, tc, tAdmin, spaces] = await Promise.all([getTranslations("meetings"), getTranslations("common"), getTranslations("admin.meetings"), listSpaces()]);
+  const [t, tc, tAdmin, spaces] = await Promise.all([getTranslations("meetings"), getTranslations("common"), getTranslations("admin.meetings"), listSpaces(user.communityId)]);
   return (
     <div>
       <PageHeader title={t("title")} description={t("intro")} />

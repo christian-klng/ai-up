@@ -9,9 +9,9 @@ import { RunStatusBadge, formatDuration } from "@/components/workflows/run-statu
 import { RunDetail } from "./run-detail";
 
 export default async function RunDetailPage({ params }: PageProps<"/admin/workflows/[id]/runs/[runId]">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const { id, runId } = await params;
-  const [wf, run, t, tw, format] = await Promise.all([getWorkflow(id), getRunWithSteps(runId), getTranslations("admin.workflows"), getTranslations("workflows"), getFormatter()]);
+  const [wf, run, t, tw, format] = await Promise.all([getWorkflow(user.communityId, id), getRunWithSteps(user.communityId, runId), getTranslations("admin.workflows"), getTranslations("workflows"), getFormatter()]);
   if (!wf || !run || run.workflowId !== wf.id) notFound();
 
   return (

@@ -6,8 +6,8 @@ import { SpaceDialog } from "./space-dialog";
 import { SpaceList } from "./space-list";
 
 export default async function AdminMeetingSpacesPage() {
-  await requireAdmin();
-  const [t, spaces] = await Promise.all([getTranslations("admin.meetings"), listSpaces()]);
+  const user = await requireAdmin();
+  const [t, spaces] = await Promise.all([getTranslations("admin.meetings"), listSpaces(user.communityId)]);
   return (
     <div className="max-w-4xl">
       <PageHeader title={t("title")} description={t("intro")} actions={<SpaceDialog mode="create" />} />

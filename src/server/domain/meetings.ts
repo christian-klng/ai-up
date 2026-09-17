@@ -24,7 +24,7 @@ import { slugify } from "@/lib/slug";
 
 export type SpaceWithStats = MeetingSpace & { meetingCount: number; liveCount: number };
 
-export async function listSpaces(): Promise<SpaceWithStats[]> {
+export async function listSpaces(communityId: string): Promise<SpaceWithStats[]> {
   const rows = await db
     .select({
       space: meetingSpaces,
@@ -32,21 +32,32 @@ export async function listSpaces(): Promise<SpaceWithStats[]> {
       liveCount: sql<number>`(select count(*)::int from ${meetings} m where m.space_id = ${meetingSpaces}."id" and m.deleted_at is null and m.status = 'live')`,
     })
     .from(meetingSpaces)
+    .where(eq(meetingSpaces.communityId, communityId))
     .orderBy(asc(meetingSpaces.sortOrder), asc(meetingSpaces.name));
   return rows.map((r) => ({ ...r.space, meetingCount: r.meetingCount, liveCount: r.liveCount }));
 }
 
-export async function getSpaceBySlug(slug: string): Promise<MeetingSpace | undefined> {
-  return db.query.meetingSpaces.findFirst({ where: eq(meetingSpaces.slug, slug) });
+export async function getSpaceBySlug(communityId: string, slug: string): Promise<MeetingSpace | undefined> {
+  return db.query.meetingSpaces.findFirst({ where: and(eq(meetingSpaces.communityId, communityId), eq(meetingSpaces.slug, slug)) });
 }
-export async function getSpaceById(id: string): Promise<MeetingSpace | undefined> {
+
+/** A space inside a community; an id from elsewhere answers undefined (same as "not found"). */
+export async function getSpaceById(communityId: string, id: string): Promise<MeetingSpace | undefined> {
+  return db.query.meetingSpaces.findFirst({ where: and(eq(meetingSpaces.communityId, communityId), eq(meetingSpaces.id, id)) });
+}
+
+/** Unqualified lookup for paths that already know the community (events, webhooks). */
+async function spaceOf(id: string): Promise<MeetingSpace | undefined> {
   return db.query.meetingSpaces.findFirst({ where: eq(meetingSpaces.id, id) });
 }
 
-async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
+async function uniqueSlug(communityId: string, base: string, excludeId?: string): Promise<string> {
   let slug = slugify(base);
   for (let i = 2; i < 100; i++) {
-    const clash = await db.query.meetingSpaces.findFirst({ where: excludeId ? and(eq(meetingSpaces.slug, slug), ne(meetingSpaces.id, excludeId)) : eq(meetingSpaces.slug, slug), columns: { id: true } });
+    const clash = await db.query.meetingSpaces.findFirst({
+      where: and(eq(meetingSpaces.communityId, communityId), eq(meetingSpaces.slug, slug), excludeId ? ne(meetingSpaces.id, excludeId) : undefined),
+      columns: { id: true },
+    });
     if (!clash) return slug;
     slug = `${slugify(base)}-${i}`;
   }
@@ -55,38 +66,45 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
 
 export type SpaceInput = { name: string; purpose: string; description?: string | null; icon?: string; recordingDefault?: boolean };
 
-export async function createSpace(input: SpaceInput, actorId: string): Promise<MeetingSpace> {
-  const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${meetingSpaces.sortOrder}), -1)::int` }).from(meetingSpaces);
+export async function createSpace(communityId: string, input: SpaceInput, actorId: string): Promise<MeetingSpace> {
+  const [{ max }] = await db
+    .select({ max: sql<number>`coalesce(max(${meetingSpaces.sortOrder}), -1)::int` })
+    .from(meetingSpaces)
+    .where(eq(meetingSpaces.communityId, communityId));
   const [row] = await db
     .insert(meetingSpaces)
-    .values({ name: input.name.trim(), slug: await uniqueSlug(input.name), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? "calendar", recordingDefault: input.recordingDefault ?? true, sortOrder: max + 1, createdBy: actorId })
+    .values({ communityId, name: input.name.trim(), slug: await uniqueSlug(communityId, input.name), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? "calendar", recordingDefault: input.recordingDefault ?? true, sortOrder: max + 1, createdBy: actorId })
     .returning();
-  await db.insert(auditLog).values({ actorId, action: "meeting_space.created", targetType: "meeting_space", targetId: row.id, details: { name: row.name } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "meeting_space.created", targetType: "meeting_space", targetId: row.id, details: { name: row.name } });
   return row;
 }
 
-export async function updateSpace(id: string, input: SpaceInput, actorId: string): Promise<MeetingSpace | undefined> {
-  const existing = await getSpaceById(id);
+export async function updateSpace(communityId: string, id: string, input: SpaceInput, actorId: string): Promise<MeetingSpace | undefined> {
+  const existing = await getSpaceById(communityId, id);
   if (!existing) return undefined;
   const [row] = await db
     .update(meetingSpaces)
-    .set({ name: input.name.trim(), slug: existing.name.trim() === input.name.trim() ? existing.slug : await uniqueSlug(input.name, id), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? existing.icon, recordingDefault: input.recordingDefault ?? existing.recordingDefault })
+    .set({ name: input.name.trim(), slug: existing.name.trim() === input.name.trim() ? existing.slug : await uniqueSlug(communityId, input.name, id), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? existing.icon, recordingDefault: input.recordingDefault ?? existing.recordingDefault })
     .where(eq(meetingSpaces.id, id))
     .returning();
-  await db.insert(auditLog).values({ actorId, action: "meeting_space.updated", targetType: "meeting_space", targetId: id, details: { name: row.name } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "meeting_space.updated", targetType: "meeting_space", targetId: id, details: { name: row.name } });
   return row;
 }
 
-export async function deleteSpace(id: string, actorId: string): Promise<boolean> {
+export async function deleteSpace(communityId: string, id: string, actorId: string): Promise<boolean> {
+  if (!(await getSpaceById(communityId, id))) return false;
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(meetings).where(and(eq(meetings.spaceId, id), isNull(meetings.deletedAt)));
   if (count > 0) return false;
   await db.delete(meetingSpaces).where(eq(meetingSpaces.id, id));
-  await db.insert(auditLog).values({ actorId, action: "meeting_space.deleted", targetType: "meeting_space", targetId: id });
+  await db.insert(auditLog).values({ communityId, actorId, action: "meeting_space.deleted", targetType: "meeting_space", targetId: id });
   return true;
 }
 
-export async function moveSpace(id: string, direction: "up" | "down"): Promise<void> {
-  const all = await db.query.meetingSpaces.findMany({ orderBy: [asc(meetingSpaces.sortOrder), asc(meetingSpaces.name)] });
+export async function moveSpace(communityId: string, id: string, direction: "up" | "down"): Promise<void> {
+  const all = await db.query.meetingSpaces.findMany({
+    where: eq(meetingSpaces.communityId, communityId),
+    orderBy: [asc(meetingSpaces.sortOrder), asc(meetingSpaces.name)],
+  });
   const idx = all.findIndex((a) => a.id === id);
   const swap = direction === "up" ? idx - 1 : idx + 1;
   if (idx < 0 || swap < 0 || swap >= all.length) return;
@@ -101,16 +119,35 @@ export async function moveSpace(id: string, direction: "up" | "down"): Promise<v
 // Meetings
 // ---------------------------------------------------------------------------
 
-export type MeetingListItem = Meeting & { host: { id: string; name: string; avatarMediaId: string | null } | null; recording: MediaFile | null; spaceSlug: string; spaceName: string };
+export type MeetingListItem = Meeting & {
+  host: { id: string; name: string; avatarMediaId: string | null } | null;
+  recording: MediaFile | null;
+  spaceSlug: string;
+  spaceName: string;
+  /** Inherited from the space – meetings have no community column of their own. */
+  communityId: string;
+};
 
 export type MeetingInput = { title: string; description?: string | null; kind: MeetingKind; startsAt?: Date | null; recordingEnabled?: boolean; coverMediaId?: string | null };
 
 async function eventMeeting(m: Meeting): Promise<MeetingEventMeeting> {
-  const space = await getSpaceById(m.spaceId);
+  const space = await spaceOf(m.spaceId);
   return { id: m.id, title: m.title, kind: m.kind, status: m.status, spaceId: m.spaceId, spaceSlug: space?.slug ?? "", spaceName: space?.name ?? "", hostId: m.hostId, href: `/meetings/${space?.slug ?? m.spaceId}/${m.id}` };
 }
 
-export async function createMeeting(spaceId: string, input: MeetingInput, actorId: string, origin: EventOrigin = { kind: "user" }): Promise<Meeting> {
+/** The community a meeting belongs to, via its space. Used by webhooks, which have no session. */
+export async function communityOfMeeting(meetingId: string): Promise<string | undefined> {
+  const rows = await db
+    .select({ communityId: meetingSpaces.communityId })
+    .from(meetings)
+    .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
+    .where(eq(meetings.id, meetingId))
+    .limit(1);
+  return rows[0]?.communityId;
+}
+
+export async function createMeeting(communityId: string, spaceId: string, input: MeetingInput, actorId: string, origin: EventOrigin = { kind: "user" }): Promise<Meeting> {
+  if (!(await getSpaceById(communityId, spaceId))) throw new Error("meeting space not found in this community");
   const [row] = await db
     .insert(meetings)
     .values({
@@ -128,11 +165,12 @@ export async function createMeeting(spaceId: string, input: MeetingInput, actorI
     .returning();
   // room name = meeting id (stable, unique, no secrets)
   const [withRoom] = await db.update(meetings).set({ roomName: `m-${row.id}` }).where(eq(meetings.id, row.id)).returning();
-  emitDomainEvent("meeting.created", { meeting: await eventMeeting(withRoom), actorId, origin });
+  emitDomainEvent("meeting.created", communityId, { meeting: await eventMeeting(withRoom), actorId, origin });
   return withRoom;
 }
 
-export async function updateMeeting(id: string, input: Partial<MeetingInput>, actorId: string): Promise<Meeting | undefined> {
+export async function updateMeeting(communityId: string, id: string, input: Partial<MeetingInput>, actorId: string): Promise<Meeting | undefined> {
+  if (!(await getMeeting(communityId, id))) return undefined;
   const patch: Partial<typeof meetings.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title.trim();
   if (input.description !== undefined) patch.description = input.description?.trim() || null;
@@ -141,40 +179,41 @@ export async function updateMeeting(id: string, input: Partial<MeetingInput>, ac
   if (input.kind !== undefined) patch.kind = input.kind;
   if (input.coverMediaId !== undefined) patch.coverMediaId = input.coverMediaId;
   const [row] = await db.update(meetings).set(patch).where(and(eq(meetings.id, id), isNull(meetings.deletedAt))).returning();
-  if (row) await db.insert(auditLog).values({ actorId, action: "meeting.updated", targetType: "meeting", targetId: id });
+  if (row) await db.insert(auditLog).values({ communityId, actorId, action: "meeting.updated", targetType: "meeting", targetId: id });
   return row;
 }
 
-export async function softDeleteMeeting(id: string, actorId: string): Promise<Meeting | undefined> {
+export async function softDeleteMeeting(communityId: string, id: string, actorId: string): Promise<Meeting | undefined> {
+  if (!(await getMeeting(communityId, id))) return undefined;
   const [row] = await db.update(meetings).set({ deletedAt: new Date() }).where(and(eq(meetings.id, id), isNull(meetings.deletedAt))).returning();
-  if (row) await db.insert(auditLog).values({ actorId, action: "meeting.deleted", targetType: "meeting", targetId: id });
+  if (row) await db.insert(auditLog).values({ communityId, actorId, action: "meeting.deleted", targetType: "meeting", targetId: id });
   return row;
 }
 
-export async function getMeeting(id: string): Promise<MeetingListItem | undefined> {
+export async function getMeeting(communityId: string, id: string): Promise<MeetingListItem | undefined> {
   const rows = await db
-    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name })
+    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name, communityId: meetingSpaces.communityId })
     .from(meetings)
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
     .leftJoin(users, eq(users.id, meetings.hostId))
     .leftJoin(mediaFiles, eq(mediaFiles.id, meetings.recordingMediaId))
-    .where(and(eq(meetings.id, id), isNull(meetings.deletedAt)))
+    .where(and(eq(meetings.id, id), eq(meetingSpaces.communityId, communityId), isNull(meetings.deletedAt)))
     .limit(1);
   const r = rows[0];
   if (!r) return undefined;
-  return { ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName };
+  return { ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName, communityId: r.communityId };
 }
 
 export async function getMeetingByRoom(roomName: string): Promise<Meeting | undefined> {
   return db.query.meetings.findFirst({ where: and(eq(meetings.roomName, roomName), isNull(meetings.deletedAt)) });
 }
 
-export async function listMeetings(opts: { spaceId?: string; status?: Meeting["status"]; limit?: number } = {}): Promise<MeetingListItem[]> {
-  const conds = [isNull(meetings.deletedAt)];
+export async function listMeetings(communityId: string, opts: { spaceId?: string; status?: Meeting["status"]; limit?: number } = {}): Promise<MeetingListItem[]> {
+  const conds = [isNull(meetings.deletedAt), eq(meetingSpaces.communityId, communityId)];
   if (opts.spaceId) conds.push(eq(meetings.spaceId, opts.spaceId));
   if (opts.status) conds.push(eq(meetings.status, opts.status));
   const rows = await db
-    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name })
+    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name, communityId: meetingSpaces.communityId })
     .from(meetings)
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
     .leftJoin(users, eq(users.id, meetings.hostId))
@@ -183,29 +222,39 @@ export async function listMeetings(opts: { spaceId?: string; status?: Meeting["s
     // live first, then upcoming soonest first, then past newest first
     .orderBy(sql`case ${meetings.status} when 'live' then 0 when 'scheduled' then 1 else 2 end`, sql`case when ${meetings.status} = 'ended' then null else coalesce(${meetings.startsAt}, ${meetings.createdAt}) end asc nulls last`, desc(sql`coalesce(${meetings.endedAt}, ${meetings.startsAt}, ${meetings.createdAt})`))
     .limit(opts.limit ?? 100);
-  return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName }));
+  return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName, communityId: r.communityId }));
 }
 
 /**
  * Meetings for the home page teaser across all spaces: running now, or scheduled with a start in the
  * future. Meetings without a date and anything already started but not live are left out.
  */
-export async function listUpcomingMeetings(limit = 6): Promise<MeetingListItem[]> {
+export async function listUpcomingMeetings(communityId: string, limit = 6): Promise<MeetingListItem[]> {
   const rows = await db
-    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name })
+    .select({ m: meetings, host: { id: users.id, name: users.name, avatarMediaId: users.avatarMediaId }, recording: mediaFiles, spaceSlug: meetingSpaces.slug, spaceName: meetingSpaces.name, communityId: meetingSpaces.communityId })
     .from(meetings)
     .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
     .leftJoin(users, eq(users.id, meetings.hostId))
     .leftJoin(mediaFiles, eq(mediaFiles.id, meetings.recordingMediaId))
-    .where(and(isNull(meetings.deletedAt), or(eq(meetings.status, "live"), and(eq(meetings.status, "scheduled"), gte(meetings.startsAt, new Date())))))
+    .where(
+      and(
+        isNull(meetings.deletedAt),
+        eq(meetingSpaces.communityId, communityId),
+        or(eq(meetings.status, "live"), and(eq(meetings.status, "scheduled"), gte(meetings.startsAt, new Date()))),
+      ),
+    )
     .orderBy(sql`case ${meetings.status} when 'live' then 0 else 1 end`, asc(meetings.startsAt))
     .limit(limit);
-  return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName }));
+  return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName, communityId: r.communityId }));
 }
 
 /** Live meetings grouped by space (for the sidebar's blinking dot). */
-export async function liveSpaceIds(): Promise<Set<string>> {
-  const rows = await db.select({ spaceId: meetings.spaceId }).from(meetings).where(and(eq(meetings.status, "live"), isNull(meetings.deletedAt)));
+export async function liveSpaceIds(communityId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ spaceId: meetings.spaceId })
+    .from(meetings)
+    .innerJoin(meetingSpaces, eq(meetingSpaces.id, meetings.spaceId))
+    .where(and(eq(meetings.status, "live"), eq(meetingSpaces.communityId, communityId), isNull(meetings.deletedAt)));
   return new Set(rows.map((r) => r.spaceId));
 }
 
@@ -296,8 +345,11 @@ export function canEditMeeting(user: { id: string; role: string }, meeting: { ho
 }
 
 /** Space names for a set of ids (used for breadcrumbs/sidebar). */
-export async function spaceNames(ids: string[]): Promise<Map<string, string>> {
+export async function spaceNames(communityId: string, ids: string[]): Promise<Map<string, string>> {
   if (!ids.length) return new Map();
-  const rows = await db.select({ id: meetingSpaces.id, name: meetingSpaces.name }).from(meetingSpaces).where(inArray(meetingSpaces.id, ids));
+  const rows = await db
+    .select({ id: meetingSpaces.id, name: meetingSpaces.name })
+    .from(meetingSpaces)
+    .where(and(eq(meetingSpaces.communityId, communityId), inArray(meetingSpaces.id, ids)));
   return new Map(rows.map((r) => [r.id, r.name]));
 }

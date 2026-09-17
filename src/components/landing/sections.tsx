@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
-import type { AppSettings } from "@/server/db/schema";
+import type { Community } from "@/server/db/schema";
 import type { LandingSection } from "@/lib/landing-schema";
 import { Markdown } from "@/components/content/markdown";
 import { BrandLogo } from "@/components/shell/brand-logo";
@@ -35,7 +35,7 @@ export function LandingSectionView({
 }: {
   section: LandingSection;
   path: string;
-  settings: AppSettings;
+  settings: Community;
   /** Render FAQ items expanded (inline editor: answers must be clickable) */
   faqOpen?: boolean;
 }) {

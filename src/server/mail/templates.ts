@@ -71,9 +71,10 @@ export function accountApprovedMail(ctx: Ctx, to: string, loginUrl: string): Mai
   };
 }
 
-export function pendingMemberAdminMail(ctx: Ctx, to: string, member: { name: string; email: string }): MailMessage {
+/** `reviewUrl` already points into the right community (see domain/communities.ts communityUrl). */
+export function pendingMemberAdminMail(ctx: Ctx, to: string, member: { name: string; email: string; registrationMessage?: string | null }, reviewUrl?: string): MailMessage {
   const s = t[ctx.locale];
-  const url = `${ctx.appUrl}/admin/members?status=pending`;
+  const url = reviewUrl ?? `${ctx.appUrl}/admin/members?status=pending`;
   return {
     to,
     subject: s.pendingAdminSubject(ctx.appName),

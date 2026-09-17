@@ -10,14 +10,16 @@ import { createWorkflow, deleteWorkflow, getWorkflow, setWorkflowStatus, updateW
 import { validateDefinition } from "@/server/workflows/definitions";
 import { db } from "@/server/db/client";
 import { workflows } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export type SaveWorkflowResult = { ok: true; id: string; warnings: { path: string; message: string }[] } | { ok: false; issues: { path: string; message: string }[] };
 
 export async function saveWorkflowAction(input: { id?: string; definition: unknown; changeNote?: string }): Promise<SaveWorkflowResult> {
   const admin = await assertAdmin();
   await loadRegistry();
-  const res = input.id ? await updateWorkflow(input.id, input.definition, admin.id, "ui", { changeNote: input.changeNote }) : await createWorkflow(input.definition, admin.id, "ui", { changeNote: input.changeNote });
+  const res = input.id
+    ? await updateWorkflow(admin.communityId, input.id, input.definition, admin.id, "ui", { changeNote: input.changeNote })
+    : await createWorkflow(admin.communityId, input.definition, admin.id, "ui", { changeNote: input.changeNote });
   if (!res.ok) return { ok: false, issues: res.issues };
   revalidatePath("/admin/workflows");
   revalidatePath("/workflows");
@@ -32,20 +34,23 @@ export async function validateWorkflowAction(definition: unknown) {
 
 export async function setWorkflowStatusAction(id: string, status: Workflow["status"]): Promise<void> {
   const admin = await assertAdmin();
-  await setWorkflowStatus(id, status, admin.id);
+  await setWorkflowStatus(admin.communityId, id, status, admin.id);
   revalidatePath("/admin/workflows");
   revalidatePath("/workflows");
 }
 
 export async function setToastAudienceAction(id: string, audience: "all" | "admins"): Promise<void> {
-  await assertAdmin();
-  await db.update(workflows).set({ toastAudience: audience }).where(eq(workflows.id, id));
+  const admin = await assertAdmin();
+  await db
+    .update(workflows)
+    .set({ toastAudience: audience })
+    .where(and(eq(workflows.id, id), eq(workflows.communityId, admin.communityId)));
   revalidatePath("/admin/workflows");
 }
 
 export async function deleteWorkflowAction(id: string): Promise<void> {
   const admin = await assertAdmin();
-  await deleteWorkflow(id, admin.id);
+  await deleteWorkflow(admin.communityId, id, admin.id);
   revalidatePath("/admin/workflows");
   revalidatePath("/workflows");
 }
@@ -54,7 +59,7 @@ export async function deleteWorkflowAction(id: string): Promise<void> {
 export async function runWorkflowNowAction(id: string, payloadJson?: string): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
   const admin = await assertAdmin();
   await loadRegistry();
-  const wf = await getWorkflow(id);
+  const wf = await getWorkflow(admin.communityId, id);
   if (!wf) return { ok: false, error: "not found" };
   let payload: Record<string, unknown>;
   if (payloadJson?.trim()) {
@@ -76,9 +81,9 @@ export async function runWorkflowNowAction(id: string, payloadJson?: string): Pr
 /** Re-runs a finished run with the same trigger event. */
 export async function retryRunAction(runId: string): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
   const admin = await assertAdmin();
-  const run = await getRunWithSteps(runId);
+  const run = await getRunWithSteps(admin.communityId, runId);
   if (!run) return { ok: false, error: "not found" };
-  const wf = await getWorkflow(run.workflowId);
+  const wf = await getWorkflow(admin.communityId, run.workflowId);
   if (!wf) return { ok: false, error: "workflow missing" };
   const newId = await startRun(wf, run.triggerEvent, { triggeredBy: run.triggeredBy ?? admin.id, parentRunId: run.id, depth: run.depth });
   if (!newId) return { ok: false, error: "run not created" };

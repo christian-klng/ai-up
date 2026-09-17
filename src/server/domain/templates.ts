@@ -1,6 +1,7 @@
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { auditLog, contentTemplateVersions, contentTemplates, knowledgeAreaTemplates, type ContentTemplate, type ContentTemplateVersion } from "@/server/db/schema";
+import { auditLog, contentTemplateVersions, contentTemplates, knowledgeAreaTemplates, knowledgeAreas, type ContentTemplate, type ContentTemplateVersion } from "@/server/db/schema";
+import { ROOT_COMMUNITY_ID } from "./communities";
 import type { StructureDefinition } from "@/lib/structures/types";
 import type { TemplateEvaluation } from "@/lib/structures/evaluation";
 import { SYSTEM_TEMPLATE_IDS, type SystemTemplateKey } from "@/lib/structures/defaults";
@@ -10,10 +11,18 @@ import { SYSTEM_TEMPLATE_IDS, type SystemTemplateKey } from "@/lib/structures/de
 // definitions, versioned like the old collection structures (snapshot per
 // save). Admins assign them per collection; a collection without assignments
 // offers the seeded system templates.
+//
+// Scope: a template with `community_id` belongs to that community; the seeded system templates
+// have none and are shared by every community (read-only – their definition is seed-managed).
 // ---------------------------------------------------------------------------
 
-export async function getTemplateById(id: string): Promise<ContentTemplate | undefined> {
-  return db.query.contentTemplates.findFirst({ where: eq(contentTemplates.id, id) });
+/** A template is usable in a community when it belongs to it, or is a shared system template. */
+function visibleIn(communityId: string) {
+  return or(eq(contentTemplates.communityId, communityId), isNull(contentTemplates.communityId))!;
+}
+
+export async function getTemplateById(communityId: string, id: string): Promise<ContentTemplate | undefined> {
+  return db.query.contentTemplates.findFirst({ where: and(eq(contentTemplates.id, id), visibleIn(communityId)) });
 }
 
 export async function getTemplateBySystemKey(key: SystemTemplateKey): Promise<ContentTemplate | undefined> {
@@ -22,14 +31,15 @@ export async function getTemplateBySystemKey(key: SystemTemplateKey): Promise<Co
 
 export type TemplateListItem = ContentTemplate & { assignmentCount: number };
 
-/** All templates (system first, then by name) with their assignment count. */
-export async function listTemplates(): Promise<TemplateListItem[]> {
+/** Templates usable in this community (system first, then by name) with their assignment count. */
+export async function listTemplates(communityId: string): Promise<TemplateListItem[]> {
   const rows = await db
     .select({
       template: contentTemplates,
       assignmentCount: sql<number>`(select count(*)::int from ${knowledgeAreaTemplates} where ${knowledgeAreaTemplates}."template_id" = ${contentTemplates}."id")`,
     })
     .from(contentTemplates)
+    .where(visibleIn(communityId))
     .orderBy(desc(contentTemplates.isSystem), asc(contentTemplates.name));
   return rows.map((r) => ({ ...r.template, assignmentCount: r.assignmentCount }));
 }
@@ -79,14 +89,15 @@ export type SaveTemplateInput = {
  * changed – name, icon and evaluation criteria live outside the snapshot, so editing them must
  * not push entries onto a new structure version.
  */
-export async function saveTemplate(input: SaveTemplateInput, actorId: string, changeNote?: string | null): Promise<ContentTemplate | { error: "system" | "notFound" }> {
+export async function saveTemplate(communityId: string, input: SaveTemplateInput, actorId: string, changeNote?: string | null): Promise<ContentTemplate | { error: "system" | "notFound" }> {
   const result = await db.transaction(async (tx): Promise<{ ok: false; error: "system" | "notFound" } | { ok: true; row: ContentTemplate; created: boolean }> => {
     let row: ContentTemplate;
     let created = false;
     if (input.id) {
       const existing = await tx.query.contentTemplates.findFirst({ where: eq(contentTemplates.id, input.id) });
-      if (!existing) return { ok: false, error: "notFound" };
-      if (existing.isSystem) return { ok: false, error: "system" };
+      if (!existing || (existing.communityId !== null && existing.communityId !== communityId)) return { ok: false, error: "notFound" };
+      // Shared system templates are seed-managed; their definition is not editable from any community.
+      if (existing.isSystem || existing.communityId === null) return { ok: false, error: "system" };
       const definitionChanged = stableStringify(existing.definition) !== stableStringify(input.definition);
       [row] = await tx
         .update(contentTemplates)
@@ -107,6 +118,7 @@ export async function saveTemplate(input: SaveTemplateInput, actorId: string, ch
       [row] = await tx
         .insert(contentTemplates)
         .values({
+          communityId,
           name: input.name,
           description: input.description ?? null,
           icon: input.icon ?? "file-text",
@@ -129,6 +141,7 @@ export async function saveTemplate(input: SaveTemplateInput, actorId: string, ch
   });
   if (!result.ok) return { error: result.error };
   await db.insert(auditLog).values({
+    communityId,
     actorId,
     action: result.created ? "content_template.created" : "content_template.updated",
     targetType: "content_template",
@@ -139,12 +152,13 @@ export async function saveTemplate(input: SaveTemplateInput, actorId: string, ch
 }
 
 /** Deletes a custom template; FK cascade removes assignments and version rows. Entries keep their snapshots. */
-export async function deleteTemplate(id: string, actorId: string): Promise<{ ok: boolean; reason?: "system" | "notFound" }> {
-  const existing = await getTemplateById(id);
+export async function deleteTemplate(communityId: string, id: string, actorId: string): Promise<{ ok: boolean; reason?: "system" | "notFound" }> {
+  const existing = await getTemplateById(communityId, id);
   if (!existing) return { ok: false, reason: "notFound" };
-  if (existing.isSystem) return { ok: false, reason: "system" };
+  // System templates are shared; a community may use but never delete them.
+  if (existing.isSystem || existing.communityId !== communityId) return { ok: false, reason: "system" };
   await db.delete(contentTemplates).where(eq(contentTemplates.id, id));
-  await db.insert(auditLog).values({ actorId, action: "content_template.deleted", targetType: "content_template", targetId: id, details: { name: existing.name } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "content_template.deleted", targetType: "content_template", targetId: id, details: { name: existing.name } });
   return { ok: true };
 }
 
@@ -158,14 +172,21 @@ export async function listAreaTemplateIds(areaId: string): Promise<string[]> {
 }
 
 /** Replaces a collection's template assignments (array order = display order). Empty = system templates. */
-export async function setAreaTemplates(areaId: string, templateIds: string[], actorId: string): Promise<void> {
+export async function setAreaTemplates(communityId: string, areaId: string, templateIds: string[], actorId: string): Promise<void> {
+  // A collection may only offer templates that are usable in its own community.
+  const usable = await db.query.contentTemplates.findMany({
+    where: and(inArray(contentTemplates.id, templateIds.length ? templateIds : ["-"]), visibleIn(communityId)),
+    columns: { id: true },
+  });
+  const allowed = new Set(usable.map((t) => t.id));
+  templateIds = templateIds.filter((id) => allowed.has(id));
   await db.transaction(async (tx) => {
     await tx.delete(knowledgeAreaTemplates).where(eq(knowledgeAreaTemplates.areaId, areaId));
     if (templateIds.length > 0) {
       await tx.insert(knowledgeAreaTemplates).values(templateIds.map((templateId, i) => ({ areaId, templateId, sortOrder: i })));
     }
   });
-  await db.insert(auditLog).values({ actorId, action: "knowledge_area.templates_updated", targetType: "knowledge_area", targetId: areaId, details: { templateIds } });
+  await db.insert(auditLog).values({ communityId, actorId, action: "knowledge_area.templates_updated", targetType: "knowledge_area", targetId: areaId, details: { templateIds } });
 }
 
 const SYSTEM_ORDER = Object.values(SYSTEM_TEMPLATE_IDS);
@@ -196,20 +217,24 @@ export async function isTemplateAvailableForArea(areaId: string, templateId: str
 }
 
 /** areaId → number of assigned templates (0 = system defaults), for admin list badges. */
-export async function listAssignmentsByArea(): Promise<Map<string, number>> {
+export async function listAssignmentsByArea(communityId: string): Promise<Map<string, number>> {
   const rows = await db
     .select({ areaId: knowledgeAreaTemplates.areaId, count: sql<number>`count(*)::int` })
     .from(knowledgeAreaTemplates)
+    .innerJoin(knowledgeAreas, eq(knowledgeAreas.id, knowledgeAreaTemplates.areaId))
+    .where(eq(knowledgeAreas.communityId, communityId))
     .groupBy(knowledgeAreaTemplates.areaId);
   return new Map(rows.map((r) => [r.areaId, r.count]));
 }
 
 /** All assignments with template names, batched for the MCP collections context. */
-export async function listAllAssignments(): Promise<Map<string, { id: string; name: string; version: number }[]>> {
+export async function listAllAssignments(communityId: string): Promise<Map<string, { id: string; name: string; version: number }[]>> {
   const rows = await db
     .select({ areaId: knowledgeAreaTemplates.areaId, sortOrder: knowledgeAreaTemplates.sortOrder, id: contentTemplates.id, name: contentTemplates.name, version: contentTemplates.version })
     .from(knowledgeAreaTemplates)
     .innerJoin(contentTemplates, eq(knowledgeAreaTemplates.templateId, contentTemplates.id))
+    .innerJoin(knowledgeAreas, eq(knowledgeAreas.id, knowledgeAreaTemplates.areaId))
+    .where(eq(knowledgeAreas.communityId, communityId))
     .orderBy(asc(knowledgeAreaTemplates.areaId), asc(knowledgeAreaTemplates.sortOrder));
   const map = new Map<string, { id: string; name: string; version: number }[]>();
   for (const r of rows) {
@@ -225,10 +250,16 @@ export async function listAllAssignments(): Promise<Map<string, { id: string; na
  * is seed-managed, the criteria are not – otherwise collections on the default templates could
  * never be checked.
  */
-export async function setTemplateEvaluation(id: string, evaluation: TemplateEvaluation, actorId: string): Promise<ContentTemplate | undefined> {
+export async function setTemplateEvaluation(communityId: string, id: string, evaluation: TemplateEvaluation, actorId: string): Promise<ContentTemplate | undefined> {
+  const existing = await getTemplateById(communityId, id);
+  if (!existing) return undefined;
+  // The criteria of a *shared* system template belong to the platform: only the root community may
+  // change them, otherwise one sub-community would silently re-grade everyone else's entries.
+  if (existing.communityId === null && communityId !== ROOT_COMMUNITY_ID) return undefined;
   const [row] = await db.update(contentTemplates).set({ evaluation, updatedBy: actorId }).where(eq(contentTemplates.id, id)).returning();
   if (row) {
     await db.insert(auditLog).values({
+      communityId,
       actorId,
       action: "content_template.evaluation_updated",
       targetType: "content_template",

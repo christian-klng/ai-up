@@ -10,9 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { StructureEditor } from "@/components/structures/structure-editor";
 
 export default async function EditTemplatePage({ params }: PageProps<"/admin/templates/[id]">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const { id } = await params;
-  const [t, template, providers] = await Promise.all([getTranslations("admin.templates"), getTemplateById(id), listProviderOptions()]);
+  const [t, template, providers] = await Promise.all([getTranslations("admin.templates"), getTemplateById(user.communityId, id), listProviderOptions(user.communityId)]);
   if (!template) notFound();
   return (
     <div>

@@ -17,20 +17,20 @@ import { WorkflowRowActions } from "../row-actions";
 import { RunNowPanel } from "./run-now-panel";
 
 export default async function AdminWorkflowDetailPage({ params }: PageProps<"/admin/workflows/[id]">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   await loadRegistry();
   const { id } = await params;
-  const wf = await getWorkflow(id);
+  const wf = await getWorkflow(user.communityId, id);
   if (!wf) notFound();
   const [t, tw, format, locale, runs, versions, stats, catalog, nextRun] = await Promise.all([
     getTranslations("admin.workflows"),
     getTranslations("workflows"),
     getFormatter(),
     getLocale(),
-    listRuns({ workflowId: wf.id, limit: 30 }),
-    listWorkflowVersions(wf.id),
-    workflowStats(wf.id, 14),
-    getEditorCatalog(),
+    listRuns(user.communityId, { workflowId: wf.id, limit: 30 }),
+    listWorkflowVersions(user.communityId, wf.id),
+    workflowStats(user.communityId, wf.id, 14),
+    getEditorCatalog(user.communityId),
     wf.trigger.type === "schedule" && wf.status === "active" ? nextScheduledRun(wf.id).catch(() => null) : Promise.resolve(null),
   ]);
   const loc = locale === "en" ? "en" : "de";

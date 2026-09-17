@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { users } from "@/server/db/schema";
+import { communityMembers, users, workflows } from "@/server/db/schema";
 import { listAreas } from "@/server/domain/knowledge";
 import { listProviderOptions } from "@/server/llm/providers";
 import { listQuestionKeys } from "@/server/domain/questions";
@@ -22,14 +22,19 @@ export type EditorCatalog = {
   questionKeys: { key: string; title: string }[];
 };
 
-export async function getEditorCatalog(): Promise<EditorCatalog> {
+export async function getEditorCatalog(communityId: string): Promise<EditorCatalog> {
   await loadRegistry();
   const [areas, providers, members, questionKeysDb, wfs] = await Promise.all([
-    listAreas(),
-    listProviderOptions(),
-    db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.status, "active"), eq(users.isBot, false))).orderBy(asc(users.name)),
-    listQuestionKeys(),
-    db.query.workflows.findMany({ columns: { steps: true } }),
+    listAreas(communityId),
+    listProviderOptions(communityId),
+    db
+      .select({ id: users.id, name: users.name })
+      .from(communityMembers)
+      .innerJoin(users, eq(users.id, communityMembers.userId))
+      .where(and(eq(communityMembers.communityId, communityId), eq(communityMembers.status, "active"), eq(users.isBot, false)))
+      .orderBy(asc(users.name)),
+    listQuestionKeys(communityId),
+    db.query.workflows.findMany({ where: eq(workflows.communityId, communityId), columns: { steps: true } }),
   ]);
   // Question keys: from created questions + from ask_user steps in any workflow (even before the first run)
   const keys = new Map<string, string>(questionKeysDb.map((k) => [k.key, k.title]));

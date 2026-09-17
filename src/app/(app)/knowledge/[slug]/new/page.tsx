@@ -11,9 +11,9 @@ import { StructureFillForm } from "@/components/structures/structure-fill-form";
 import { TemplateIcon } from "@/components/structures/template-icon";
 
 export default async function NewContentPage({ params, searchParams }: PageProps<"/knowledge/[slug]/new">) {
-  await requireUser();
+  const user = await requireUser();
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
-  const area = await getAreaBySlug(slug);
+  const area = await getAreaBySlug(user.communityId, slug);
   if (!area) notFound();
   const templates = await listAvailableTemplates(area.id);
   if (templates.length === 0) notFound();
