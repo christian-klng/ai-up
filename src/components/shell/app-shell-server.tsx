@@ -14,6 +14,7 @@ import { QuestionDock } from "@/components/questions/question-dock";
 import { listOpenQuestionsForUser } from "@/server/domain/questions";
 import { listSpaces } from "@/server/domain/meetings";
 import { listAgentsForUser } from "@/server/domain/agents";
+import { AGENTS_IN_NAV } from "@/lib/agents";
 import { BrandLogo } from "./brand-logo";
 
 /** Server wrapper: loads everything the shell needs (settings, nav data, counters) once per request. */
@@ -28,7 +29,8 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
     listAreas(),
     listOpenQuestionsForUser(user.id),
     listSpaces(),
-    listAgentsForUser(user.id),
+    // Hidden from the sidebar for now (AGENTS_IN_NAV) – then there is nothing to load either.
+    AGENTS_IN_NAV ? listAgentsForUser(user.id) : Promise.resolve([]),
   ]);
 
   return (
