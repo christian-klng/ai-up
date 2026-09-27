@@ -16,6 +16,7 @@ import {
 } from "@/server/db/schema";
 import { emitDomainEvent, type ContentEventPayload, type EventOrigin } from "@/server/events/bus";
 import { enqueueEvaluation } from "@/server/workflows/queue";
+import { syncLiveBoards } from "@/server/whiteboards/state";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import { flattenAnswersText } from "@/lib/structures/markdown";
 import { slugify } from "@/lib/slug";
@@ -246,6 +247,15 @@ async function queueEvaluation(content: Content, input: ContentVersionInput, ori
   await enqueueEvaluation(content.id, content.currentVersionId);
 }
 
+export type AddVersionOptions = {
+  /** Live whiteboard saves: evaluate only when the session ends, not at every intermediate save. */
+  skipEvaluation?: boolean;
+  /** Optimistic check – the write fails (unique version number) when someone saved in between. */
+  expectedVersionCount?: number;
+  /** "keep": the write took its whiteboards from the live session, so the session stays as it is. */
+  liveBoards?: "keep";
+};
+
 /** Appends a new version (edits are never destructive). */
 export async function addContentVersion(
   communityId: string,
@@ -253,11 +263,12 @@ export async function addContentVersion(
   input: ContentVersionInput,
   editorId: string,
   origin: EventOrigin = { kind: "user" },
+  opts: AddVersionOptions = {},
 ): Promise<Content | undefined> {
   const existing = await db.query.contents.findFirst({ where: and(eq(contents.id, contentId), isNull(contents.deletedAt)) });
   if (!existing) return undefined;
   if (!(await getAreaById(communityId, existing.areaId))) return undefined;
-  const nextNo = existing.versionCount + 1;
+  const nextNo = (opts.expectedVersionCount ?? existing.versionCount) + 1;
   const result = await db.transaction(async (tx) => {
     const [version] = await tx
       .insert(contentVersions)
@@ -281,7 +292,9 @@ export async function addContentVersion(
     return updated;
   });
   emitDomainEvent("content.updated", communityId, await contentEventPayload(result, input, nextNo, editorId, origin));
-  if (result) await queueEvaluation(result, input, origin);
+  if (result && !opts.skipEvaluation) await queueEvaluation(result, input, origin);
+  // A write from outside a running whiteboard session (restore, MCP, agent) replaces the live board.
+  if (opts.liveBoards !== "keep" && input.meta?.structure) await syncLiveBoards(contentId, input.meta.structure);
   return result;
 }
 

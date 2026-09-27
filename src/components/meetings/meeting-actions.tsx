@@ -12,7 +12,7 @@ import { MeetingDialog, type MeetingFormValues } from "./meeting-dialog";
 import { InviteLinkDialog, type InviteLinkState } from "./invite-link-dialog";
 
 /** `invite` is null for non-admins – only admins may hand out the invite link. */
-export function MeetingActions({ meeting, spaceId, spaceSlug, recordingDefault, callsAvailable, invite }: { meeting: MeetingFormValues; spaceId: string; spaceSlug: string; recordingDefault: boolean; callsAvailable: boolean; invite: InviteLinkState | null }) {
+export function MeetingActions({ meeting, spaceId, spaceSlug, callsAvailable, invite }: { meeting: MeetingFormValues; spaceId: string; spaceSlug: string; callsAvailable: boolean; invite: InviteLinkState | null }) {
   const t = useTranslations("meetings");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -23,7 +23,6 @@ export function MeetingActions({ meeting, spaceId, spaceSlug, recordingDefault, 
       {invite && <InviteLinkDialog meetingId={meeting.id} invite={invite} open={inviteOpen} onOpenChange={setInviteOpen} />}
       <MeetingDialog
         spaceId={spaceId}
-        recordingDefault={recordingDefault}
         meeting={meeting}
         callsAvailable={callsAvailable}
         canSetCover={invite !== null}

@@ -5,12 +5,12 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, FileText, GitBranch, Image as ImageIcon, Info, Link2, MessageSquare, Plus, Tags, Trash2, Type, Video } from "lucide-react";
+import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, FileText, GitBranch, Image as ImageIcon, Info, Link2, MessageSquare, Plus, Presentation, Tags, Trash2, Type, Video } from "lucide-react";
 import { saveTemplateAction, deleteTemplateAction } from "@/server/actions/admin-templates";
 import type { ValidationIssue } from "@/lib/structures/validate";
-import type { ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType } from "@/lib/structures/types";
+import type { ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType, WhiteboardBoard } from "@/lib/structures/types";
 import { emptyEvaluation, type TemplateEvaluation } from "@/lib/structures/evaluation";
-import { emptyProcessGraph, isAnswerable } from "@/lib/structures/types";
+import { emptyProcessGraph, emptyWhiteboard, isAnswerable } from "@/lib/structures/types";
 import { StructureFillForm } from "@/components/structures/structure-fill-form";
 import { IconPicker } from "@/components/common/icon-picker";
 import { EvaluationEditor } from "@/components/structures/evaluation-editor";
@@ -24,6 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
+const WhiteboardInput = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardInput), { ssr: false });
 
 const ELEMENT_ICONS: Record<StructureElementType, React.ComponentType<{ className?: string }>> = {
   info: Info,
@@ -34,13 +35,14 @@ const ELEMENT_ICONS: Record<StructureElementType, React.ComponentType<{ classNam
   checkbox: Check,
   qa: MessageSquare,
   process: GitBranch,
+  whiteboard: Presentation,
   markdown: FileText,
   image: ImageIcon,
   link: Link2,
   video: Video,
 };
 
-const ELEMENT_TYPES: StructureElementType[] = ["info", "text", "textarea", "markdown", "select", "chips", "checkbox", "qa", "process", "image", "link", "video"];
+const ELEMENT_TYPES: StructureElementType[] = ["info", "text", "textarea", "markdown", "select", "chips", "checkbox", "qa", "process", "whiteboard", "image", "link", "video"];
 
 function newElement(type: StructureElementType, key: string, label: string): StructureElement {
   const base = { key, label };
@@ -61,6 +63,8 @@ function newElement(type: StructureElementType, key: string, label: string): Str
       return { ...base, type };
     case "process":
       return { ...base, type, seed: emptyProcessGraph() };
+    case "whiteboard":
+      return { ...base, type };
     case "image":
     case "link":
     case "video":
@@ -523,6 +527,23 @@ function TypeConfig({ element, onChange }: { element: StructureElement; onChange
           <div className="text-xs font-medium">{t("seedLabel")}</div>
           <p className="text-xs text-muted-foreground">{t("seedHint")}</p>
           <ProcessGraphEditor key={element.key} value={element.seed} onChange={(seed: ProcessGraph) => onChange({ seed } as Partial<StructureElement>)} />
+        </div>
+      );
+    case "whiteboard":
+      return (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-1">
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input type="checkbox" checked={element.collaborative !== false} onChange={(e) => onChange({ collaborative: e.target.checked ? undefined : false } as Partial<StructureElement>)} className="size-3.5 accent-primary" />
+              {t("collaborativeLabel")}
+            </label>
+            <p className="text-xs text-muted-foreground">{t("collaborativeHint")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-1">
+            <div className="text-xs font-medium">{t("whiteboardSeedLabel")}</div>
+            <p className="text-xs text-muted-foreground">{t("whiteboardSeedHint")}</p>
+            <WhiteboardInput key={element.key} mode="seed" value={element.seed ?? emptyWhiteboard()} onChange={(seed: WhiteboardBoard) => onChange({ seed: seed.items.length ? seed : undefined } as Partial<StructureElement>)} />
+          </div>
         </div>
       );
   }

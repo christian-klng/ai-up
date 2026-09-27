@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, Plus, RefreshCw, X } from "lucide-react";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import { validateStructureAnswers } from "@/lib/structures/validate";
 import type { ImageAnswer, LinkAnswer, MarkdownSection, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureElement, VideoAnswer } from "@/lib/structures/types";
-import { fillProcessSeeds, isAnswerable, isMarkdownSectionArray } from "@/lib/structures/types";
+import { emptyWhiteboard, fillSeeds, isAnswerable, isMarkdownSectionArray, isWhiteboardBoard } from "@/lib/structures/types";
 import { migrateStructureAnswers } from "@/lib/structures/migrate";
 import { visibleElements } from "@/lib/structures/visibility";
 import { saveStructuredEntryAction } from "@/server/actions/structured-content";
@@ -23,6 +23,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
+const WhiteboardInput = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardInput), { ssr: false });
+const WhiteboardEditor = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardEditor), { ssr: false });
 
 export type StructureFillFormProps = {
   def: StructureDefinition;
@@ -93,8 +95,8 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
   const submit = () => {
     const missingTitle = !title.trim();
     setTitleMissing(missingTitle);
-    // Untouched process elements submit their seed graph as the answer.
-    const effective = fillProcessSeeds(activeDef, answers);
+    // Untouched process/whiteboard elements submit their seed as the answer.
+    const effective = fillSeeds(activeDef, answers);
     const res = validateStructureAnswers(activeDef, effective);
     if (!res.ok) {
       setIssues(res.issues);
@@ -180,7 +182,7 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
         </div>
       )}
       {visible.map((el) => (
-        <ElementInput key={el.key} element={el} value={answers[el.key]} onChange={(v) => setValue(el.key, v)} issue={issueFor(el.key)} disabled={pending} maxUploadMb={maxUploadMb ?? 25} />
+        <ElementInput key={el.key} element={el} value={answers[el.key]} onChange={(v) => setValue(el.key, v)} issue={issueFor(el.key)} disabled={pending} maxUploadMb={maxUploadMb ?? 25} liveBoards={mode === "edit"} />
       ))}
       {mode === "edit" && (
         <div className="grid grid-cols-1 gap-1.5">
@@ -201,7 +203,7 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
   );
 }
 
-function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb }: { element: StructureElement; value: StructureAnswers[string] | undefined; onChange: (v: StructureAnswers[string] | undefined) => void; issue?: AnswerIssue; disabled: boolean; maxUploadMb: number }) {
+function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb, liveBoards }: { element: StructureElement; value: StructureAnswers[string] | undefined; onChange: (v: StructureAnswers[string] | undefined) => void; issue?: AnswerIssue; disabled: boolean; maxUploadMb: number; liveBoards: boolean }) {
   const t = useTranslations("knowledge.structured");
   const te = useTranslations("knowledge.editor");
 
@@ -332,6 +334,25 @@ function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb }
           {header}
           {help}
           <ProcessGraphEditor value={graph} onChange={(g) => onChange(g)} />
+          {error}
+        </div>
+      );
+    }
+    case "whiteboard": {
+      const board = isWhiteboardBoard(value) ? value : structuredClone(element.seed ?? emptyWhiteboard());
+      // Existing entries edit their boards live on the entry page; the form keeps whatever the session holds.
+      return (
+        <div className="grid grid-cols-1 gap-1.5">
+          {header}
+          {help}
+          {liveBoards ? (
+            <>
+              <WhiteboardEditor items={board.items} />
+              <p className="text-xs text-muted-foreground">{t("whiteboard.editOnEntry")}</p>
+            </>
+          ) : (
+            <WhiteboardInput value={board} onChange={(b) => onChange(b)} maxUploadMb={maxUploadMb} className={cn(issue && "border-destructive")} />
+          )}
           {error}
         </div>
       );

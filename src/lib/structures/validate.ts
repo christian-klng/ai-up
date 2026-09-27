@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ProcessGraph, StructureAnswers, StructureDefinition, StructureElement } from "./types";
 import { STRUCTURE_KEY_REGEX, isAnswerable, isMarkdownSectionArray, isMediaLikeAnswer } from "./types";
 import { isQaPairArray, pruneHiddenAnswers, visibleElements } from "./visibility";
+import { WHITEBOARD_MAX_ITEMS, enforceSeedLocks, layoutMissingItems, whiteboardBoardInputSchema, whiteboardHasContent, whiteboardProblems } from "./whiteboard";
 
 // ---------------------------------------------------------------------------
 // Definition schema
@@ -65,6 +66,7 @@ export const structureElementSchema = z.discriminatedUnion("type", [
     maxPairs: z.number().int().min(1).max(100).optional(),
   }),
   z.object({ ...base, type: z.literal("process"), seed: processGraphSchema }),
+  z.object({ ...base, type: z.literal("whiteboard"), seed: whiteboardBoardInputSchema.optional(), collaborative: z.boolean().optional() }),
   z.object({ ...base, type: z.literal("markdown"), placeholder: z.string().trim().max(200).optional(), maxLength: z.number().int().min(1).max(200000).optional(), multiple: z.boolean().optional() }),
   z.object({ ...base, type: z.literal("image") }),
   z.object({ ...base, type: z.literal("link") }),
@@ -117,6 +119,17 @@ function graphChecks(graph: ProcessGraph, path: string, issues: ValidationIssue[
   }
 }
 
+/** Whiteboard seeds may omit geometry (MCP); the stored definition always carries it, never authors. */
+function normalizeSeeds(def: StructureDefinition): StructureDefinition {
+  return {
+    ...def,
+    elements: def.elements.map((el) => {
+      if (el.type !== "whiteboard" || !el.seed) return el;
+      return { ...el, seed: { items: layoutMissingItems(el.seed.items).map((i) => ({ ...i, createdBy: undefined })) } };
+    }),
+  };
+}
+
 /** showIf operator compatibility per referenced element type. */
 function showIfCompatible(target: StructureElement, cond: NonNullable<StructureElement["showIf"]>): string | null {
   if (cond.includes !== undefined && target.type !== "chips") return "includes only works with chips elements";
@@ -138,7 +151,7 @@ export function validateStructure(input: unknown): StructureValidationResult {
     }
     return { issues, warnings };
   }
-  const def = parsed.data as StructureDefinition;
+  const def = normalizeSeeds(parsed.data as StructureDefinition);
 
   const seen = new Map<string, StructureElement>();
   def.elements.forEach((el, i) => {
@@ -162,6 +175,9 @@ export function validateStructure(input: unknown): StructureValidationResult {
       issues.push({ path: `${path}.minPairs`, message: "minPairs must not exceed maxPairs" });
     }
     if (el.type === "process") graphChecks(el.seed, `${path}.seed`, issues, warnings);
+    if (el.type === "whiteboard" && el.seed) {
+      for (const message of whiteboardProblems(el.seed)) issues.push({ path: `${path}.seed`, message });
+    }
     seen.set(el.key, el);
   });
 
@@ -289,6 +305,29 @@ export function validateStructureAnswers(def: StructureDefinition, raw: unknown)
           break;
         }
         cleaned[el.key] = parsed.data;
+        break;
+      }
+      case "whiteboard": {
+        if (value === undefined) {
+          missing();
+          break;
+        }
+        const parsed = whiteboardBoardInputSchema.safeParse(value);
+        if (!parsed.success || whiteboardProblems(parsed.data).length > 0) {
+          issues.push({ key: el.key, code: "invalid" });
+          break;
+        }
+        const items = enforceSeedLocks(el.seed, layoutMissingItems(parsed.data.items));
+        if (items.length > WHITEBOARD_MAX_ITEMS) {
+          issues.push({ key: el.key, code: "invalid" });
+          break;
+        }
+        const board = { items };
+        if (!whiteboardHasContent(board)) {
+          missing();
+          if (el.required || items.length === 0) break;
+        }
+        cleaned[el.key] = board;
         break;
       }
       case "markdown": {

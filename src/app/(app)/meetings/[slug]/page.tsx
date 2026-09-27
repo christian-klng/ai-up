@@ -31,7 +31,7 @@ export default async function MeetingSpacePage({ params }: PageProps<"/meetings/
           </span>
         }
         description={space.purpose}
-        actions={<MeetingDialog spaceId={space.id} recordingDefault={space.recordingDefault} callsAvailable={callsAvailable} canSetCover={user.role === "admin"} />}
+        actions={<MeetingDialog spaceId={space.id} callsAvailable={callsAvailable} canSetCover={user.role === "admin"} />}
       />
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">{t("empty")}</div>

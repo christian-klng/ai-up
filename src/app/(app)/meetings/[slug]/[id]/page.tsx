@@ -75,7 +75,6 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
                     meeting={{ id: meeting.id, title: meeting.title, description: meeting.description, kind: meeting.kind, startsAt: meeting.startsAt?.toISOString() ?? null, recordingEnabled: meeting.recordingEnabled, status: meeting.status, coverMediaId: meeting.coverMediaId }}
                     spaceId={space.id}
                     spaceSlug={space.slug}
-                    recordingDefault={space.recordingDefault}
                     callsAvailable={callsAvailable}
                     invite={isAdmin ? (invite ? { url: invite.url, enabled: invite.enabled, useCount: invite.useCount } : { url: null, enabled: false, useCount: 0 }) : null}
                   />

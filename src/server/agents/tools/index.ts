@@ -230,7 +230,7 @@ register({
     if (!tpl) return `No template with id ${input.templateId}.`;
     if (!(await isTemplateAvailableForArea(area.id, tpl.id))) return `Template "${tpl.name}" is not available in collection "${area.name}".`;
 
-    const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, input.title, input.answers);
+    const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, input.title, input.answers, { actorId: ctx.userId });
     if (!built.ok) return `The answers do not fit the template:\n${built.issues.map((i) => `- ${i.key}: ${i.code}${i.count === undefined ? "" : ` (${i.count})`}`).join("\n")}`;
     const content = await createContent(ctx.communityId, area.id, "structured", built.input, ctx.userId, agentOrigin(ctx));
     ctx.written.add(content.id);
@@ -264,7 +264,7 @@ register({
       { structureId: snapshot.structureId, structureVersion: snapshot.structureVersion, definition: snapshot.definition },
       input.title ?? entry.title,
       input.answers ?? snapshot.answers,
-      { changeNote: input.changeNote ?? null, prevEnrichment: snapshot.enrichment, imageMediaId: entry.version.mediaId },
+      { changeNote: input.changeNote ?? null, prevEnrichment: snapshot.enrichment, imageMediaId: entry.version.mediaId, prevAnswers: snapshot.answers, actorId: ctx.userId },
     );
     if (!built.ok) return `The answers do not fit the entry's template:\n${built.issues.map((i) => `- ${i.key}: ${i.code}${i.count === undefined ? "" : ` (${i.count})`}`).join("\n")}`;
     const updated = await addContentVersion(ctx.communityId, entry.id, { ...built.input, meta: { ...entry.version.meta, ...built.input.meta } }, ctx.userId, agentOrigin(ctx));
