@@ -1161,27 +1161,18 @@
     "create": "New meeting",
     "createSubmit": "Create meeting",
     "edit": "Edit meeting",
-    "dialogIntro": "Kind, title and an optional date. Participants start the call themselves; the minutes are written on the meeting page.",
-    "kind": "Kind",
     "kinds": {
       "protocol": "Minutes",
       "audio": "Audio call",
       "video": "Video call"
-    },
-    "kindHints": {
-      "protocol": "Markdown minutes only – for meetings outside the app.",
-      "audio": "Audio call in the app, optionally recorded.",
-      "video": "Video call in the app, optionally with audio recording."
     },
     "callsUnavailable": "Audio/video calls are not set up yet (Admin → Integrations).",
     "titleLabel": "Title",
     "titlePlaceholder": "e.g. Weekly sync",
     "descriptionLabel": "Description (optional)",
     "descriptionPlaceholder": "What is it about, who should join?",
-    "startsAt": "Date (optional)",
-    "startsAtHint": "Leave empty for ad-hoc meetings.",
+    "startsAt": "Date",
     "recordingEnabled": "Audio recording",
-    "recordingEnabledHint": "The call audio is recorded and attached here after the meeting.",
     "empty": "No meetings in this space yet.",
     "sections": {
       "live": "Live now",
@@ -1254,6 +1245,7 @@
     "deleted": "Meeting deleted.",
     "errors": {
       "titleRequired": "Please enter a title.",
+      "startsAtRequired": "Please set a date.",
       "forbidden": "You are not allowed to edit this meeting."
     },
     "protocol": {
