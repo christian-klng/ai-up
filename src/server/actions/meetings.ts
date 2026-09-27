@@ -7,7 +7,7 @@ import { setInviteEnabled } from "@/server/domain/invites";
 import { getMedia } from "@/server/media/storage";
 import { canEditMeeting, createMeeting, getMeeting, getSpaceById, restoreProtocolVersion, saveProtocol, softDeleteMeeting, updateMeeting } from "@/server/domain/meetings";
 
-export type MeetingFormState = { status: "idle" } | { status: "saved"; meetingId: string; spaceSlug: string } | { status: "error"; code: "titleRequired" | "forbidden" | "unexpected" };
+export type MeetingFormState = { status: "idle" } | { status: "saved"; meetingId: string; spaceSlug: string } | { status: "error"; code: "titleRequired" | "startsAtRequired" | "forbidden" | "unexpected" };
 
 const schema = z.object({
   meetingId: z.string().uuid().optional(),
@@ -39,7 +39,8 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     description: formData.get("description") || undefined,
     kind: formData.get("kind"),
     startsAt: formData.get("startsAt") || undefined,
-    recordingEnabled: formData.has("recordingEnabled") ? formData.get("recordingEnabled") === "on" : undefined,
+    // an unchecked switch is not submitted at all, so absence means "off"
+    recordingEnabled: formData.get("recordingEnabled") === "on",
     coverMediaId: formData.has("coverMediaId") ? String(formData.get("coverMediaId")) : undefined,
   });
   // "protocol" (minutes without a call) is legacy – kept for existing meetings, no longer created.
@@ -66,10 +67,13 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     const existing = await getMeeting(user.communityId, d.meetingId);
     if (!existing) return { status: "error", code: "unexpected" };
     if (!canEditMeeting(user, existing)) return { status: "error", code: "forbidden" };
+    // legacy meetings without a date may stay undated, but a date once set cannot be removed
+    if (!startsAt && existing.startsAt) return { status: "error", code: "startsAtRequired" };
     await updateMeeting(user.communityId, d.meetingId, { title: d.title, description: d.description ?? null, startsAt, recordingEnabled: d.recordingEnabled, kind: existing.status === "scheduled" ? d.kind : undefined, coverMediaId }, user.id);
     revalidatePath("/", "layout");
     return { status: "saved", meetingId: d.meetingId, spaceSlug: space.slug };
   }
+  if (!startsAt) return { status: "error", code: "startsAtRequired" };
   const created = await createMeeting(user.communityId, d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled ?? space.recordingDefault, coverMediaId: coverMediaId ?? null }, user.id);
   revalidatePath("/", "layout");
   return { status: "saved", meetingId: created.id, spaceSlug: space.slug };
