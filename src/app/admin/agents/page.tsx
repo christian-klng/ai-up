@@ -9,16 +9,19 @@ import { PageHeader } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
 import { AgentForm } from "./agent-form";
 import { QuotaForm } from "./quota-form";
+import { LiveForm } from "./live-form";
+import { getLiveSettingsView } from "@/server/domain/live-settings";
 
 export default async function AdminAgentsPage() {
   const user = await requireAdmin();
-  const [t, agent, providers, settings, usage, format] = await Promise.all([
+  const [t, agent, providers, settings, usage, format, live] = await Promise.all([
     getTranslations("admin.agents"),
     ensureSystemAgent(user.communityId),
     listProviderOptions(user.communityId),
     requireCommunity(),
     listWeeklyUsage(user.communityId),
     getFormatter(),
+    getLiveSettingsView(user.communityId),
   ]);
 
   return (
@@ -43,6 +46,8 @@ export default async function AdminAgentsPage() {
 
       <div className="mt-6 grid gap-6">
         <QuotaForm budget={settings.agentWeeklyTokenBudget} outputWeight={settings.agentOutputTokenWeight} />
+
+        <LiveForm initial={{ enabled: live.enabled, sttModel: live.sttModel, hasKey: live.hasKey, keyMasked: live.keyMasked, checkedAt: live.checkedAt, lastError: live.lastError }} />
 
         <section>
           <h2 className="mb-1 text-sm font-medium">{t("usageTitle")}</h2>

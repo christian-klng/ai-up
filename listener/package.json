@@ -1,0 +1,27 @@
+{
+  "name": "ai-up-listener",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Live listener for AI-Up meetings: joins LiveKit rooms, transcribes every participant, reports segments to the app (docs/live-ki-agenten.md).",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=../.env.local src/index.ts start",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=dist/index.js",
+    "start": "node dist/index.js start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@livekit/agents": "1.9.1",
+    "@livekit/agents-plugin-silero": "1.9.1",
+    "@livekit/rtc-node": "1.1.0",
+    "@mistralai/mistralai": "2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "livekit-server-sdk": "^2.18.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.0"
+  }
+}

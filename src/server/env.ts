@@ -32,6 +32,8 @@ const schema = z.object({
 
   BETTER_AUTH_SECRET: z.string().min(16),
   APP_ENCRYPTION_KEY: z.string().min(16),
+  /** HMAC secret shared with the live listener (listener/, docs/live-ki-agenten.md); unset = live routes answer 503 */
+  LISTENER_SHARED_SECRET: z.string().min(32).optional(),
 
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),

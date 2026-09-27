@@ -15,6 +15,7 @@ services:
       - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY}
+      - LISTENER_SHARED_SECRET=${LISTENER_SHARED_SECRET:-}
       - DATABASE_URL=postgres://aiup:${POSTGRES_PASSWORD}@postgres:5432/aiup
       - REDIS_URL=redis://redis:6379
       - UPLOAD_DIR=/data/uploads

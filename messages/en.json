@@ -589,7 +589,21 @@
       "usageBreakdown": "{input} input · {output} output",
       "reasoningMax": "Maximum",
       "reasoningUnknown": "No reasoning levels recorded for this model – hence only “off”. Record them via MCP (see docs/modell-faehigkeiten.md).",
-      "reasoningNone": "This model has no reasoning setting."
+      "reasoningNone": "This model has no reasoning setting.",
+      "live": {
+        "title": "Live transcription in meetings",
+        "enabled": "Allow live transcription",
+        "provider": "Provider",
+        "model": "Model",
+        "apiKey": "API key",
+        "keyKeep": "Stored ({masked}) – leave empty to keep",
+        "apiKeyHint": "Costs are billed to this Mistral account.",
+        "check": "Check key",
+        "checkOk": "Key last checked successfully: {date}",
+        "checkFailed": "Check failed ({date}): {error}",
+        "checkOkToast": "Key works.",
+        "checkFailedToast": "Check failed: {error}"
+      }
     },
     "questions": {
       "title": "Questions & surveys",
@@ -1314,7 +1328,10 @@
         "start": "Start recording",
         "stop": "Stop recording",
         "autoHint": "Audio recording starts automatically when the first person joins."
-      }
+      },
+      "transcribingBadge": "Live transcript",
+      "captureBoth": "Recording + live transcript",
+      "transcribingHint": "The conversation is transcribed live and stored."
     },
     "confirmDelete": "Really delete this meeting?",
     "deleted": "Meeting deleted.",
@@ -1371,7 +1388,8 @@
       "uploading": "Uploading …",
       "tooLarge": "The image is too large.",
       "unsupported": "Only JPEG, PNG, WebP or GIF."
-    }
+    },
+    "liveTranscriptionOn": "transcribed live"
   },
   "communities": {
     "switch": "Switch community",

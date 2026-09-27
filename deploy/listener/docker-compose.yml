@@ -1,0 +1,28 @@
+# AI-Up live listener – its OWN Coolify "Docker Compose" resource on the media server (next to LiveKit).
+# Base directory: repository root, compose file: deploy/listener/docker-compose.yml. No domain needed:
+# the listener only connects outward (LiveKit websocket, the app's internal API, the recogniser).
+#
+# Required env vars (Coolify → Environment Variables):
+#   LIVEKIT_URL             – wss://meet.<domain> (same server the app uses)
+#   LIVEKIT_API_KEY/SECRET  – same values as in the app (Admin → Integrations → LiveKit)
+#   APP_URL                 – https://<app-domain>
+#   LISTENER_SHARED_SECRET  – same value as in the app resource (openssl rand -hex 32)
+services:
+  listener:
+    build:
+      context: ../..
+      dockerfile: deploy/listener/Dockerfile
+    restart: unless-stopped
+    environment:
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - APP_URL=${APP_URL}
+      - LISTENER_SHARED_SECRET=${LISTENER_SHARED_SECRET}
+      - LISTENER_IDLE_PROCESSES=${LISTENER_IDLE_PROCESSES:-1}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8081/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "dist/**",
     "data/**",
+    // own package with its own tsconfig (native LiveKit deps, not part of the Next.js app)
+    "listener/**",
   ]),
 ]);
 

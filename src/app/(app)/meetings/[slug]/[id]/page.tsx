@@ -15,6 +15,7 @@ import { MeetingCover, MeetingFacts, MeetingHeader, MeetingLayout, ParticipantCh
 import { ProtocolEditor } from "@/components/meetings/protocol-editor";
 import { CallActions } from "@/components/meetings/call-actions";
 import { Markdown } from "@/components/content/markdown";
+import { isLiveTranscriptionAvailable } from "@/server/meetings/listener";
 
 /** The minutes ("Protokoll") are paused until the feature is reworked – flip to show editor and history again. */
 const SHOW_PROTOCOL = false;
@@ -32,13 +33,14 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
   const [space, meeting] = await Promise.all([getSpaceBySlug(user.communityId, slug), getMeeting(user.communityId, id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
   const isAdmin = user.role === "admin";
-  const [t, format, participants, recordings, lk, invite] = await Promise.all([
+  const [t, format, participants, recordings, lk, invite, liveTranscription] = await Promise.all([
     getTranslations("meetings"),
     getFormatter(),
     listParticipants(meeting.id),
     listRecordings(meeting.id),
     getLiveKitConfig(),
     isAdmin ? getMeetingInvite(meeting.id) : Promise.resolve(undefined),
+    isLiveTranscriptionAvailable(user.communityId),
   ]);
   const editable = canEditMeeting(user, meeting);
   // An invited member arriving at their meeting has reached the target – no redirect from /home later.
@@ -92,7 +94,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
           <>
             <Card>
               <CardContent className="grid gap-4">
-                <MeetingFacts startsAt={meeting.startsAt} startedAt={meeting.startedAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} status={meeting.status} endedAt={meeting.endedAt} participantCount={meeting.participantCount} space={space} spaceHref={`/meetings/${space.slug}`} />
+                <MeetingFacts startsAt={meeting.startsAt} startedAt={meeting.startedAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} liveTranscription={liveTranscription} status={meeting.status} endedAt={meeting.endedAt} participantCount={meeting.participantCount} space={space} spaceHref={`/meetings/${space.slug}`} />
                 {callKind && (
                   <>
                     <Separator />

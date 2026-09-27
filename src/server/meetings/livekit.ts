@@ -152,6 +152,10 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
         const { startRecording } = await import("./recording");
         await startRecording(m);
       }
+      {
+        const { ensureListener } = await import("./listener");
+        await ensureListener(m);
+      }
       break;
     }
     case "participant_left": {

@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { MeetingCover, MeetingFacts, MeetingHeader, MeetingLayout } from "@/components/meetings/meeting-detail";
 import { InviteForm } from "./invite-form";
 import { MeetingJoinButton } from "./meeting-join-button";
+import { isLiveTranscriptionAvailable } from "@/server/meetings/listener";
 
 /** Date line for the OpenGraph description. */
 async function startsAtLabel(resolved: ResolvedInvite): Promise<string | null> {
@@ -92,7 +93,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
               <CardDescription>{t("intro")}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <MeetingFacts startsAt={meeting.startsAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} status={meeting.status} space={space} />
+              <MeetingFacts startsAt={meeting.startsAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} liveTranscription={await isLiveTranscriptionAvailable(resolved.communityId)} status={meeting.status} space={space} />
               <Separator />
               {account ? <MeetingJoinButton token={token} /> : <InviteForm token={token} loginHref={`/login?next=${encodeURIComponent(resolved.href)}`} />}
             </CardContent>

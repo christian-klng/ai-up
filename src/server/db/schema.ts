@@ -986,6 +986,72 @@ export const meetingRecordings = pgTable(
   (t) => [index("meeting_recordings_meeting_idx").on(t.meetingId, t.createdAt)],
 );
 
+// ---------------------------------------------------------------------------
+// Live AI in meetings (docs/live-ki-agenten.md): a listener transcribes every participant live
+// ---------------------------------------------------------------------------
+
+export const liveSttProviderEnum = pgEnum("live_stt_provider", ["mistral"]);
+
+/**
+ * Per-community live transcription settings. The community pays: the recogniser runs on the key its
+ * admin enters here – nothing is inherited from the root or the operator.
+ */
+export const communityLiveSettings = pgTable("community_live_settings", {
+  communityId: text("community_id")
+    .primaryKey()
+    .references(() => communities.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  sttProvider: liveSttProviderEnum("stt_provider").notNull().default("mistral"),
+  sttModel: text("stt_model").notNull().default("voxtral-mini-transcribe-realtime-2602"),
+  /** AES-256-GCM encrypted (see src/server/crypto.ts) */
+  sttApiKeyEncrypted: text("stt_api_key_encrypted"),
+  sttCheckedAt: timestamp("stt_checked_at", { withTimezone: true }),
+  sttLastError: text("stt_last_error"),
+  ...timestamps,
+});
+
+/** Final utterances reported by the listener. `id` comes from the listener, so re-sends are idempotent. */
+export const meetingTranscriptSegments = pgTable(
+  "meeting_transcript_segments",
+  {
+    id: uuid("id").primaryKey(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    /** LiveKit room sid – separates the sessions of a reopened meeting */
+    session: text("session").notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    speakerName: text("speaker_name").notNull(),
+    trackSid: text("track_sid").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
+    text: text("text").notNull(),
+    language: text("language"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("meeting_transcript_segments_meeting_idx").on(t.meetingId, t.startedAt)],
+);
+
+/**
+ * Live AI consumption per community, meeting and day – the basis for limits and the admin overview.
+ * The meeting reference is kept loose so a deleted meeting still counts toward the month.
+ */
+export const meetingLiveUsage = pgTable(
+  "meeting_live_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
+    meetingId: uuid("meeting_id").references(() => meetings.id, { onDelete: "set null" }),
+    /** calendar day in the app time zone, YYYY-MM-DD */
+    day: text("day").notNull(),
+    audioSeconds: integer("audio_seconds").notNull().default(0),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("meeting_live_usage_idx").on(t.communityId, t.meetingId, t.day)],
+);
+
 /**
  * The shareable invite link of a meeting (one per meeting, admins only, off by default). Anyone
  * holding an enabled link may register and is activated immediately – the admin vouches by switching

@@ -8,7 +8,6 @@ import {
   RoomContext,
   VideoTrack,
   useConnectionState,
-  useIsRecording,
   useLocalParticipant,
   useParticipants,
   useRoomContext,
@@ -19,6 +18,7 @@ import { Mic, MicOff, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MeetingKindIcon } from "./meeting-badges";
 import { useCall, type ActiveCall } from "./call-provider";
+import { useCallCapture } from "./capture-badge";
 
 /**
  * Floating card shown while a call is active and the user is anywhere but the call page itself
@@ -39,7 +39,7 @@ function MiniPlayerCard({ call, onLeave }: { call: ActiveCall; onLeave: () => Pr
   const t = useTranslations("meetings.call");
   const room = useRoomContext();
   const participants = useParticipants();
-  const isRecording = useIsRecording();
+  const { recording, transcribing } = useCallCapture();
   const connectionState = useConnectionState();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
   const cameraTracks = useTracks([Track.Source.Camera]);
@@ -52,7 +52,7 @@ function MiniPlayerCard({ call, onLeave }: { call: ActiveCall; onLeave: () => Pr
       <Link href={call.callHref} aria-label={t("mini.openCall")} className="flex items-center gap-2 border-b px-3 py-2 hover:bg-accent">
         <MeetingKindIcon kind={call.kind} className="shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{call.title}</span>
-        {isRecording && <span className="size-1.5 shrink-0 rounded-full bg-red-500 animate-pulse" aria-label={t("recordingBadge")} />}
+        {(recording || transcribing) && <span className="size-1.5 shrink-0 rounded-full bg-red-500 animate-pulse" aria-label={recording ? t("recordingBadge") : t("transcribingBadge")} />}
       </Link>
       {call.kind === "video" && (
         <div className="aspect-video bg-black">

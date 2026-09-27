@@ -4,13 +4,15 @@ import "@livekit/components-styles";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { AudioConference, RoomContext, VideoConference } from "@livekit/components-react";
+import { AudioConference, RoomContext } from "@livekit/components-react";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MeetingKindIcon } from "./meeting-badges";
 import { useCall } from "./call-provider";
+import { CaptureBadge } from "./capture-badge";
+import { VideoConference } from "./video-conference";
 
 type Props = {
   meetingId: string;
@@ -69,7 +71,13 @@ export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recor
         </Button>
         <MeetingKindIcon kind={kind} className="text-muted-foreground" />
         <span className="truncate text-sm font-medium">{title}</span>
-        {recordingEnabled && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" />{t("recordingBadge")}</span>}
+        {connectedHere ? (
+          <RoomContext.Provider value={room}>
+            <CaptureBadge recordingEnabled={recordingEnabled} />
+          </RoomContext.Provider>
+        ) : (
+          recordingEnabled && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" />{t("recordingBadge")}</span>
+        )}
         {!connectedHere && (
           <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" /> {t("connecting")}

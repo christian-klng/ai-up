@@ -589,7 +589,21 @@
       "usageBreakdown": "{input} Eingabe · {output} Ausgabe",
       "reasoningMax": "Maximal",
       "reasoningUnknown": "Für dieses Modell sind keine Reasoning-Stufen hinterlegt – deshalb nur „Aus\". Stufen per MCP eintragen (siehe docs/modell-faehigkeiten.md).",
-      "reasoningNone": "Dieses Modell hat keine Reasoning-Einstellung."
+      "reasoningNone": "Dieses Modell hat keine Reasoning-Einstellung.",
+      "live": {
+        "title": "Live-Transkription in Meetings",
+        "enabled": "Live-Transkription erlauben",
+        "provider": "Anbieter",
+        "model": "Modell",
+        "apiKey": "API-Schlüssel",
+        "keyKeep": "Gespeichert ({masked}) – leer lassen zum Behalten",
+        "apiKeyHint": "Die Kosten laufen über dieses Mistral-Konto.",
+        "check": "Schlüssel prüfen",
+        "checkOk": "Schlüssel zuletzt erfolgreich geprüft: {date}",
+        "checkFailed": "Prüfung fehlgeschlagen ({date}): {error}",
+        "checkOkToast": "Schlüssel funktioniert.",
+        "checkFailedToast": "Prüfung fehlgeschlagen: {error}"
+      }
     },
     "questions": {
       "title": "Fragen & Umfragen",
@@ -1314,7 +1328,10 @@
         "start": "Aufzeichnung starten",
         "stop": "Aufzeichnung stoppen",
         "autoHint": "Audio-Mitschnitt startet automatisch, sobald die erste Person im Call ist."
-      }
+      },
+      "transcribingBadge": "Live-Transkript",
+      "captureBoth": "Aufzeichnung + Live-Transkript",
+      "transcribingHint": "Das Gespräch wird live transkribiert und gespeichert."
     },
     "confirmDelete": "Dieses Meeting wirklich löschen?",
     "deleted": "Meeting gelöscht.",
@@ -1371,7 +1388,8 @@
       "uploading": "Lädt hoch …",
       "tooLarge": "Das Bild ist zu groß.",
       "unsupported": "Nur JPEG, PNG, WebP oder GIF."
-    }
+    },
+    "liveTranscriptionOn": "Wird live transkribiert"
   },
   "communities": {
     "switch": "Community wechseln",

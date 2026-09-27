@@ -15,7 +15,8 @@
     "worker": "tsx watch --env-file-if-exists=.env.local worker/index.ts",
     "worker:build": "esbuild worker/index.ts src/server/db/migrate.ts --bundle --platform=node --target=node22 --outdir=dist --outbase=. --packages=external --format=cjs",
     "test": "vitest run",
-    "worker:start": "node dist/worker/index.js"
+    "worker:start": "node dist/worker/index.js",
+    "listener:typecheck": "npm --prefix listener run typecheck"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
