@@ -5,12 +5,13 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, FileText, GitBranch, Image as ImageIcon, Info, Link2, MessageSquare, Plus, Presentation, Tags, Trash2, Type, Video } from "lucide-react";
+import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, FileText, GitBranch, Image as ImageIcon, Info, Link2, MessageSquare, Plus, Presentation, SquareKanban, Tags, Trash2, Type, Video } from "lucide-react";
 import { saveTemplateAction, deleteTemplateAction } from "@/server/actions/admin-templates";
 import type { ValidationIssue } from "@/lib/structures/validate";
 import type { ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType, WhiteboardBoard } from "@/lib/structures/types";
 import { emptyEvaluation, type TemplateEvaluation } from "@/lib/structures/evaluation";
 import { emptyProcessGraph, emptyWhiteboard, isAnswerable } from "@/lib/structures/types";
+import { defaultKanbanSeed } from "@/lib/structures/kanban";
 import { StructureFillForm } from "@/components/structures/structure-fill-form";
 import { IconPicker } from "@/components/common/icon-picker";
 import { EvaluationEditor } from "@/components/structures/evaluation-editor";
@@ -36,6 +37,7 @@ const ELEMENT_ICONS: Record<StructureElementType, React.ComponentType<{ classNam
   qa: MessageSquare,
   process: GitBranch,
   whiteboard: Presentation,
+  kanban: SquareKanban,
   markdown: FileText,
   image: ImageIcon,
   link: Link2,
@@ -65,6 +67,8 @@ function newElement(type: StructureElementType, key: string, label: string): Str
       return { ...base, type, seed: emptyProcessGraph() };
     case "whiteboard":
       return { ...base, type };
+    case "kanban":
+      return { ...base, type, seed: defaultKanbanSeed() };
     case "image":
     case "link":
     case "video":

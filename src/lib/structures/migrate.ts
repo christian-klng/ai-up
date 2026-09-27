@@ -1,5 +1,6 @@
 import type { StructureAnswers, StructureDefinition, StructureElement } from "./types";
-import { isAnswerable, isMarkdownSectionArray } from "./types";
+import { isAnswerable, isKanbanBoard, isMarkdownSectionArray } from "./types";
+import { normalizeKanbanBoard } from "./kanban";
 import { hasAnswerValue } from "./visibility";
 
 export type AnswerMigrationResult = {
@@ -86,6 +87,13 @@ export function migrateStructureAnswers(oldDef: StructureDefinition, newDef: Str
         const kept = (value as string[]).filter((v) => typeof v === "string" && newEl.options.includes(v));
         if (kept.length === 0) break;
         migrated[newEl.key] = kept;
+        carriedKeys.push(newEl.key);
+        break;
+      }
+      case "kanban": {
+        if (!isKanbanBoard(value)) break;
+        // fixed columns follow the new template: cards find their column by id/title, the rest go to the first
+        migrated[newEl.key] = newEl.lockColumns ? normalizeKanbanBoard(value, { lockedColumns: newEl.seed.columns }).board : value;
         carriedKeys.push(newEl.key);
         break;
       }

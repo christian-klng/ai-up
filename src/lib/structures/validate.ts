@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ProcessGraph, StructureAnswers, StructureDefinition, StructureElement } from "./types";
 import { STRUCTURE_KEY_REGEX, isAnswerable, isMarkdownSectionArray, isMediaLikeAnswer } from "./types";
+import { kanbanBoardInputSchema, kanbanHasContent, normalizeKanbanBoard } from "./kanban";
 import { isQaPairArray, pruneHiddenAnswers, visibleElements } from "./visibility";
 import { WHITEBOARD_MAX_ITEMS, enforceSeedLocks, layoutMissingItems, whiteboardBoardInputSchema, whiteboardHasContent, whiteboardProblems } from "./whiteboard";
 
@@ -67,6 +68,7 @@ export const structureElementSchema = z.discriminatedUnion("type", [
   }),
   z.object({ ...base, type: z.literal("process"), seed: processGraphSchema }),
   z.object({ ...base, type: z.literal("whiteboard"), seed: whiteboardBoardInputSchema.optional(), collaborative: z.boolean().optional() }),
+  z.object({ ...base, type: z.literal("kanban"), seed: kanbanBoardInputSchema, lockColumns: z.boolean().optional(), collaborative: z.boolean().optional() }),
   z.object({ ...base, type: z.literal("markdown"), placeholder: z.string().trim().max(200).optional(), maxLength: z.number().int().min(1).max(200000).optional(), multiple: z.boolean().optional() }),
   z.object({ ...base, type: z.literal("image") }),
   z.object({ ...base, type: z.literal("link") }),
@@ -119,11 +121,15 @@ function graphChecks(graph: ProcessGraph, path: string, issues: ValidationIssue[
   }
 }
 
-/** Whiteboard seeds may omit geometry (MCP); the stored definition always carries it, never authors. */
+/**
+ * Whiteboard seeds may omit geometry (MCP); the stored definition always carries it, never authors.
+ * Kanban seeds may omit ids; the stored definition carries them (the lock of "lockColumns" keys on them).
+ */
 function normalizeSeeds(def: StructureDefinition): StructureDefinition {
   return {
     ...def,
     elements: def.elements.map((el) => {
+      if (el.type === "kanban") return { ...el, seed: normalizeKanbanBoard(el.seed).board };
       if (el.type !== "whiteboard" || !el.seed) return el;
       return { ...el, seed: { items: layoutMissingItems(el.seed.items).map((i) => ({ ...i, createdBy: undefined })) } };
     }),
@@ -177,6 +183,9 @@ export function validateStructure(input: unknown): StructureValidationResult {
     if (el.type === "process") graphChecks(el.seed, `${path}.seed`, issues, warnings);
     if (el.type === "whiteboard" && el.seed) {
       for (const message of whiteboardProblems(el.seed)) issues.push({ path: `${path}.seed`, message });
+    }
+    if (el.type === "kanban") {
+      for (const message of normalizeKanbanBoard(el.seed).problems) issues.push({ path: `${path}.seed`, message });
     }
     seen.set(el.key, el);
   });
@@ -326,6 +335,29 @@ export function validateStructureAnswers(def: StructureDefinition, raw: unknown)
         if (!whiteboardHasContent(board)) {
           missing();
           if (el.required || items.length === 0) break;
+        }
+        cleaned[el.key] = board;
+        break;
+      }
+      case "kanban": {
+        if (value === undefined) {
+          missing();
+          break;
+        }
+        const parsed = kanbanBoardInputSchema.safeParse(value);
+        if (!parsed.success) {
+          issues.push({ key: el.key, code: "invalid" });
+          break;
+        }
+        const { board, problems } = normalizeKanbanBoard(parsed.data, { lockedColumns: el.lockColumns ? el.seed.columns : undefined });
+        if (problems.length > 0) {
+          issues.push({ key: el.key, code: "invalid" });
+          break;
+        }
+        if (!kanbanHasContent(board)) {
+          missing();
+          // an optional board keeps its (possibly renamed) columns even without cards
+          if (el.required) break;
         }
         cleaned[el.key] = board;
         break;

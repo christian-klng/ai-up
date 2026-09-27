@@ -1,6 +1,7 @@
 import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureEnrichment, VideoAnswer } from "./types";
-import { isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "./types";
+import { isKanbanBoard, isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "./types";
 import { whiteboardText, whiteboardToMarkdown } from "./whiteboard";
+import { kanbanText, kanbanToMarkdown } from "./kanban";
 import { visibleElements } from "./visibility";
 import { isQaPairArray } from "./visibility";
 
@@ -97,6 +98,13 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
         parts.push(`## ${el.label}\n\n${outline}`);
         break;
       }
+      case "kanban": {
+        if (!isKanbanBoard(value)) break;
+        const outline = kanbanToMarkdown(value);
+        if (!outline) break;
+        parts.push(`## ${el.label}\n\n${outline}`);
+        break;
+      }
       case "markdown": {
         if (el.multiple) {
           // accordion list: each section becomes a "## title" block
@@ -152,6 +160,7 @@ export function flattenAnswersText(def: StructureDefinition, answers: StructureA
     if (typeof value === "string") parts.push(value);
     else if (Array.isArray(value) && value.every((v) => typeof v === "string")) parts.push((value as string[]).join(" "));
     else if (isWhiteboardBoard(value)) parts.push(whiteboardText(value));
+    else if (isKanbanBoard(value)) parts.push(kanbanText(value));
     else if (isMarkdownSectionArray(value)) parts.push(value.map((s) => `${s.title} ${s.body}`).join(" "));
     else if (isQaPairArray(value)) parts.push((value as QaPair[]).map((p) => `${p.question} ${p.answer}`).join(" "));
     else if (isMediaLikeAnswer(value)) {

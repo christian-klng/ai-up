@@ -1,6 +1,7 @@
 import type { ProcessGraph, QaPair, ShowIf, StructureAnswers, StructureAnswerValue, StructureDefinition, StructureElement } from "./types";
-import { isAnswerable, isMediaLikeAnswer, isWhiteboardBoard } from "./types";
+import { isAnswerable, isKanbanBoard, isMediaLikeAnswer, isWhiteboardBoard } from "./types";
 import { whiteboardHasContent } from "./whiteboard";
+import { kanbanHasContent } from "./kanban";
 
 export function hasAnswerValue(value: StructureAnswerValue | undefined): boolean {
   return hasValue(value);
@@ -12,6 +13,7 @@ function hasValue(value: StructureAnswerValue | undefined): boolean {
   if (typeof value === "boolean") return value;
   if (Array.isArray(value)) return value.length > 0;
   if (isWhiteboardBoard(value)) return whiteboardHasContent(value);
+  if (isKanbanBoard(value)) return kanbanHasContent(value);
   if (isMediaLikeAnswer(value)) return Boolean(value.mediaId?.trim() || value.url?.trim());
   // ProcessGraph counts as answered once it has any node
   return (value as ProcessGraph).nodes?.length > 0;

@@ -80,6 +80,15 @@ export type WhiteboardItem = {
 
 export type WhiteboardBoard = { items: WhiteboardItem[] };
 
+/** Card colours – palette tokens, mapped to theme-aware classes by the component. */
+export const KANBAN_COLORS = ["red", "orange", "yellow", "green", "blue", "purple", "brown", "gray"] as const;
+export type KanbanColor = (typeof KANBAN_COLORS)[number];
+export type KanbanCard = { id: string; title: string; description?: string; color?: KanbanColor };
+/** Cards in display order. */
+export type KanbanColumn = { id: string; title: string; cards: KanbanCard[] };
+/** Columns in display order (docs/kanban-board.md). */
+export type KanbanBoard = { columns: KanbanColumn[] };
+
 export type StructureElement =
   | (StructureElementBase & { type: "info"; body: string })
   | (StructureElementBase & { type: "text"; placeholder?: string; maxLength?: number })
@@ -91,6 +100,8 @@ export type StructureElement =
   | (StructureElementBase & { type: "process"; seed: ProcessGraph })
   /** Free canvas (sticky notes, text, boxes, images). `collaborative` (default true): every active member may edit it live. */
   | (StructureElementBase & { type: "whiteboard"; seed?: WhiteboardBoard; collaborative?: boolean })
+  /** Cards in columns. `lockColumns`: members move and edit cards only. `collaborative` (default true) as for whiteboards. */
+  | (StructureElementBase & { type: "kanban"; seed: KanbanBoard; lockColumns?: boolean; collaborative?: boolean })
   | (StructureElementBase & { type: "markdown"; placeholder?: string; maxLength?: number; multiple?: boolean })
   | (StructureElementBase & { type: "image" })
   | (StructureElementBase & { type: "link" })
@@ -118,7 +129,7 @@ export type LinkAnswer = { url: string };
 /** video answer: exactly one of mediaId (upload) or url (YouTube/Vimeo/direct) */
 export type VideoAnswer = { mediaId?: string; url?: string };
 
-export type StructureAnswerValue = string | boolean | string[] | QaPair[] | MarkdownSection[] | ProcessGraph | WhiteboardBoard | ImageAnswer | LinkAnswer | VideoAnswer;
+export type StructureAnswerValue = string | boolean | string[] | QaPair[] | MarkdownSection[] | ProcessGraph | WhiteboardBoard | KanbanBoard | ImageAnswer | LinkAnswer | VideoAnswer;
 
 export type StructureAnswers = Record<string, StructureAnswerValue>;
 
@@ -161,8 +172,12 @@ export type MediaLikeAnswer = { mediaId?: string; url?: string; alt?: string };
 export function isMediaLikeAnswer(value: unknown): value is MediaLikeAnswer {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const v = value as MediaLikeAnswer;
-  // Process graphs and whiteboards are objects too – tell them apart by their collections.
-  return (v.mediaId === undefined || typeof v.mediaId === "string") && (v.url === undefined || typeof v.url === "string") && !("nodes" in value) && !("items" in value);
+  // Process graphs, whiteboards and kanban boards are objects too – tell them apart by their collections.
+  return (v.mediaId === undefined || typeof v.mediaId === "string") && (v.url === undefined || typeof v.url === "string") && !("nodes" in value) && !("items" in value) && !("columns" in value);
+}
+
+export function isKanbanBoard(value: unknown): value is KanbanBoard {
+  return typeof value === "object" && value !== null && !Array.isArray(value) && Array.isArray((value as KanbanBoard).columns);
 }
 
 export function isWhiteboardBoard(value: unknown): value is WhiteboardBoard {
@@ -179,13 +194,14 @@ export function isAnswerable(el: StructureElement): boolean {
   return el.type !== "info";
 }
 
-/** Untouched process/whiteboard elements default to their seed (fill form, server action and MCP share this). */
+/** Untouched process/whiteboard/kanban elements default to their seed (fill form, server action and MCP share this). */
 export function fillSeeds(def: StructureDefinition, answers: StructureAnswers): StructureAnswers {
   const filled = { ...answers };
   for (const el of def.elements) {
     if (filled[el.key] !== undefined) continue;
     if (el.type === "process") filled[el.key] = structuredClone(el.seed);
     else if (el.type === "whiteboard" && el.seed?.items.length) filled[el.key] = structuredClone(el.seed);
+    else if (el.type === "kanban") filled[el.key] = structuredClone(el.seed);
   }
   return filled;
 }
