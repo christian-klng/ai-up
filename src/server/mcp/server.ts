@@ -271,7 +271,7 @@ Every meeting belongs to exactly one space; the app URL is /meetings/<spaceSlug>
 - \`kind\`: \`protocol\` (markdown protocol only, for meetings held outside the app), \`audio\` or \`video\`
   (a call inside the app). Calls need the LiveKit integration – the context below says whether it is enabled;
   without it, create protocol meetings only.
-- \`title\`, optional \`description\` (plain text), optional \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00).
+- \`title\`, optional \`description\` (plain text), required \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00). The date can be changed later but not removed.
 - \`recordingEnabled\` (audio/video only; defaults to the space's recordingDefault). Protocol meetings never record.
 - \`status\` is managed by the app (\`scheduled\` → \`live\` → \`ended\`) and cannot be set here.
 - The API key's owner becomes host and creator of meetings created here.
@@ -1070,7 +1070,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         title: z.string().trim().min(1).max(200),
         kind: z.enum(["protocol", "audio", "video"]).optional().describe("default protocol"),
         description: z.string().trim().max(4000).optional(),
-        startsAt: z.string().optional().describe("ISO 8601 with timezone"),
+        startsAt: z.string().min(1).describe("ISO 8601 with timezone, required"),
         recordingEnabled: z.boolean().optional().describe("audio/video only; default = space's recordingDefault"),
       },
     },
@@ -1090,6 +1090,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       } catch (err) {
         return fail((err as Error).message);
       }
+      if (!when) return fail("startsAt is required");
       const meeting = await createMeeting(cid, spaceId, { title, description: description ?? null, kind: k, startsAt: when, recordingEnabled: recordingEnabled ?? space.recordingDefault }, auth.user.id);
       await audit(auth, "meeting.created", meeting.id, { spaceId, kind: k }, "meeting");
       const full = await getMeeting(cid, meeting.id);
@@ -1100,13 +1101,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "update_meeting",
     {
       title: "Meetings - Update meeting",
-      description: "Changes title, description, date or recording flag of a meeting. Kind can only change while the meeting is still scheduled. Omitted fields stay; startsAt null clears the date.",
+      description: "Changes title, description, date or recording flag of a meeting. Kind can only change while the meeting is still scheduled. Omitted fields stay; a date can be changed but not removed.",
       inputSchema: {
         id: z.string().uuid(),
         title: z.string().trim().min(1).max(200).optional(),
         description: z.string().trim().max(4000).nullable().optional(),
         kind: z.enum(["protocol", "audio", "video"]).optional(),
-        startsAt: z.string().nullable().optional().describe("ISO 8601 with timezone; null clears"),
+        startsAt: z.string().optional().describe("ISO 8601 with timezone"),
         recordingEnabled: z.boolean().optional(),
       },
     },
@@ -1125,6 +1126,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       } catch (err) {
         return fail((err as Error).message);
       }
+      if (when === null && existing.startsAt) return fail("startsAt cannot be removed – a meeting keeps its date");
       await updateMeeting(cid, id, { title, description, kind, startsAt: when, recordingEnabled }, auth.user.id);
       await audit(auth, "meeting.updated", id, {}, "meeting");
       const full = await getMeeting(cid, id);
