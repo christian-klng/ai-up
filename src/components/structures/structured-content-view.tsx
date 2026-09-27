@@ -3,18 +3,28 @@
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureEntryMeta, VideoAnswer } from "@/lib/structures/types";
-import { isMarkdownSectionArray, isMediaLikeAnswer } from "@/lib/structures/types";
+import { isCollaborativeWhiteboard, isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "@/lib/structures/types";
 import { visibleElements } from "@/lib/structures/visibility";
 import { isQaPairArray } from "@/lib/structures/visibility";
 import { Markdown } from "@/components/content/markdown";
 import { LinkCard, VideoPlayer } from "@/components/content/content-body";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { WhiteboardSection } from "./whiteboard-section";
+
+export type StructuredViewWhiteboards = {
+  contentId: string;
+  /** author or admin – may join boards that are not collaborative */
+  canEditEntry: boolean;
+  /** user id → name for the author tags */
+  authors: Record<string, string>;
+  maxUploadMb: number;
+};
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
 
 /** Native view of a structured entry: sections from the stored answers, process graphs rendered read-only. */
-export function StructuredContentView({ meta }: { meta: StructureEntryMeta }) {
+export function StructuredContentView({ meta, whiteboards }: { meta: StructureEntryMeta; whiteboards?: StructuredViewWhiteboards }) {
   const t = useTranslations("knowledge");
   const { definition, answers, enrichment } = meta;
   return (
@@ -33,6 +43,13 @@ export function StructuredContentView({ meta }: { meta: StructureEntryMeta }) {
           );
         }
         const value = answers[el.key];
+        if (el.type === "whiteboard") {
+          // rendered even without an answer: the live session is how a board gets filled
+          const items = isWhiteboardBoard(value) ? value.items : [];
+          const canJoin = Boolean(whiteboards && (isCollaborativeWhiteboard(el) || whiteboards.canEditEntry));
+          if (!items.length && !canJoin) return null;
+          return <WhiteboardSection key={el.key} label={el.label} elementKey={el.key} items={items} live={whiteboards ? { contentId: whiteboards.contentId, canJoin, authors: whiteboards.authors, maxUploadMb: whiteboards.maxUploadMb } : undefined} />;
+        }
         if (value === undefined) return null;
         switch (el.type) {
           case "text":

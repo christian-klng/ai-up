@@ -392,7 +392,7 @@ registerAction<z.infer<typeof createContentConfig>>({
     const template = await getTemplateBySystemKey(config.type === "link" ? "link" : "text");
     if (!template) throw new Error("system templates missing – run db:migrate");
     const answers = config.type === "link" ? { url: { url: config.url }, ...(config.body.trim() ? { note: config.body } : {}) } : { body: config.body };
-    const built = await buildStructuredVersionInput({ structureId: template.id, structureVersion: template.version, definition: template.definition }, config.title.slice(0, 200), answers, {});
+    const built = await buildStructuredVersionInput({ structureId: template.id, structureVersion: template.version, definition: template.definition }, config.title.slice(0, 200), answers, { actorId: ctx.triggeredBy ?? undefined });
     if (!built.ok) throw new Error(`invalid content: ${JSON.stringify(built.issues)}`);
     const authorId = ctx.triggeredBy;
     const content = await createContent(ctx.communityId, area.id, "structured", built.input, authorId ?? null, { kind: "workflow", runId: ctx.runId, workflowId: ctx.workflowId, depth: ctx.depth + 1 });

@@ -1,9 +1,9 @@
 /**
  * Background worker (BullMQ): executes workflow runs, schedule triggers, entry evaluations and
- * AI agent turns.
+ * AI agent turns, live whiteboard saves.
  * Shares src/server/** with the web process; never imports next/* or React.
  */
-import { Worker, type Job } from "bullmq";
+import { DelayedError, Worker, type Job } from "bullmq";
 import IORedis from "ioredis";
 import { eq } from "drizzle-orm";
 import { env } from "@/server/env";
@@ -17,11 +17,23 @@ import { createRun, executeRun } from "@/server/workflows/engine";
 import { loadRegistry } from "@/server/workflows/registry";
 import { evaluateContentVersion } from "@/server/domain/evaluation";
 import { runTurn } from "@/server/agents/loop";
+import { flushBoard } from "@/server/whiteboards/flush";
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
-async function processJob(job: Job<WorkflowJob>): Promise<void> {
+async function processJob(job: Job<WorkflowJob>, token?: string): Promise<void> {
   const data = job.data;
+  if (data.kind === "whiteboard-flush") {
+    const result = await flushBoard({ contentId: data.contentId, key: data.key });
+    if ("postponeMs" in result && token) {
+      // Same job, later: the session is still busy (docs/whiteboard.md 5.4).
+      await job.moveToDelayed(Date.now() + result.postponeMs, token);
+      throw new DelayedError();
+    }
+    if ("saved" in result) logger.info({ contentId: data.contentId, key: data.key, versionNo: result.saved }, "whiteboard session saved");
+    else if ("skipped" in result) logger.debug({ contentId: data.contentId, key: data.key, reason: result.skipped }, "whiteboard flush skipped");
+    return;
+  }
   if (data.kind === "run") {
     await executeRun(data.runId);
     return;

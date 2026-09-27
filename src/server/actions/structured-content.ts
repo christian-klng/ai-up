@@ -10,6 +10,8 @@ import { enqueueEvaluation } from "@/server/workflows/queue";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import type { StructureEntryMeta } from "@/lib/structures/types";
 import { logger } from "@/server/logger";
+import { markFlushed, readState, type BoardState } from "@/server/whiteboards/state";
+import { isWhiteboardBoard, type StructureAnswers } from "@/lib/structures/types";
 
 export type SaveStructuredEntryResult =
   | { ok: true; contentId: string; areaSlug: string }
@@ -51,6 +53,7 @@ export async function saveStructuredEntryAction(input: {
 
   let snapshot: Pick<StructureEntryMeta, "structureId" | "structureVersion" | "definition">;
   let prevEnrichment: StructureEntryMeta["enrichment"];
+  let prevAnswers: StructureEntryMeta["answers"] | undefined;
 
   if (d.contentId) {
     const existing = await getContent(user.communityId, d.contentId);
@@ -60,6 +63,7 @@ export async function saveStructuredEntryAction(input: {
     if (!prev) return { ok: false, issues: [{ key: "", code: "invalid" }] };
     snapshot = prev;
     prevEnrichment = prev.enrichment;
+    prevAnswers = prev.answers;
     if (d.upgrade) {
       const template = await getTemplateById(user.communityId, prev.structureId);
       if (template && template.version > prev.structureVersion) {
@@ -73,12 +77,34 @@ export async function saveStructuredEntryAction(input: {
     snapshot = { structureId: template.id, structureVersion: template.version, definition: template.definition };
   }
 
-  const built = await buildStructuredVersionInput(snapshot, d.title, d.answers, { changeNote: d.changeNote ?? null, prevEnrichment, imageMediaId: d.imageMediaId ?? null });
+  // Boards of an existing entry are edited live, never through the form: take the running session's
+  // state (or the stored board), so a form save cannot overwrite what others are drawing right now.
+  let answers = d.answers;
+  const liveKeys: string[] = [];
+  const liveStates = new Map<string, BoardState>();
+  if (d.contentId && typeof answers === "object" && answers !== null) {
+    const merged: StructureAnswers = { ...(answers as StructureAnswers) };
+    for (const el of snapshot.definition.elements) {
+      if (el.type !== "whiteboard") continue;
+      const live = await readState({ contentId: d.contentId, key: el.key });
+      if (live) {
+        merged[el.key] = { items: live.items };
+        liveKeys.push(el.key);
+        liveStates.set(el.key, live);
+      } else if (isWhiteboardBoard(prevAnswers?.[el.key])) merged[el.key] = prevAnswers[el.key];
+      else delete merged[el.key];
+    }
+    answers = merged;
+  }
+
+  const built = await buildStructuredVersionInput(snapshot, d.title, answers, { changeNote: d.changeNote ?? null, prevEnrichment, imageMediaId: d.imageMediaId ?? null, prevAnswers, actorId: user.id, trustedWhiteboardKeys: liveKeys });
   if (!built.ok) return { ok: false, issues: built.issues };
 
   try {
     if (d.contentId) {
-      await addContentVersion(user.communityId, d.contentId, built.input, user.id);
+      await addContentVersion(user.communityId, d.contentId, built.input, user.id, { kind: "user" }, { liveBoards: "keep" });
+      // The session's state is saved with this version – no second version for it when the session ends.
+      for (const [key, live] of liveStates) await markFlushed({ contentId: d.contentId, key }, live.seq, live.items);
       revalidatePath(`/knowledge/${area.slug}`, "layout");
       return { ok: true, contentId: d.contentId, areaSlug: area.slug };
     }
