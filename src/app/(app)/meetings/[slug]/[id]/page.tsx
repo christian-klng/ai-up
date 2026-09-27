@@ -16,6 +16,9 @@ import { ProtocolEditor } from "@/components/meetings/protocol-editor";
 import { CallActions } from "@/components/meetings/call-actions";
 import { Markdown } from "@/components/content/markdown";
 
+/** The minutes ("Protokoll") are paused until the feature is reworked – flip to show editor and history again. */
+const SHOW_PROTOCOL = false;
+
 export async function generateMetadata({ params }: PageProps<"/meetings/[slug]/[id]">): Promise<Metadata> {
   const { id } = await params;
   const me = await requireUser();
@@ -65,11 +68,13 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
             description={meeting.description}
             actions={
               <>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href={`/meetings/${space.slug}/${meeting.id}/history`}>
-                    <History className="size-4" /> {t("protocol.history")}
-                  </Link>
-                </Button>
+                {SHOW_PROTOCOL && (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={`/meetings/${space.slug}/${meeting.id}/history`}>
+                      <History className="size-4" /> {t("protocol.history")}
+                    </Link>
+                  </Button>
+                )}
                 {editable && (
                   <MeetingActions
                     meeting={{ id: meeting.id, title: meeting.title, description: meeting.description, kind: meeting.kind, startsAt: meeting.startsAt?.toISOString() ?? null, recordingEnabled: meeting.recordingEnabled, status: meeting.status, coverMediaId: meeting.coverMediaId }}
@@ -144,13 +149,15 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
             </div>
           </details>
         )}
-        <section className="rounded-lg border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold">{t("protocol.title")}</h2>
-            {meeting.protocolVersion > 0 && <span className="text-xs text-muted-foreground">{t("protocol.version", { no: meeting.protocolVersion })}</span>}
-          </div>
-          <ProtocolEditor meetingId={meeting.id} initialBody={meeting.protocolMarkdown ?? ""} version={meeting.protocolVersion} />
-        </section>
+        {SHOW_PROTOCOL && (
+          <section className="rounded-lg border bg-card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold">{t("protocol.title")}</h2>
+              {meeting.protocolVersion > 0 && <span className="text-xs text-muted-foreground">{t("protocol.version", { no: meeting.protocolVersion })}</span>}
+            </div>
+            <ProtocolEditor meetingId={meeting.id} initialBody={meeting.protocolMarkdown ?? ""} version={meeting.protocolVersion} />
+          </section>
+        )}
       </MeetingLayout>
     </article>
   );
