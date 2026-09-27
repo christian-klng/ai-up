@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { AlignLeft, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, ChevronsUpDown, FileText, GitBranch, Image as ImageIcon, Info, Link2, MessageSquare, Plus, Presentation, SquareKanban, Tags, Trash2, Type, Video } from "lucide-react";
 import { saveTemplateAction, deleteTemplateAction } from "@/server/actions/admin-templates";
 import type { ValidationIssue } from "@/lib/structures/validate";
-import type { ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType, WhiteboardBoard } from "@/lib/structures/types";
+import type { KanbanBoard, ProcessGraph, ShowIf, StructureDefinition, StructureElement, StructureElementType, WhiteboardBoard } from "@/lib/structures/types";
 import { emptyEvaluation, type TemplateEvaluation } from "@/lib/structures/evaluation";
 import { emptyProcessGraph, emptyWhiteboard, isAnswerable } from "@/lib/structures/types";
 import { defaultKanbanSeed } from "@/lib/structures/kanban";
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
 const WhiteboardInput = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardInput), { ssr: false });
+const KanbanInput = dynamic(() => import("./kanban-board").then((m) => m.KanbanInput), { ssr: false });
 
 const ELEMENT_ICONS: Record<StructureElementType, React.ComponentType<{ className?: string }>> = {
   info: Info,
@@ -44,9 +45,9 @@ const ELEMENT_ICONS: Record<StructureElementType, React.ComponentType<{ classNam
   video: Video,
 };
 
-const ELEMENT_TYPES: StructureElementType[] = ["info", "text", "textarea", "markdown", "select", "chips", "checkbox", "qa", "process", "whiteboard", "image", "link", "video"];
+const ELEMENT_TYPES: StructureElementType[] = ["info", "text", "textarea", "markdown", "select", "chips", "checkbox", "qa", "process", "whiteboard", "kanban", "image", "link", "video"];
 
-function newElement(type: StructureElementType, key: string, label: string): StructureElement {
+function newElement(type: StructureElementType, key: string, label: string, kanbanColumns: string[]): StructureElement {
   const base = { key, label };
   switch (type) {
     case "info":
@@ -68,7 +69,7 @@ function newElement(type: StructureElementType, key: string, label: string): Str
     case "whiteboard":
       return { ...base, type };
     case "kanban":
-      return { ...base, type, seed: defaultKanbanSeed() };
+      return { ...base, type, seed: defaultKanbanSeed(kanbanColumns) };
     case "image":
     case "link":
     case "video":
@@ -119,7 +120,7 @@ export function StructureEditor({
     let n = elements.length + 1;
     let key = `${type}_${n}`;
     while (elements.some((e) => e.key === key)) key = `${type}_${++n}`;
-    setElements((els) => [...els, newElement(type, key, `${t(`palette.${type}`)} ${n}`)]);
+    setElements((els) => [...els, newElement(type, key, `${t(`palette.${type}`)} ${n}`, [t("kanbanDefaultColumns.todo"), t("kanbanDefaultColumns.doing"), t("kanbanDefaultColumns.done")])]);
     setCollapsed((c) => {
       const next = new Set(c);
       next.delete(elements.length);
@@ -547,6 +548,23 @@ function TypeConfig({ element, onChange }: { element: StructureElement; onChange
             <div className="text-xs font-medium">{t("whiteboardSeedLabel")}</div>
             <p className="text-xs text-muted-foreground">{t("whiteboardSeedHint")}</p>
             <WhiteboardInput key={element.key} mode="seed" value={element.seed ?? emptyWhiteboard()} onChange={(seed: WhiteboardBoard) => onChange({ seed: seed.items.length ? seed : undefined } as Partial<StructureElement>)} />
+          </div>
+        </div>
+      );
+    case "kanban":
+      return (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-1">
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input type="checkbox" checked={Boolean(element.lockColumns)} onChange={(e) => onChange({ lockColumns: e.target.checked || undefined } as Partial<StructureElement>)} className="size-3.5 accent-primary" />
+              {t("lockColumnsLabel")}
+            </label>
+            <p className="text-xs text-muted-foreground">{t("lockColumnsHint")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-1">
+            <div className="text-xs font-medium">{t("kanbanSeedLabel")}</div>
+            <p className="text-xs text-muted-foreground">{t("kanbanSeedHint")}</p>
+            <KanbanInput key={element.key} mode="seed" value={element.seed} onChange={(seed: KanbanBoard) => onChange({ seed } as Partial<StructureElement>)} />
           </div>
         </div>
       );

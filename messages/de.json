@@ -403,7 +403,8 @@
         "image": "Bild",
         "link": "Link",
         "video": "Video",
-        "whiteboard": "Whiteboard"
+        "whiteboard": "Whiteboard",
+        "kanban": "Kanban-Board"
       },
       "multipleLabel": "Als Akkordeon-Liste (mehrere Text-Abschnitte)",
       "multipleHint": "Mitglieder pflegen mehrere betitelte Text-Abschnitte, können welche hinzufügen, entfernen und umsortieren.",
@@ -466,7 +467,16 @@
       "collaborativeLabel": "Gemeinsam bearbeitbar",
       "collaborativeHint": "Alle Mitglieder können das Whiteboard live mitbearbeiten – nicht nur, wer den Eintrag angelegt hat. Titel und übrige Felder bleiben geschützt.",
       "whiteboardSeedLabel": "Start-Whiteboard (optional)",
-      "whiteboardSeedHint": "Mitglieder starten mit einer Kopie. Gesperrte Elemente (Schloss in der Auswahlleiste) bilden ein festes Gerüst, z. B. Spalten einer Retrospektive oder SWOT-Quadranten."
+      "whiteboardSeedHint": "Mitglieder starten mit einer Kopie. Gesperrte Elemente (Schloss in der Auswahlleiste) bilden ein festes Gerüst, z. B. Spalten einer Retrospektive oder SWOT-Quadranten.",
+      "lockColumnsLabel": "Spalten festlegen",
+      "lockColumnsHint": "Mitglieder verschieben und bearbeiten nur Karten; Spalten legt allein die Vorlage fest. Karten aus entfallenen Spalten landen in der ersten.",
+      "kanbanSeedLabel": "Start-Board",
+      "kanbanSeedHint": "Mitglieder starten mit einer Kopie – Spalten und, falls gewünscht, Beispielkarten.",
+      "kanbanDefaultColumns": {
+        "todo": "Offen",
+        "doing": "In Arbeit",
+        "done": "Erledigt"
+      }
     },
     "llm": {
       "title": "LLM-Provider",
@@ -830,6 +840,59 @@
         "wasReset": "Das Whiteboard wurde von außen ersetzt (z. B. eine ältere Version wiederhergestellt).",
         "revoked": "Du hast keinen Zugriff mehr auf dieses Whiteboard.",
         "lockDenied": "Jemand anderes schreibt gerade in diese Notiz."
+      },
+      "kanban": {
+        "cardCount": "{count, plural, =0 {Keine Karten} one {# Karte} other {# Karten}}",
+        "fullscreen": "Vollbild",
+        "exitFullscreen": "Vollbild beenden",
+        "addCard": "Karte hinzufügen",
+        "cardTitlePlaceholder": "Titel der Karte …",
+        "addColumn": "Spalte hinzufügen",
+        "columnTitlePlaceholder": "Titel der Spalte …",
+        "columnTitle": "Titel der Spalte",
+        "columnMenu": "Aktionen für Spalte {title}",
+        "dragColumn": "Spalte {title} verschieben",
+        "moveColumnLeft": "Nach links",
+        "moveColumnRight": "Nach rechts",
+        "deleteColumn": "Spalte löschen",
+        "deleteColumnBlocked": "Löschen nur für leere Spalten (und nicht die letzte)",
+        "emptyColumn": "Keine Karten",
+        "hasDescription": "Hat eine Beschreibung",
+        "cancel": "Abbrechen",
+        "cardDialogTitle": "Karte",
+        "cardTitle": "Titel der Karte",
+        "inColumn": "In Spalte {column}",
+        "description": "Beschreibung",
+        "descriptionPlaceholder": "Details, Akzeptanzkriterien, Links … (Markdown)",
+        "editDescription": "Bearbeiten",
+        "previewDescription": "Vorschau",
+        "noDescription": "Keine Beschreibung.",
+        "noDescriptionEditable": "Noch keine Beschreibung – auf „Bearbeiten“ klicken.",
+        "color": "Farbe",
+        "noColor": "Keine Farbe",
+        "colors": {
+          "red": "Rot",
+          "orange": "Orange",
+          "yellow": "Gelb",
+          "green": "Grün",
+          "blue": "Blau",
+          "purple": "Lila",
+          "brown": "Braun",
+          "gray": "Grau"
+        },
+        "column": "Spalte",
+        "deleteCard": "Karte löschen",
+        "deleteCardConfirm": "Diese Karte wirklich löschen?",
+        "done": "Fertig",
+        "tooManyCards": "Ein Board fasst höchstens {max} Karten.",
+        "dnd": {
+          "instructions": "Leertaste zum Aufnehmen, Pfeiltasten zum Verschieben, Leertaste zum Ablegen, Escape zum Abbrechen. Enter öffnet eine Karte.",
+          "pickedUp": "{title} aufgenommen.",
+          "over": "{title} ist über {target}.",
+          "outside": "{title} ist außerhalb einer Spalte.",
+          "dropped": "{title} bei {target} abgelegt.",
+          "cancelled": "Verschieben von {title} abgebrochen."
+        }
       }
     },
     "picker": {

@@ -403,7 +403,8 @@
         "image": "Image",
         "link": "Link",
         "video": "Video",
-        "whiteboard": "Whiteboard"
+        "whiteboard": "Whiteboard",
+        "kanban": "Kanban board"
       },
       "multipleLabel": "As accordion list (multiple text sections)",
       "multipleHint": "Members maintain multiple titled text sections and can add, remove and reorder them.",
@@ -466,7 +467,16 @@
       "collaborativeLabel": "Collaborative",
       "collaborativeHint": "Every member can edit the whiteboard live – not only whoever created the entry. Title and other fields stay protected.",
       "whiteboardSeedLabel": "Starting whiteboard (optional)",
-      "whiteboardSeedHint": "Members start with a copy. Locked elements (lock in the selection bar) form a fixed scaffold, e.g. the columns of a retrospective or SWOT quadrants."
+      "whiteboardSeedHint": "Members start with a copy. Locked elements (lock in the selection bar) form a fixed scaffold, e.g. the columns of a retrospective or SWOT quadrants.",
+      "lockColumnsLabel": "Fixed columns",
+      "lockColumnsHint": "Members only move and edit cards; the template alone defines the columns. Cards of removed columns land in the first one.",
+      "kanbanSeedLabel": "Starting board",
+      "kanbanSeedHint": "Members start with a copy – columns and, if you like, example cards.",
+      "kanbanDefaultColumns": {
+        "todo": "To do",
+        "doing": "In progress",
+        "done": "Done"
+      }
     },
     "llm": {
       "title": "LLM providers",
@@ -830,6 +840,59 @@
         "wasReset": "The whiteboard was replaced from outside (e.g. an older version was restored).",
         "revoked": "You no longer have access to this whiteboard.",
         "lockDenied": "Someone else is typing in this note right now."
+      },
+      "kanban": {
+        "cardCount": "{count, plural, =0 {No cards} one {# card} other {# cards}}",
+        "fullscreen": "Full screen",
+        "exitFullscreen": "Exit full screen",
+        "addCard": "Add card",
+        "cardTitlePlaceholder": "Card title …",
+        "addColumn": "Add column",
+        "columnTitlePlaceholder": "Column title …",
+        "columnTitle": "Column title",
+        "columnMenu": "Actions for column {title}",
+        "dragColumn": "Move column {title}",
+        "moveColumnLeft": "Move left",
+        "moveColumnRight": "Move right",
+        "deleteColumn": "Delete column",
+        "deleteColumnBlocked": "Only empty columns can be deleted (never the last one)",
+        "emptyColumn": "No cards",
+        "hasDescription": "Has a description",
+        "cancel": "Cancel",
+        "cardDialogTitle": "Card",
+        "cardTitle": "Card title",
+        "inColumn": "In column {column}",
+        "description": "Description",
+        "descriptionPlaceholder": "Details, acceptance criteria, links … (Markdown)",
+        "editDescription": "Edit",
+        "previewDescription": "Preview",
+        "noDescription": "No description.",
+        "noDescriptionEditable": "No description yet – click “Edit”.",
+        "color": "Color",
+        "noColor": "No color",
+        "colors": {
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "blue": "Blue",
+          "purple": "Purple",
+          "brown": "Brown",
+          "gray": "Gray"
+        },
+        "column": "Column",
+        "deleteCard": "Delete card",
+        "deleteCardConfirm": "Really delete this card?",
+        "done": "Done",
+        "tooManyCards": "A board holds at most {max} cards.",
+        "dnd": {
+          "instructions": "Press space to pick up, arrow keys to move, space to drop, escape to cancel. Enter opens a card.",
+          "pickedUp": "Picked up {title}.",
+          "over": "{title} is over {target}.",
+          "outside": "{title} is outside a column.",
+          "dropped": "Dropped {title} on {target}.",
+          "cancelled": "Moving {title} was cancelled."
+        }
       }
     },
     "picker": {

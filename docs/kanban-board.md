@@ -4,7 +4,7 @@ Ein neuer Element-Typ `kanban` für Vorlagen in Sammlungen: Karten in Spalten na
 gedacht für gemeinsames Planen, etwa von Anforderungen. Karten haben Titel, Beschreibung und Farbe,
 Spalten haben Titel. UI-Name in beiden Sprachen: „Kanban-Board“ / „Kanban board“.
 
-Stand: **Phase A umgesetzt** (27.09.2026), B–D offen.
+Stand: **Phasen A und B umgesetzt** (27.09.2026), C und D offen. Abweichungen vom Plan in Abschnitt 10.
 
 ---
 
@@ -113,9 +113,7 @@ type KanbanOp = { op: "upsert"; item: KanbanLiveItem } | { op: "delete"; id: str
 | `agents/tools/describe.ts` | Antwortform inkl. fester Spalten |
 | `kanban.test.ts` | 23 Tests: Guards, Normalisierung, Sperre, Validierung, Markdown, Migration, Sortierschlüssel, Live-Form inkl. gleichzeitiger Züge |
 
-Der Vorlagen-Editor kennt den Typ bereits (Icon `SquareKanban`, Startwert), bietet ihn aber noch **nicht** an –
-das kommt mit Phase B. Per MCP (`save_template`) validiert eine Kanban-Vorlage schon jetzt; die Doku-Resource
-nennt den Typ erst, wenn Formular und Ansicht ihn darstellen.
+Per MCP (`save_template`) validiert eine Kanban-Vorlage bereits; die Doku-Resource nennt den Typ ab Phase D.
 
 ---
 
@@ -191,7 +189,7 @@ Live-Sicherungen bei Bedarf herausfiltern kann (gilt dann auch fürs Whiteboard)
 | Phase | Inhalt | Stand |
 |---|---|---|
 | A | Typen, `kanban.ts`, Validierung, Markdown, Migration, `describe.ts`, Tests | **umgesetzt** 27.09.2026 |
-| B | `kanban-board.tsx` (`form`/`readOnly`), Vorlagen-Editor, Formular, Ansicht, i18n, `@dnd-kit` | offen |
+| B | `kanban-board.tsx` (`form`/`readOnly`), Vorlagen-Editor, Formular, Ansicht, i18n, `@dnd-kit` | **umgesetzt** 27.09.2026 |
 | C | Live-Schicht verallgemeinern (5.1), Modus `live`, Session-Hook, Präsenz, Sperre im Dialog | offen |
 | D | MCP-Doku, `update_board`, Agenten-Werkzeug, Absatz in `CLAUDE.md` unter „Sammlungen“ | offen |
 
@@ -206,3 +204,38 @@ danach erneut (gemeinsame Schicht).
 - Karten-Zuständige, Fälligkeitsdaten, Kommentare an Karten: bewusst nicht Teil dieser Planung.
 - Autorenname an Karten (5.1, `createdBy`).
 - Versions-Kompaktierung, falls der Speicher je Board spürbar wächst.
+
+---
+
+## 10. Umsetzung Phase B (27.09.2026)
+
+| Baustein | Datei |
+|---|---|
+| Board, Spalten, Karten, Kartendialog, Drag and Drop | `src/components/structures/kanban-board.tsx` (`KanbanBoardEditor`, gesteuert über Live-Items + Ops) |
+| Formularfeld (Ops lokal angewendet) | `KanbanInput` – Vorlagen-Editor (Seed, Modus `seed`) und Ausfüllformular |
+| Nur-Lese-Anzeige im Eintrag | `KanbanView` in `structured-content-view.tsx` |
+| Schalter „Spalten festlegen“, Start-Board | `structure-editor.tsx` |
+| Texte | `knowledge.structured.kanban.*`, `admin.templates.{lockColumns*,kanbanSeed*,kanbanDefaultColumns}` |
+
+Abweichungen und Präzisierungen:
+
+- **Tastatur:** Leertaste nimmt auf und legt ab, Enter öffnet eine Karte (der Standard von dnd-kit belegt
+  beide Tasten mit Aufnehmen). ←/→ springen über eine eigene Koordinatenfunktion zur Nachbarspalte, ↑/↓
+  bleiben beim Sortier-Standard – der ist für eine Liste gebaut und wählt bei ←/→ Karten derselben Spalte.
+  Beim Tastatur-Drag wandert nur das Overlay; die Karte wechselt die Spalte erst beim Ablegen. Würde sie
+  (wie bei der Maus) schon unterwegs umziehen, verrechnet dnd-kit die Tastatur-Koordinaten und legt eine
+  Spalte zu weit rechts ab. Screenreader-Ansagen sind übersetzt.
+- **Schalter „Gemeinsam bearbeitbar“** erscheint erst mit Phase C – vorher hätte er keine Wirkung. Der Wert
+  `collaborative` wird schon validiert und gespeichert (Standard: an).
+- **Bestehende Einträge** bearbeiten ihr Board bis Phase C über das Formular (wie `process`). Mit Phase C
+  zeigt das Formular es wie beim Whiteboard nur an.
+- **Ansicht:** Ein Board ohne Karten wird noch nicht angezeigt; mit Phase C erscheint es immer, samt Einstieg
+  in die Live-Bearbeitung.
+- **Vollbild** als `fixed`-Overlay über der Seite, Escape schließt es (nicht aber, wenn Escape gerade einen
+  Tastatur-Drag abbricht oder ein Dialog offen ist).
+
+Getestet lokal im Browser: Vorlage mit Start-Karten anlegen, Karten per Enter hintereinander anlegen, Vollbild,
+Tastatur-Drag innerhalb und zwischen Spalten, Kartendialog (Beschreibung, Farbe, Spalte), Eintrag anlegen und
+bearbeiten, Nur-Lese-Dialog, gespeichertes Markdown, heller Modus, Handybreite (kein seitliches Scrollen der
+Seite). **Nicht automatisiert prüfbar:** Maus-Drag – der synthetische Klick des Test-Browsers springt ohne
+Zwischenbewegung; bitte einmal von Hand ziehen, auch auf einem Touch-Gerät.

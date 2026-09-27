@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, Plus, RefreshCw, X } from "lucide-react";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import { validateStructureAnswers } from "@/lib/structures/validate";
 import type { ImageAnswer, LinkAnswer, MarkdownSection, ProcessGraph, QaPair, StructureAnswers, StructureDefinition, StructureElement, VideoAnswer } from "@/lib/structures/types";
-import { emptyWhiteboard, fillSeeds, isAnswerable, isMarkdownSectionArray, isWhiteboardBoard } from "@/lib/structures/types";
+import { emptyWhiteboard, fillSeeds, isAnswerable, isKanbanBoard, isMarkdownSectionArray, isWhiteboardBoard } from "@/lib/structures/types";
 import { migrateStructureAnswers } from "@/lib/structures/migrate";
 import { visibleElements } from "@/lib/structures/visibility";
 import { saveStructuredEntryAction } from "@/server/actions/structured-content";
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
 const WhiteboardInput = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardInput), { ssr: false });
 const WhiteboardEditor = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardEditor), { ssr: false });
+const KanbanInput = dynamic(() => import("./kanban-board").then((m) => m.KanbanInput), { ssr: false });
 
 export type StructureFillFormProps = {
   def: StructureDefinition;
@@ -95,7 +96,7 @@ export function StructureFillForm({ def, mode, areaId, contentId, templateId, up
   const submit = () => {
     const missingTitle = !title.trim();
     setTitleMissing(missingTitle);
-    // Untouched process/whiteboard elements submit their seed as the answer.
+    // Untouched process/whiteboard/kanban elements submit their seed as the answer.
     const effective = fillSeeds(activeDef, answers);
     const res = validateStructureAnswers(activeDef, effective);
     if (!res.ok) {
@@ -353,6 +354,18 @@ function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb, 
           ) : (
             <WhiteboardInput value={board} onChange={(b) => onChange(b)} maxUploadMb={maxUploadMb} className={cn(issue && "border-destructive")} />
           )}
+          {error}
+        </div>
+      );
+    }
+    case "kanban": {
+      // the seed itself, not a copy: the board never mutates its value, and a stable reference keeps its local state
+      const board = isKanbanBoard(value) ? value : element.seed;
+      return (
+        <div className="grid grid-cols-1 gap-1.5">
+          {header}
+          {help}
+          <KanbanInput value={board} onChange={(b) => onChange(b)} lockColumns={element.lockColumns} className={cn(issue && "rounded-md ring-1 ring-destructive")} />
           {error}
         </div>
       );

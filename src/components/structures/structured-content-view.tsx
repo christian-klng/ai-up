@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureEntryMeta, VideoAnswer } from "@/lib/structures/types";
-import { isCollaborativeWhiteboard, isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "@/lib/structures/types";
+import { isCollaborativeWhiteboard, isKanbanBoard, isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "@/lib/structures/types";
+import { kanbanHasContent } from "@/lib/structures/kanban";
 import { visibleElements } from "@/lib/structures/visibility";
 import { isQaPairArray } from "@/lib/structures/visibility";
 import { Markdown } from "@/components/content/markdown";
@@ -22,6 +23,7 @@ export type StructuredViewWhiteboards = {
 };
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
+const KanbanView = dynamic(() => import("./kanban-board").then((m) => m.KanbanView), { ssr: false });
 
 /** Native view of a structured entry: sections from the stored answers, process graphs rendered read-only. */
 export function StructuredContentView({ meta, whiteboards }: { meta: StructureEntryMeta; whiteboards?: StructuredViewWhiteboards }) {
@@ -97,6 +99,13 @@ export function StructuredContentView({ meta, whiteboards }: { meta: StructureEn
                     </div>
                   ))}
                 </div>
+              </section>
+            ) : null;
+          case "kanban":
+            return isKanbanBoard(value) && kanbanHasContent(value) ? (
+              <section key={el.key}>
+                <h2 className="mb-1.5 text-base font-semibold">{el.label}</h2>
+                <KanbanView board={value} />
               </section>
             ) : null;
           case "process": {
