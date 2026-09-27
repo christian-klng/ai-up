@@ -398,3 +398,152 @@ export function deleteColumnOp(items: KanbanLiveItem[], columnId: string): Kanba
   if (liveColumns(items).length <= 1 || liveCards(items, columnId).length > 0) return null;
   return { op: "delete", id: columnId };
 }
+
+// ---------------------------------------------------------------------------
+// Intents: how MCP and agents change a board – by id or title, with positions
+// instead of order keys. Translated into ops against the current items, one
+// after another, so a later intent sees what an earlier one did (add a column,
+// then cards into it).
+// ---------------------------------------------------------------------------
+
+const refSchema = z.string().trim().min(1).max(KANBAN_MAX_TITLE).describe("id, or the exact title (case-insensitive, must be unique)");
+const positionSchema = z.number().int().min(0).max(KANBAN_MAX_CARDS).optional().describe("0-based position; default: at the end");
+
+export const kanbanIntentSchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("addCard"), column: refSchema, title: z.string().trim().min(1).max(KANBAN_MAX_TITLE), description: z.string().max(KANBAN_MAX_DESCRIPTION).optional().describe("markdown"), color: z.enum(KANBAN_COLORS).optional(), position: positionSchema }),
+  z.object({
+    op: z.literal("updateCard"),
+    card: refSchema,
+    title: z.string().trim().min(1).max(KANBAN_MAX_TITLE).optional(),
+    description: z.string().max(KANBAN_MAX_DESCRIPTION).nullable().optional().describe("markdown; null removes it"),
+    color: z.enum(KANBAN_COLORS).nullable().optional().describe("null removes it"),
+  }),
+  z.object({ op: z.literal("moveCard"), card: refSchema, column: refSchema, position: positionSchema }),
+  z.object({ op: z.literal("deleteCard"), card: refSchema }),
+  z.object({ op: z.literal("addColumn"), title: z.string().trim().min(1).max(KANBAN_MAX_COLUMN_TITLE), position: positionSchema }),
+  z.object({ op: z.literal("renameColumn"), column: refSchema, title: z.string().trim().min(1).max(KANBAN_MAX_COLUMN_TITLE) }),
+  z.object({ op: z.literal("moveColumn"), column: refSchema, position: z.number().int().min(0).max(KANBAN_MAX_COLUMNS) }),
+  z.object({ op: z.literal("deleteColumn"), column: refSchema }),
+]);
+
+export type KanbanIntent = z.infer<typeof kanbanIntentSchema>;
+/** Per intent: the id it touched, or why it was skipped. */
+export type KanbanIntentResult = { ok: true; id: string } | { ok: false; error: string };
+
+type Found<T> = { item: T } | { error: string };
+
+function findByRef<T extends KanbanLiveItem>(candidates: T[], ref: string, what: "card" | "column"): Found<T> {
+  const byId = candidates.find((c) => c.id === ref);
+  if (byId) return { item: byId };
+  const needle = ref.trim().toLowerCase();
+  const byTitle = candidates.filter((c) => c.title.trim().toLowerCase() === needle);
+  if (byTitle.length === 1) return { item: byTitle[0] };
+  if (byTitle.length > 1) return { error: `${byTitle.length} ${what}s are titled "${ref}" – use the id (${byTitle.map((c) => c.id).join(", ")})` };
+  return { error: `no ${what} "${ref}"` };
+}
+
+/**
+ * Translates intents into ops against `items`. Skipped intents (unknown reference, limits, fixed
+ * columns) do not stop the rest; the result says per intent what happened. Returns the items as
+ * they are after the applied ops.
+ */
+export function translateKanbanIntents(items: KanbanLiveItem[], intents: KanbanIntent[], opts: { lockColumns?: boolean } = {}): { ops: KanbanOp[]; items: KanbanLiveItem[]; results: KanbanIntentResult[] } {
+  let cur = items;
+  const ops: KanbanOp[] = [];
+  const results: KanbanIntentResult[] = [];
+  const cards = () => cur.filter((i): i is KanbanLiveCard => i.kind === "card");
+  const push = (op: KanbanOp | null, id: string, failure: string) => {
+    if (!op) {
+      results.push({ ok: false, error: failure });
+      return;
+    }
+    ops.push(op);
+    cur = applyKanbanOps(cur, [op]);
+    results.push({ ok: true, id });
+  };
+  const fixedColumns = "the columns are fixed by the template – only cards can change";
+
+  for (const intent of intents) {
+    switch (intent.op) {
+      case "addCard": {
+        const col = findByRef(liveColumns(cur), intent.column, "column");
+        if ("error" in col) {
+          results.push({ ok: false, error: col.error });
+          break;
+        }
+        if (cards().length >= KANBAN_MAX_CARDS) {
+          results.push({ ok: false, error: `the board holds at most ${KANBAN_MAX_CARDS} cards` });
+          break;
+        }
+        const id = newKanbanId();
+        const description = intent.description?.replace(/\r\n?/g, "\n").trim();
+        push(addCardOp(cur, col.item.id, { id, title: intent.title, ...(description ? { description } : {}), ...(intent.color ? { color: intent.color } : {}) }, intent.position), id, "");
+        break;
+      }
+      case "updateCard": {
+        const card = findByRef(cards(), intent.card, "card");
+        if ("error" in card) {
+          results.push({ ok: false, error: card.error });
+          break;
+        }
+        const next: KanbanLiveCard = { ...card.item };
+        if (intent.title !== undefined) next.title = intent.title;
+        if (intent.description !== undefined) {
+          const description = intent.description?.replace(/\r\n?/g, "\n").trim();
+          if (description) next.description = description;
+          else delete next.description;
+        }
+        if (intent.color !== undefined) {
+          if (intent.color) next.color = intent.color;
+          else delete next.color;
+        }
+        push({ op: "upsert", item: next }, next.id, "");
+        break;
+      }
+      case "moveCard": {
+        const card = findByRef(cards(), intent.card, "card");
+        const col = findByRef(liveColumns(cur), intent.column, "column");
+        if ("error" in card || "error" in col) {
+          results.push({ ok: false, error: "error" in card ? card.error : (col as { error: string }).error });
+          break;
+        }
+        const others = liveCards(cur, col.item.id).filter((c) => c.id !== card.item.id).length;
+        push(moveCardOp(cur, card.item.id, col.item.id, intent.position ?? others), card.item.id, `no card "${intent.card}"`);
+        break;
+      }
+      case "deleteCard": {
+        const card = findByRef(cards(), intent.card, "card");
+        if ("error" in card) results.push({ ok: false, error: card.error });
+        else push({ op: "delete", id: card.item.id }, card.item.id, "");
+        break;
+      }
+      case "addColumn": {
+        if (opts.lockColumns) results.push({ ok: false, error: fixedColumns });
+        else if (liveColumns(cur).length >= KANBAN_MAX_COLUMNS) results.push({ ok: false, error: `the board holds at most ${KANBAN_MAX_COLUMNS} columns` });
+        else {
+          const id = newKanbanId();
+          push(addColumnOp(cur, { id, title: intent.title }, intent.position), id, "");
+        }
+        break;
+      }
+      case "renameColumn":
+      case "moveColumn":
+      case "deleteColumn": {
+        if (opts.lockColumns) {
+          results.push({ ok: false, error: fixedColumns });
+          break;
+        }
+        const col = findByRef(liveColumns(cur), intent.column, "column");
+        if ("error" in col) {
+          results.push({ ok: false, error: col.error });
+          break;
+        }
+        if (intent.op === "renameColumn") push({ op: "upsert", item: { ...col.item, title: intent.title } }, col.item.id, "");
+        else if (intent.op === "moveColumn") push(moveColumnOp(cur, col.item.id, intent.position), col.item.id, "");
+        else push(deleteColumnOp(cur, col.item.id), col.item.id, `column "${col.item.title}" still holds cards (or is the last one) – move or delete its cards first`);
+        break;
+      }
+    }
+  }
+  return { ops, items: cur, results };
+}

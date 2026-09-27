@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import type { KanbanBoard, StructureDefinition } from "./types";
 import { fillSeeds, isKanbanBoard, isMediaLikeAnswer } from "./types";
 import { flattenAnswersText, renderStructureMarkdown } from "./markdown";
@@ -21,6 +22,8 @@ import {
   moveColumnOp,
   normalizeKanbanBoard,
   orderKeyBetween,
+  kanbanIntentSchema,
+  translateKanbanIntents,
 } from "./kanban";
 
 const board = (...columns: Array<[string, string, Array<[string, string]>]>): KanbanBoard => ({
@@ -258,5 +261,64 @@ describe("live form", () => {
     const items = kanbanToLiveItems(stored);
     expect(moveCardOp(items, "zzz", "todo", 0)).toBeNull();
     expect(moveColumnOp(items, "zzz", 0)).toBeNull();
+  });
+});
+
+describe("intents", () => {
+  const stored: KanbanBoard = {
+    columns: [
+      { id: "todo", title: "Offen", cards: [{ id: "a", title: "Login" }, { id: "b", title: "Suche" }] },
+      { id: "done", title: "Erledigt", cards: [] },
+    ],
+  };
+
+  it("resolves by id or unique title and applies intents one after another", () => {
+    const { items, results } = translateKanbanIntents(kanbanToLiveItems(stored), [
+      { op: "addColumn", title: "In Arbeit", position: 1 },
+      { op: "moveCard", card: "suche", column: "in arbeit" },
+      { op: "addCard", column: "In Arbeit", title: "Export", color: "green", description: "PDF\r\n" },
+      { op: "updateCard", card: "a", title: "Magic Link", color: "red" },
+    ]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    const out = liveItemsToKanban(items);
+    expect(out.columns.map((c) => [c.title, c.cards.map((k) => k.title)])).toEqual([
+      ["Offen", ["Magic Link"]],
+      ["In Arbeit", ["Suche", "Export"]],
+      ["Erledigt", []],
+    ]);
+    expect(out.columns[1].cards[1]).toMatchObject({ color: "green", description: "PDF" });
+  });
+
+  it("clears description and colour with null", () => {
+    const board: KanbanBoard = { columns: [{ id: "c", title: "C", cards: [{ id: "x", title: "X", description: "d", color: "red" }] }] };
+    const { items } = translateKanbanIntents(kanbanToLiveItems(board), [{ op: "updateCard", card: "x", description: null, color: null }]);
+    expect(liveItemsToKanban(items).columns[0].cards[0]).toEqual({ id: "x", title: "X" });
+  });
+
+  it("skips what does not fit and keeps going", () => {
+    const dup: KanbanBoard = { columns: [{ id: "c", title: "C", cards: [{ id: "x", title: "Gleich" }, { id: "y", title: "Gleich" }] }, { id: "d", title: "D", cards: [] }] };
+    const { ops, results } = translateKanbanIntents(kanbanToLiveItems(dup), [
+      { op: "deleteCard", card: "gleich" },
+      { op: "deleteColumn", column: "C" },
+      { op: "moveCard", card: "x", column: "nirgends" },
+      { op: "deleteColumn", column: "D" },
+    ]);
+    expect(results.map((r) => r.ok)).toEqual([false, false, false, true]);
+    expect(results[0].ok === false && results[0].error).toMatch(/use the id \(x, y\)/);
+    expect(ops).toEqual([{ op: "delete", id: "d" }]);
+  });
+
+  it("refuses column changes when the template fixes the columns", () => {
+    const { ops, results } = translateKanbanIntents(kanbanToLiveItems(stored, { lockColumns: true }), [{ op: "addColumn", title: "Neu" }, { op: "renameColumn", column: "todo", title: "X" }, { op: "addCard", column: "todo", title: "geht" }], { lockColumns: true });
+    expect(results.map((r) => r.ok)).toEqual([false, false, true]);
+    expect(ops).toHaveLength(1);
+  });
+});
+
+describe("intent schema", () => {
+  it("becomes a self-contained JSON schema for LLM tool calls (no $ref – some providers reject it)", () => {
+    const json = JSON.stringify(z.toJSONSchema(z.object({ ops: z.array(kanbanIntentSchema) }), { io: "input" }));
+    expect(json).not.toContain("$ref");
+    expect(json).toContain("moveCard");
   });
 });

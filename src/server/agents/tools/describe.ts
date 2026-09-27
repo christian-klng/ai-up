@@ -26,7 +26,7 @@ function answerShape(el: StructureElement): string {
     case "whiteboard":
       return 'whiteboard { "items": [{ "id", "kind": "sticky"|"text"|"shape"|"image", "text"?, "color"?, "shape"?: "rect"|"ellipse", "x"?, "y"?, "w"?, "h"? }] } – send the FULL board incl. existing items (ids stable); omit x/y to let the server place new items; a "shape" containing items acts as a group heading';
     case "kanban":
-      return `kanban board { "columns": [{ "id"?, "title", "cards": [{ "id"?, "title", "description"? (markdown), "color"?: "red"|"orange"|"yellow"|"green"|"blue"|"purple"|"brown"|"gray" }] }] } – send the FULL board, order = array order; keep existing ids, omit ids for new cards${el.lockColumns ? "; columns are fixed by the template (" + el.seed.columns.map((c) => JSON.stringify(c.title)).join(", ") + ") – only move and edit cards" : ""}`;
+      return `kanban board { "columns": [{ "id"?, "title", "cards": [{ "id"?, "title", "description"? (markdown), "color"?: "red"|"orange"|"yellow"|"green"|"blue"|"purple"|"brown"|"gray" }] }] } – send the FULL board, order = array order; keep existing ids, omit ids for new cards; to change an existing board step by step use update_board${el.lockColumns ? "; columns are fixed by the template (" + el.seed.columns.map((c) => JSON.stringify(c.title)).join(", ") + ") – only move and edit cards" : ""}`;
     case "image":
       return 'object { "url": string } or { "mediaId": string }';
     case "link":

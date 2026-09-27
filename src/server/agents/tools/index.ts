@@ -3,6 +3,9 @@ import { addContentVersion, canEditContent, createContent, getAreaById, getAreaB
 import { getTemplateById, isTemplateAvailableForArea, listAvailableTemplates } from "@/server/domain/templates";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { describeStructure } from "./describe";
+import { kanbanIntentSchema } from "@/lib/structures/kanban";
+import { isCollaborativeBoard } from "@/lib/structures/live-boards";
+import { applyKanbanIntents, describeBoard, findKanbanElement } from "@/server/whiteboards/kanban-intents";
 import type { EventOrigin } from "@/server/events/bus";
 import type { ToolDefinition } from "@/server/llm/client";
 import { MAX_WRITES_PER_TURN } from "@/lib/agents";
@@ -271,5 +274,36 @@ register({
     if (!updated) return `Entry ${input.id} could not be updated.`;
     ctx.written.add(updated.id);
     return `Updated "${updated.title}" (version ${updated.versionCount}).`;
+  },
+});
+
+register({
+  name: "update_board",
+  description:
+    "Changes a kanban board inside an entry step by step: add, edit, move and delete cards and columns. Reference cards and columns by their exact title (case-insensitive, must be unique) or by id; positions are 0-based, default is the end. Intents run in order; one that does not fit is skipped and reported. Prefer this over update_entry for boards. The answer lists the board afterwards with all ids.",
+  labels: { de: "Kanban-Board ändern", en: "Update kanban board" },
+  schema: z.object({
+    id: z.string().describe("entry id"),
+    key: z.string().optional().describe("element key of the board; only needed when the entry has several"),
+    ops: z.array(kanbanIntentSchema).min(1).max(50),
+  }),
+  access: "write",
+  async run(input, ctx) {
+    if (ctx.written.size >= MAX_WRITES_PER_TURN) return `Write limit of ${MAX_WRITES_PER_TURN} entries per answer reached. Tell the user what is still missing.`;
+    const entry = await getContent(ctx.communityId, input.id);
+    const snapshot = entry?.version?.meta.structure;
+    if (!entry || !snapshot) return `No entry with id ${input.id} that was created from a template.`;
+    if (!mayWrite(entry.areaId, ctx)) return "This entry belongs to a collection that is read-only in this conversation.";
+    const el = findKanbanElement(snapshot.definition.elements, input.key);
+    if ("error" in el) return `Cannot change the board: ${el.error}.`;
+    // Same rule as on the entry page: a collaborative board is open to every member, otherwise author or admin.
+    if (!isCollaborativeBoard(el) && !canEditContent({ id: ctx.userId, role: ctx.userRole }, entry)) return "The user may not edit this board – only the entry's author or an admin can.";
+
+    const res = await applyKanbanIntents(ctx.communityId, entry.id, el.key, input.ops, ctx.userId, agentOrigin(ctx));
+    if (!res.ok) return `The board could not be changed: ${res.error}.`;
+    if (res.results.some((r) => r.ok)) ctx.written.add(entry.id);
+    const lines = res.results.map((r, i) => `${i + 1}. ${input.ops[i].op}: ${r.ok ? "done" : `skipped – ${r.error}`}`);
+    const saved = res.live ? "People are working on the board right now – they see the change at once; it is saved with their session." : res.versionNo ? `Saved as version ${res.versionNo}.` : "Nothing changed.";
+    return [`Board "${el.label}" in "${entry.title}":`, ...lines, saved, "", "Board now:", describeBoard(res.board)].join("\n");
   },
 });

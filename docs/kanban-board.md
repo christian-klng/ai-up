@@ -4,7 +4,7 @@ Ein neuer Element-Typ `kanban` für Vorlagen in Sammlungen: Karten in Spalten na
 gedacht für gemeinsames Planen, etwa von Anforderungen. Karten haben Titel, Beschreibung und Farbe,
 Spalten haben Titel. UI-Name in beiden Sprachen: „Kanban-Board“ / „Kanban board“.
 
-Stand: **Phasen A–C umgesetzt** (27.09.2026), D offen. Abweichungen vom Plan in Abschnitt 10 (B) und 11 (C).
+Stand: **alle Phasen umgesetzt** (27.09.2026). Abweichungen vom Plan in den Abschnitten 10 (B), 11 (C) und 12 (D).
 
 ---
 
@@ -191,7 +191,7 @@ Live-Sicherungen bei Bedarf herausfiltern kann (gilt dann auch fürs Whiteboard)
 | A | Typen, `kanban.ts`, Validierung, Markdown, Migration, `describe.ts`, Tests | **umgesetzt** 27.09.2026 |
 | B | `kanban-board.tsx` (`form`/`readOnly`), Vorlagen-Editor, Formular, Ansicht, i18n, `@dnd-kit` | **umgesetzt** 27.09.2026 |
 | C | Live-Schicht verallgemeinern (5.1), Modus `live`, Session-Hook, Präsenz, Sperre im Dialog | **umgesetzt** 27.09.2026 |
-| D | MCP-Doku, `update_board`, Agenten-Werkzeug, Absatz in `CLAUDE.md` unter „Sammlungen“ | offen |
+| D | MCP-Doku, `update_board`, Agenten-Werkzeug, Absatz in `CLAUDE.md` unter „Sammlungen“ | **umgesetzt** 27.09.2026 |
 
 Vor Abschluss jeder Phase: `npm run typecheck && npm run lint && npm run build && npm run worker:build`
 und `npm test`. Phase C mit zwei Identitäten testen (`localhost:3000` und `127.0.0.1:3000`), das Whiteboard
@@ -274,3 +274,35 @@ Abweichungen und Präzisierungen:
 - **Pfade und Schlüssel** heißen weiter `whiteboards`/`aiup:wb:` und der Worker-Job `whiteboard-flush` – ein
   Umbenennen hätte laufende Jobs und Sitzungen beim Deploy verwaist.
 - Das Formular zeigt das Board eines bestehenden Eintrags nur noch an und übernimmt beim Speichern den Live-Stand.
+
+---
+
+## 12. Umsetzung Phase D (27.09.2026)
+
+| Baustein | Datei |
+|---|---|
+| Absichten (Schema + Übersetzung in Ops, pur) | `kanbanIntentSchema`, `translateKanbanIntents` in `src/lib/structures/kanban.ts` |
+| Anwenden: in die Sitzung oder als neue Version | `applyKanbanIntents`, `findKanbanElement`, `describeBoard` in `src/server/whiteboards/kanban-intents.ts` |
+| MCP-Werkzeug `update_board` (Scope `knowledge:write`) + Doku in `aiup://docs/collections` | `src/server/mcp/server.ts` |
+| Agenten-Werkzeug `update_board` (Schreibwerkzeug, Freigabe wie `update_entry`) | `src/server/agents/tools/index.ts` |
+
+Präzisierungen:
+
+- **Referenzen per Id oder Titel.** Agenten lesen Einträge nur als Markdown und kennen keine Ids; deshalb
+  nimmt jede Referenz auch den exakten Titel (ohne Groß-/Kleinschreibung). Ist er mehrdeutig, wird die Absicht
+  übersprungen und die Antwort nennt die passenden Ids. Die Antwort des Agenten-Werkzeugs listet das Board
+  danach mit allen Ids.
+- **Absichten laufen nacheinander** gegen den jeweils neuen Stand; eine übersprungene hält die übrigen nicht
+  auf. Hält jemand eine Karte gerade im Dialog (weiche Sperre), meldet die Antwort das für diese Karte.
+- **Mit laufender Sitzung** gehen die Ops durch dasselbe Lua-Skript wie die der Teilnehmenden (Grenzen,
+  Sperren, sofort auf allen Bildschirmen) und werden mit der Sitzung gesichert – die Antwort sagt dann
+  `live: true` und nennt keine Versionsnummer. Die Herkunft `agent` geht dabei verloren: die Version entsteht
+  beim Sichern der Sitzung als Nutzer-Änderung. **Ohne Sitzung** entsteht sofort eine Version (optimistische
+  Sperre über die Versionsnummer, bis zu drei Versuche), bei Agenten mit `origin: {kind:"agent"}`.
+- `describe.ts` verweist Agenten für bestehende Boards auf `update_board` statt des ganzen Boards per
+  `update_entry`.
+
+Getestet lokal gegen `/api/mcp` mit einem Test-Schlüssel: mit laufender Sitzung (Änderungen erschienen beim
+Mitglied sofort, gesichert beim Verlassen) und ohne (Version mit Änderungsnotiz), übersprungene Absichten
+(unbekannte Karte, gelöschte Spalte). **Nicht Ende-zu-Ende getestet:** das Agenten-Werkzeug – lokal ist nur ein
+Mock-Modell ohne echte Werkzeugaufrufe eingerichtet; es nutzt dieselbe Domänenfunktion wie MCP.

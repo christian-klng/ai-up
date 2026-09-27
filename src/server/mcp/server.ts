@@ -28,6 +28,8 @@ import { enqueueEvaluation } from "@/server/workflows/queue";
 import { criterionKeyFromTitle, validateEvaluation, MAX_CRITERIA, MAX_CRITERION_INSTRUCTION, MAX_CRITERION_TITLE, type EvaluationCriterion } from "@/lib/structures/evaluation";
 import { isSystemTemplateKey } from "@/lib/structures/defaults";
 import { validateStructure } from "@/lib/structures/validate";
+import { kanbanIntentSchema } from "@/lib/structures/kanban";
+import { applyKanbanIntents, findKanbanElement } from "@/server/whiteboards/kanban-intents";
 import { REASONING_LEVELS } from "@/server/db/schema";
 import type { ContentTemplate, KnowledgeArea } from "@/server/db/schema";
 
@@ -221,6 +223,19 @@ Element types and their extra config:
               locked shapes): members cannot move or delete them, and locked items in answers are
               ignored. Authorship ("createdBy") is set by the server. "collaborative" (default true)
               lets every active member edit the board live, not only the entry's author.
+- "kanban":   { "seed": <board>, "lockColumns"?: boolean, "collaborative"?: boolean } – a Trello-like
+              board for planning (e.g. requirements). Board shape: { "columns": [{ "id"?, "title" (≤100),
+              "cards"?: [{ "id"?, "title" (≤200), "description"?: "markdown ≤5000", "color"?:
+              "red"|"orange"|"yellow"|"green"|"blue"|"purple"|"brown"|"gray" }] }] } – 1–20 columns,
+              ≤500 cards; order = array order. Ids ("^[A-Za-z0-9_-]{1,40}$", unique across columns
+              and cards) may be omitted – the server assigns them; keep existing ids when you send a
+              board back. The seed needs at least one column (typical: to do / in progress / done).
+              → answer: the full board; required = at least one card. "lockColumns": the template alone
+              defines the columns – members only move and edit cards, and cards of columns the template
+              no longer has land in the first column. "collaborative" (default true) lets every active
+              member edit the board live on the entry page. Markdown: one "###" heading per column,
+              cards as a list, colours as coloured-circle emoji. To change a stored board step by step,
+              use update_board instead of sending the whole board with update_entry.
 - "image":    {} → answer: { "mediaId"?: uuid, "url"?: "https://…", "alt"?: "…" } – exactly one of
               mediaId (uploaded file) or url. The server verifies uploads and public URLs.
 - "link":     {} → answer: { "url": "https://…" } – the server fetches an Open Graph preview.
@@ -246,6 +261,11 @@ showIf makes an element conditional on an EARLIER answerable element – exactly
   own snapshot; pass upgrade=true on update_entry to re-snapshot to the template's current
   version (answers are then validated against the NEW definition).
 - Entries are versioned append-only; every update creates a new version with an optional changeNote.
+- update_board changes one kanban board by intents – addCard, updateCard, moveCard, deleteCard,
+  addColumn, renameColumn, moveColumn, deleteColumn – referencing cards and columns by id or unique
+  title, with 0-based positions. Skipped intents are reported, the rest apply. Only empty columns can
+  be deleted (never the last one). If members are on the board right now, the change reaches their
+  screens immediately and is saved with their session; the answer then says live: true.
 - Optional entry image ("Eintrag-Bild", distinct from image *elements* inside templates): pass
   "image" on create_entry/update_entry with exactly one of mediaId (an already uploaded image)
   or url (a public http(s) image URL, imported server-side). It is shown at the top of the entry
@@ -377,7 +397,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         (cid === ROOT_COMMUNITY_ID
           ? ""
           : "Two things belong to the operator rather than to this community and are read-only here: the integrations (call server, recording storage) and the platform-wide model capability table. ") +
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_cover / set_meeting_invite.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry / update_board. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_cover / set_meeting_invite.",
     },
   );
 
@@ -1016,6 +1036,34 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       await addContentVersion(cid, id, input, auth.user.id);
       await audit(auth, "content.updated", id, { collection: area?.slug, type: c.type }, "content");
       return text({ id, versionNo: c.versionCount + 1, href: `/knowledge/${area?.slug ?? c.areaId}/${id}` });
+    },
+  );
+
+  server.registerTool(
+    "update_board",
+    {
+      title: "Collections - Update kanban board",
+      description:
+        "Changes a kanban board inside an entry step by step – add, edit, move and delete cards and columns – instead of sending the full board with update_entry. Cards and columns are referenced by id or by their exact title (case-insensitive, must be unique). Intents run in order, so a later one sees what an earlier one did; one that does not fit is skipped and reported, the rest still apply. If people are working on the board right now, the changes appear on their screens at once and are saved with their session shortly after; otherwise a new version is saved right away.",
+      inputSchema: {
+        id: z.string().uuid().describe("entry id"),
+        key: z.string().optional().describe("element key of the kanban board; optional when the entry has exactly one"),
+        ops: z.array(kanbanIntentSchema).min(1).max(100),
+        changeNote: z.string().max(500).optional().describe("only used when the change is saved directly (no live session)"),
+      },
+    },
+    async ({ id, key, ops, changeNote }) => {
+      require(auth, "knowledge:write");
+      const c = await getContent(cid, id);
+      const snapshot = c?.version?.meta.structure;
+      if (!c || !snapshot) return fail("entry not found or not created from a template");
+      const el = findKanbanElement(snapshot.definition.elements, key);
+      if ("error" in el) return fail(el.error);
+      const res = await applyKanbanIntents(cid, id, el.key, ops, auth.user.id, { kind: "user" }, changeNote ?? null);
+      if (!res.ok) return fail(res.error);
+      const area = await getAreaById(cid, c.areaId);
+      if (res.results.some((r) => r.ok)) await audit(auth, "content.updated", id, { collection: area?.slug, type: c.type, board: el.key, live: res.live }, "content");
+      return text({ id, key: el.key, live: res.live, versionNo: res.versionNo ?? null, results: res.results, board: res.board, href: `/knowledge/${area?.slug ?? c.areaId}/${id}` });
     },
   );
 

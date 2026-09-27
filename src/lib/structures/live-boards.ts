@@ -35,6 +35,8 @@ export function liveItemsOf(el: LiveBoardElement, value: StructureAnswerValue | 
  * Session items → the answer that is saved. A kanban board that lost every column (two people
  * deleting the last two at once) falls back to the template's columns, so the save never fails.
  */
+export function storedBoardOf(el: Extract<LiveBoardElement, { type: "kanban" }>, items: LiveItem[]): KanbanBoard;
+export function storedBoardOf(el: LiveBoardElement, items: LiveItem[]): WhiteboardBoard | KanbanBoard;
 export function storedBoardOf(el: LiveBoardElement, items: LiveItem[]): WhiteboardBoard | KanbanBoard {
   if (el.type === "whiteboard") return { items: items as WhiteboardItem[] };
   const board = liveItemsToKanban(items as KanbanLiveItem[]);
