@@ -14,7 +14,6 @@ const schema = z.object({
   purpose: z.string().trim().min(5).max(2000),
   description: z.string().trim().max(2000).optional(),
   icon: z.string().refine(isAreaIconKey).catch("calendar"),
-  recordingDefault: z.boolean(),
 });
 
 export async function saveSpaceAction(_prev: SpaceFormState, formData: FormData): Promise<SpaceFormState> {
@@ -25,7 +24,6 @@ export async function saveSpaceAction(_prev: SpaceFormState, formData: FormData)
     purpose: formData.get("purpose"),
     description: formData.get("description") || undefined,
     icon: formData.get("icon") ?? "calendar",
-    recordingDefault: formData.get("recordingDefault") === "on",
   });
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];

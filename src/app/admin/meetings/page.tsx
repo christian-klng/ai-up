@@ -11,7 +11,7 @@ export default async function AdminMeetingSpacesPage() {
   return (
     <div className="max-w-4xl">
       <PageHeader title={t("title")} description={t("intro")} actions={<SpaceDialog mode="create" />} />
-      <SpaceList spaces={spaces.map((s) => ({ id: s.id, name: s.name, slug: s.slug, purpose: s.purpose, description: s.description, icon: s.icon, recordingDefault: s.recordingDefault, meetingCount: s.meetingCount, liveCount: s.liveCount }))} />
+      <SpaceList spaces={spaces.map((s) => ({ id: s.id, name: s.name, slug: s.slug, purpose: s.purpose, description: s.description, icon: s.icon, meetingCount: s.meetingCount, liveCount: s.liveCount }))} />
     </div>
   );
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "meeting_spaces" DROP COLUMN "recording_default";

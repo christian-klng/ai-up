@@ -183,6 +183,13 @@
       "when": 1789637426153,
       "tag": "0025_community_domains",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790529999751,
+      "tag": "0026_drop_space_recording_default",
+      "breakpoints": true
     }
   ]
 }

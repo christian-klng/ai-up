@@ -18,7 +18,6 @@ type Initial = {
   url: string;
   apiKey: string;
   recordingsPath: string;
-  recordingDefault: boolean;
   s3Endpoint: string;
   s3Region: string;
   s3Bucket: string;
@@ -114,13 +113,6 @@ export function LiveKitForm({ initial, lastTest }: { initial: Initial; lastTest:
                   autoComplete="off"
                 />
               </div>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Switch id="lk-rec" name="recordingDefault" defaultChecked={initial.recordingDefault} />
-            <div className="grid gap-0.5">
-              <Label htmlFor="lk-rec">{t("livekit.recordingDefault")}</Label>
-              <p className="text-xs text-muted-foreground">{t("livekit.recordingDefaultHint")}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">

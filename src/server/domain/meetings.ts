@@ -64,7 +64,7 @@ async function uniqueSlug(communityId: string, base: string, excludeId?: string)
   return `${slugify(base)}-${Date.now().toString(36)}`;
 }
 
-export type SpaceInput = { name: string; purpose: string; description?: string | null; icon?: string; recordingDefault?: boolean };
+export type SpaceInput = { name: string; purpose: string; description?: string | null; icon?: string };
 
 export async function createSpace(communityId: string, input: SpaceInput, actorId: string): Promise<MeetingSpace> {
   const [{ max }] = await db
@@ -73,7 +73,7 @@ export async function createSpace(communityId: string, input: SpaceInput, actorI
     .where(eq(meetingSpaces.communityId, communityId));
   const [row] = await db
     .insert(meetingSpaces)
-    .values({ communityId, name: input.name.trim(), slug: await uniqueSlug(communityId, input.name), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? "calendar", recordingDefault: input.recordingDefault ?? true, sortOrder: max + 1, createdBy: actorId })
+    .values({ communityId, name: input.name.trim(), slug: await uniqueSlug(communityId, input.name), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? "calendar", sortOrder: max + 1, createdBy: actorId })
     .returning();
   await db.insert(auditLog).values({ communityId, actorId, action: "meeting_space.created", targetType: "meeting_space", targetId: row.id, details: { name: row.name } });
   return row;
@@ -84,7 +84,7 @@ export async function updateSpace(communityId: string, id: string, input: SpaceI
   if (!existing) return undefined;
   const [row] = await db
     .update(meetingSpaces)
-    .set({ name: input.name.trim(), slug: existing.name.trim() === input.name.trim() ? existing.slug : await uniqueSlug(communityId, input.name, id), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? existing.icon, recordingDefault: input.recordingDefault ?? existing.recordingDefault })
+    .set({ name: input.name.trim(), slug: existing.name.trim() === input.name.trim() ? existing.slug : await uniqueSlug(communityId, input.name, id), purpose: input.purpose.trim(), description: input.description?.trim() || null, icon: input.icon ?? existing.icon })
     .where(eq(meetingSpaces.id, id))
     .returning();
   await db.insert(auditLog).values({ communityId, actorId, action: "meeting_space.updated", targetType: "meeting_space", targetId: id, details: { name: row.name } });

@@ -13,9 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 
-export type SpaceFormValues = { id: string; name: string; purpose: string; description: string | null; icon: string; recordingDefault: boolean };
+export type SpaceFormValues = { id: string; name: string; purpose: string; description: string | null; icon: string };
 
 export function SpaceDialog({ mode, space, trigger }: { mode: "create" | "edit"; space?: SpaceFormValues; trigger?: React.ReactNode }) {
   const t = useTranslations("admin.meetings");
@@ -67,13 +66,6 @@ export function SpaceDialog({ mode, space, trigger }: { mode: "create" | "edit";
           <div className="grid gap-2">
             <Label htmlFor="space-description">{t("description")}</Label>
             <Textarea id="space-description" name="description" defaultValue={space?.description ?? ""} maxLength={2000} rows={2} />
-          </div>
-          <div className="flex items-start gap-3">
-            <Switch id="space-recording" name="recordingDefault" defaultChecked={space?.recordingDefault ?? true} />
-            <div className="grid gap-0.5">
-              <Label htmlFor="space-recording">{t("recordingDefault")}</Label>
-              <p className="text-xs text-muted-foreground">{t("recordingDefaultHint")}</p>
-            </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="space-icon">{t("icon")}</Label>

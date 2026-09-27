@@ -296,7 +296,7 @@ async function meetingsContext(cid: string): Promise<string> {
     `- Calls available: ${lk?.enabled ? "yes" : "no – meetings can be planned, calls start once the operator sets up LiveKit"}`,
     `- App URL: ${env.APP_URL}`,
     "- Meeting spaces:",
-    ...spaces.map((s) => `  - ${s.name} (id ${s.id}, slug ${s.slug}, recordingDefault ${s.recordingDefault}, ${s.meetingCount} meetings): ${s.purpose}`),
+    ...spaces.map((s) => `  - ${s.name} (id ${s.id}, slug ${s.slug}, ${s.meetingCount} meetings): ${s.purpose}`),
   ].join("\n");
 }
 
@@ -1041,10 +1041,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return d;
   };
 
-  server.registerTool("list_meeting_spaces", { title: "Meetings - List spaces", description: "All meeting spaces with purpose, recording default and meeting counts. Spaces are created in the UI only.", inputSchema: {} }, async () => {
+  server.registerTool("list_meeting_spaces", { title: "Meetings - List spaces", description: "All meeting spaces with purpose and meeting counts. Spaces are created in the UI only.", inputSchema: {} }, async () => {
     require(auth, "meetings:read");
     const spaces = await listSpaces(cid);
-    return text(spaces.map((s) => ({ id: s.id, slug: s.slug, name: s.name, purpose: s.purpose, description: s.description, recordingDefault: s.recordingDefault, meetingCount: s.meetingCount, liveCount: s.liveCount })));
+    return text(spaces.map((s) => ({ id: s.id, slug: s.slug, name: s.name, purpose: s.purpose, description: s.description, meetingCount: s.meetingCount, liveCount: s.liveCount })));
   });
   server.registerTool(
     "list_meetings",

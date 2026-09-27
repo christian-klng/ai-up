@@ -889,8 +889,6 @@ export const meetingSpaces = pgTable(
     description: text("description"),
     icon: text("icon").notNull().default("calendar"),
     sortOrder: integer("sort_order").notNull().default(0),
-    /** default for new audio/video meetings in this space */
-    recordingDefault: boolean("recording_default").notNull().default(true),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },

@@ -17,7 +17,6 @@ export default async function AdminIntegrationsPage() {
           url: lk.url,
           apiKey: lk.apiKey,
           recordingsPath: lk.recordingsPath,
-          recordingDefault: lk.recordingDefault,
           s3Endpoint: lk.s3Endpoint,
           s3Region: lk.s3Region,
           s3Bucket: lk.s3Bucket,

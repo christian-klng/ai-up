@@ -12,8 +12,6 @@ export type LiveKitConfig = {
   apiKey: string;
   /** host path egress writes to; only used when no S3 handover is configured (single host / dev) */
   recordingsPath: string;
-  /** room composite egress default for audio/video meetings */
-  recordingDefault: boolean;
   /** S3-compatible handover (e.g. Hetzner Object Storage); empty endpoint falls back to recordingsPath */
   s3Endpoint: string;
   s3Region: string;
@@ -69,7 +67,6 @@ export async function getLiveKitConfig(): Promise<(LiveKitConfig & LiveKitSecret
     apiKey: c.apiKey,
     apiSecret: s.apiSecret,
     recordingsPath: c.recordingsPath ?? "/data/recordings",
-    recordingDefault: c.recordingDefault ?? true,
     s3Endpoint: c.s3Endpoint ?? "",
     s3Region: c.s3Region ?? "",
     s3Bucket: c.s3Bucket ?? "",
@@ -89,7 +86,6 @@ export async function getLiveKitView() {
     url: c.url ?? "",
     apiKey: c.apiKey ?? "",
     recordingsPath: c.recordingsPath ?? "/data/recordings",
-    recordingDefault: c.recordingDefault ?? true,
     s3Endpoint: c.s3Endpoint ?? "",
     s3Region: c.s3Region ?? "",
     s3Bucket: c.s3Bucket ?? "",
