@@ -5,6 +5,8 @@ import { ArrowLeft, History, Pencil } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
 import { getEvaluationSummary } from "@/server/domain/evaluation";
+import { whiteboardAuthorNames } from "@/server/whiteboards/access";
+import { env } from "@/server/env";
 import { ContentBody } from "@/components/content/content-body";
 import { ImageLightbox } from "@/components/content/image-lightbox";
 import { StructuredContentView } from "@/components/structures/structured-content-view";
@@ -81,7 +83,7 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
       )}
 
       {v && content.type === "structured" && v.meta.structure ? (
-        <StructuredContentView meta={v.meta.structure} />
+        <StructuredContentView meta={v.meta.structure} whiteboards={{ contentId: content.id, canEditEntry: editable, authors: await whiteboardAuthorNames(v.meta.structure.answers), maxUploadMb: env.MAX_UPLOAD_MB }} />
       ) : (
         v && (
           <ContentBody

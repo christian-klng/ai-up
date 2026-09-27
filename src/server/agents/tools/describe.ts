@@ -23,6 +23,8 @@ function answerShape(el: StructureElement): string {
       return 'array of { "question": string, "answer": string }';
     case "process":
       return 'process graph { "nodes": [{ "id", "label", "kind": "start"|"step"|"decision"|"end", "x", "y" }], "edges": [{ "id", "from", "to", "condition"? }] }';
+    case "whiteboard":
+      return 'whiteboard { "items": [{ "id", "kind": "sticky"|"text"|"shape"|"image", "text"?, "color"?, "shape"?: "rect"|"ellipse", "x"?, "y"?, "w"?, "h"? }] } – send the FULL board incl. existing items (ids stable); omit x/y to let the server place new items; a "shape" containing items acts as a group heading';
     case "image":
       return 'object { "url": string } or { "mediaId": string }';
     case "link":

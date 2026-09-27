@@ -5,9 +5,10 @@ import { assertPublicUrl } from "@/server/webreader/safe-fetch";
 import { logger } from "@/server/logger";
 import { detectVideoSource } from "@/lib/video";
 import { renderStructureMarkdown } from "@/lib/structures/markdown";
-import { fillProcessSeeds, isMediaLikeAnswer } from "@/lib/structures/types";
+import { fillSeeds, isMediaLikeAnswer } from "@/lib/structures/types";
 import type { ImageAnswer, LinkAnswer, StructureAnswers, StructureElementEnrichment, StructureEnrichment, StructureEntryMeta, VideoAnswer } from "@/lib/structures/types";
 import { validateStructureAnswers, type AnswerIssue } from "@/lib/structures/validate";
+import { stampWhiteboardAuthors } from "@/lib/structures/whiteboard";
 
 // ---------------------------------------------------------------------------
 // Shared write path for structured entries (server action, MCP and worker):
@@ -23,29 +24,32 @@ export type BuildStructuredVersionResult = { ok: true; input: ContentVersionInpu
  * (from the previous version) lets unchanged link previews be reused.
  * `imageMediaId` is the optional entry image (stored on version.mediaId):
  * a string sets it, null/undefined leaves the version without one.
+ * `prevAnswers` + `actorId` stamp whiteboard authorship: existing items keep their author,
+ * new ones get the actor – never taken from the input.
  */
 export async function buildStructuredVersionInput(
   snapshot: Pick<StructureEntryMeta, "structureId" | "structureVersion" | "definition">,
   title: string,
   rawAnswers: unknown,
-  opts: { changeNote?: string | null; prevEnrichment?: StructureEnrichment; imageMediaId?: string | null } = {},
+  opts: { changeNote?: string | null; prevEnrichment?: StructureEnrichment; imageMediaId?: string | null; prevAnswers?: StructureAnswers; actorId?: string; trustedWhiteboardKeys?: string[] } = {},
 ): Promise<BuildStructuredVersionResult> {
   if (opts.imageMediaId) {
     const media = await getMedia(opts.imageMediaId);
     if (!media || media.kind !== "image") return { ok: false, issues: [{ key: "__image", code: "mediaInvalid" }] };
   }
-  const seeded = typeof rawAnswers === "object" && rawAnswers !== null ? fillProcessSeeds(snapshot.definition, rawAnswers as StructureAnswers) : rawAnswers;
+  const seeded = typeof rawAnswers === "object" && rawAnswers !== null ? fillSeeds(snapshot.definition, rawAnswers as StructureAnswers) : rawAnswers;
   const res = validateStructureAnswers(snapshot.definition, seeded);
   if (!res.ok) return { ok: false, issues: res.issues };
 
-  const enrichResult = await enrichStructureAnswers(snapshot.definition, res.answers, opts.prevEnrichment);
+  const answers = stampWhiteboardAuthors(snapshot.definition, res.answers, opts.prevAnswers, opts.actorId, opts.trustedWhiteboardKeys);
+  const enrichResult = await enrichStructureAnswers(snapshot.definition, answers, opts.prevEnrichment);
   if (!enrichResult.ok) return { ok: false, issues: enrichResult.issues };
 
   const meta: StructureEntryMeta = {
     structureId: snapshot.structureId,
     structureVersion: snapshot.structureVersion,
     definition: snapshot.definition,
-    answers: res.answers,
+    answers,
     ...(Object.keys(enrichResult.enrichment).length > 0 ? { enrichment: enrichResult.enrichment } : {}),
   };
   return {

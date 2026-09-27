@@ -14,6 +14,7 @@ import { scheduleToRepeat, type ScheduleConfig } from "./triggers";
  *  - { kind: "evaluate", contentId, versionId } → LLM check of an entry against its template criteria
  *  - { kind: "agent-turn", threadId }        → one turn of an AI agent chat (tool loop, streams to the UI)
  *  - { kind: "purge-communities" }           → daily sweep: deletes communities whose grace period ran out
+ *  - { kind: "whiteboard-flush", contentId, key } → saves a live whiteboard session as an entry version
  * Web enqueues; the worker consumes (see worker/index.ts).
  */
 export const WORKFLOW_QUEUE = "workflow-runs";
@@ -22,7 +23,8 @@ export type WorkflowJob =
   | { kind: "schedule"; workflowId: string }
   | { kind: "evaluate"; contentId: string; versionId: string }
   | { kind: "agent-turn"; threadId: string }
-  | { kind: "purge-communities" };
+  | { kind: "purge-communities" }
+  | { kind: "whiteboard-flush"; contentId: string; key: string };
 
 const g = globalThis as unknown as { __aiupQueue?: Queue<WorkflowJob>; __aiupQueueConn?: IORedis };
 
@@ -67,6 +69,28 @@ export async function enqueueAgentTurn(threadId: string): Promise<"queued" | "bu
   if (await queue.getJob(jobId)) return "busy";
   await queue.add("agent-turn", { kind: "agent-turn", threadId }, { jobId, removeOnComplete: true, removeOnFail: true });
   return "queued";
+}
+
+export const whiteboardFlushJobId = (contentId: string, key: string) => `wb-${contentId}-${key}`;
+
+/**
+ * Queues the save of a live whiteboard session. One job per board (the id dedupes); the worker
+ * postpones it itself while the session is busy (see src/server/whiteboards/flush.ts). `expedite`
+ * pulls an already waiting job forward – used when the last participant leaves.
+ */
+export async function scheduleWhiteboardFlush(contentId: string, key: string, delayMs: number, opts: { expedite?: boolean } = {}): Promise<void> {
+  try {
+    const queue = getQueue();
+    const jobId = whiteboardFlushJobId(contentId, key);
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+      if (opts.expedite && (await existing.isDelayed())) await existing.changeDelay(delayMs);
+      return;
+    }
+    await queue.add("whiteboard-flush", { kind: "whiteboard-flush", contentId, key }, { jobId, delay: delayMs, removeOnComplete: true, removeOnFail: true });
+  } catch (err) {
+    logger.warn({ err, contentId, key }, "could not schedule whiteboard save");
+  }
 }
 
 // BullMQ forbids ":" in custom ids

@@ -93,6 +93,7 @@ export function migrateStructureAnswers(oldDef: StructureDefinition, newDef: Str
       case "checkbox":
       case "qa":
       case "process":
+      case "whiteboard":
       case "image":
       case "link":
       case "video": {

@@ -208,6 +208,19 @@ Element types and their extra config:
                 "edges": [{ "id", "from", "to", "condition"? }] }
               → answer: a full graph (members start from a copy of the seed). Exactly one start node;
               x/y are layout coordinates (~90px vertical spacing works well).
+- "whiteboard": { "seed"?: <board>, "collaborative"?: boolean } – a free canvas (Miro-like) for
+              brainstorming. Board shape: { "items": [{ "id": "^[A-Za-z0-9_-]{1,40}$", "kind":
+              "sticky"|"text"|"shape"|"image", "x"?, "y"?, "w"?, "h"?, "z"?, "text"?: "plain text ≤2000",
+              "color"?: "yellow"|"orange"|"green"|"blue"|"purple"|"pink"|"gray"|"white",
+              "shape"?: "rect"|"ellipse", "fontSize"?: "s"|"m"|"l"|"xl",
+              "mediaId"?|"url"? (image items only, exactly one), "alt"?, "locked"?: true }] } (≤500 items).
+              → answer: the full board. Omitted x/y/w/h are laid out by the server in a grid below the
+              existing content – only give coordinates when the layout matters. A "shape" works as a
+              group: every item whose centre lies inside it is listed under the shape's text in the
+              markdown. "locked" items are template scaffolding (seed only, e.g. SWOT quadrants as
+              locked shapes): members cannot move or delete them, and locked items in answers are
+              ignored. Authorship ("createdBy") is set by the server. "collaborative" (default true)
+              lets every active member edit the board live, not only the entry's author.
 - "image":    {} → answer: { "mediaId"?: uuid, "url"?: "https://…", "alt"?: "…" } – exactly one of
               mediaId (uploaded file) or url. The server verifies uploads and public URLs.
 - "link":     {} → answer: { "url": "https://…" } – the server fetches an Open Graph preview.
@@ -227,7 +240,8 @@ showIf makes an element conditional on an EARLIER answerable element – exactly
   type "markdown" (+body) or "link" (+url, optional body as note) maps to the system templates
   and skips the availability check (meant for automation).
 - The server validates answers, enriches media/link answers (previews, embed ids), renders
-  deterministic markdown (process graphs as a mermaid flowchart plus a text outline) and stores
+  deterministic markdown (process graphs as a mermaid flowchart plus a text outline, whiteboards
+  as an outline grouped by boxes) and stores
   answers + a full snapshot of the definition with the entry. Edits validate against the entry's
   own snapshot; pass upgrade=true on update_entry to re-snapshot to the template's current
   version (answers are then validated against the NEW definition).
@@ -918,7 +932,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         }
       }
 
-      const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, title, effectiveAnswers, { imageMediaId });
+      const built = await buildStructuredVersionInput({ structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition }, title, effectiveAnswers, { imageMediaId, actorId: auth.user.id });
       if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: "answer keys/shapes must match the template definition" }, null, 2));
       const content = await createContent(cid, area.id, "structured", built.input, auth.user.id);
       await audit(auth, "content.created", content.id, { collection: area.slug, type: "structured", templateId: tpl.id }, "content");
@@ -983,7 +997,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
           if (!answers) return fail("upgrade needs full `answers` for the template's current definition (call get_template)");
           snapshot = { structureId: tpl.id, structureVersion: tpl.version, definition: tpl.definition };
         }
-        const built = await buildStructuredVersionInput(snapshot, title ?? c.title, answers ?? prev.answers, { changeNote: changeNote ?? null, prevEnrichment: prev.enrichment, imageMediaId });
+        const built = await buildStructuredVersionInput(snapshot, title ?? c.title, answers ?? prev.answers, { changeNote: changeNote ?? null, prevEnrichment: prev.enrichment, imageMediaId, prevAnswers: prev.answers, actorId: auth.user.id });
         if (!built.ok) return fail(JSON.stringify({ issues: built.issues, hint: upgrade ? "answers are validated against the template's CURRENT definition" : "answers are validated against this entry's own definition snapshot – call get_entry to see it" }, null, 2));
         input.bodyMarkdown = built.input.bodyMarkdown;
         input.mediaId = built.input.mediaId;

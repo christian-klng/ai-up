@@ -402,7 +402,8 @@
         "markdown": "Fließtext",
         "image": "Bild",
         "link": "Link",
-        "video": "Video"
+        "video": "Video",
+        "whiteboard": "Whiteboard"
       },
       "multipleLabel": "Als Akkordeon-Liste (mehrere Text-Abschnitte)",
       "multipleHint": "Mitglieder pflegen mehrere betitelte Text-Abschnitte, können welche hinzufügen, entfernen und umsortieren.",
@@ -461,7 +462,11 @@
         "recheckHint": "Bestehende Einträge behalten ihr altes Ergebnis, bis sie neu gespeichert oder hier neu geprüft werden.",
         "recheckQueued": "{count, plural, =0 {Keine Einträge zu prüfen} one {Ein Eintrag wird geprüft} other {# Einträge werden geprüft}}",
         "recheckFailed": "Prüfung konnte nicht gestartet werden"
-      }
+      },
+      "collaborativeLabel": "Gemeinsam bearbeitbar",
+      "collaborativeHint": "Alle Mitglieder können das Whiteboard live mitbearbeiten – nicht nur, wer den Eintrag angelegt hat. Titel und übrige Felder bleiben geschützt.",
+      "whiteboardSeedLabel": "Start-Whiteboard (optional)",
+      "whiteboardSeedHint": "Mitglieder starten mit einer Kopie. Gesperrte Elemente (Schloss in der Auswahlleiste) bilden ein festes Gerüst, z. B. Spalten einer Retrospektive oder SWOT-Quadranten."
     },
     "llm": {
       "title": "LLM-Provider",
@@ -769,7 +774,63 @@
       "updateToNew": "Auf neue Version aktualisieren (v{version})",
       "upgradeActive": "Der Eintrag wird beim Speichern auf Version {version} der Vorlage aktualisiert. Bitte prüfe die übernommenen Antworten.",
       "droppedAnswers": "Nicht übernommen (passt nicht mehr in die neue Fassung): {labels}",
-      "cancelUpgrade": "Aktualisierung verwerfen"
+      "cancelUpgrade": "Aktualisierung verwerfen",
+      "whiteboard": {
+        "join": "Whiteboard öffnen",
+        "emptyBoard": "Noch nichts auf dem Whiteboard.",
+        "editOnEntry": "Das Whiteboard bearbeitest du direkt im Eintrag über „Whiteboard öffnen“ – dort arbeiten alle gleichzeitig daran. Dieses Formular lässt es unverändert.",
+        "emptySticky": "Doppelklick zum Schreiben",
+        "emptyText": "Text",
+        "isTyping": "{name} schreibt …",
+        "tooMany": "Ein Whiteboard fasst höchstens {max} Elemente.",
+        "imageTooLarge": "Das Bild ist größer als {mb} MB.",
+        "imageUnsupported": "Dieses Bildformat wird nicht unterstützt.",
+        "imageFailed": "Das Bild konnte nicht hochgeladen werden.",
+        "toolSelect": "Auswählen",
+        "toolHand": "Verschieben (oder Leertaste halten)",
+        "addSticky": "Haftnotiz",
+        "addText": "Text",
+        "addRect": "Box",
+        "addEllipse": "Ellipse",
+        "addImage": "Bild einfügen",
+        "colors": {
+          "yellow": "Gelb",
+          "orange": "Orange",
+          "green": "Grün",
+          "blue": "Blau",
+          "purple": "Lila",
+          "pink": "Rosa",
+          "gray": "Grau",
+          "white": "Weiß"
+        },
+        "fontSizes": {
+          "s": "Schrift klein",
+          "m": "Schrift mittel",
+          "l": "Schrift groß",
+          "xl": "Schrift sehr groß"
+        },
+        "toFront": "Nach vorn",
+        "toBack": "Nach hinten",
+        "duplicate": "Duplizieren",
+        "lock": "Sperren (Mitglieder können es nicht verändern)",
+        "unlock": "Entsperren",
+        "delete": "Löschen",
+        "showAuthors": "Namen an Notizen zeigen",
+        "hideAuthors": "Namen ausblenden",
+        "fullscreen": "Vollbild",
+        "exitFullscreen": "Vollbild beenden",
+        "close": "Schließen",
+        "emptyHint": "Doppelklicke irgendwo, um eine Haftnotiz anzulegen – oder zieh ein Bild hierher.",
+        "hint": "Doppelklick: neue Notiz · Leertaste + Ziehen: verschieben · ⌘/Strg + Mausrad: zoomen · ⌘/Strg + D: duplizieren",
+        "live": "Live",
+        "saved": "Gespeichert",
+        "connecting": "Verbinde …",
+        "offline": "Verbindung unterbrochen",
+        "rejected": "Eine Änderung wurde nicht übernommen – jemand anderes bearbeitet das Element gerade.",
+        "wasReset": "Das Whiteboard wurde von außen ersetzt (z. B. eine ältere Version wiederhergestellt).",
+        "revoked": "Du hast keinen Zugriff mehr auf dieses Whiteboard.",
+        "lockDenied": "Jemand anderes schreibt gerade in diese Notiz."
+      }
     },
     "picker": {
       "title": "Vorlage wählen",
@@ -1100,18 +1161,27 @@
     "create": "Neues Meeting",
     "createSubmit": "Meeting anlegen",
     "edit": "Meeting bearbeiten",
+    "dialogIntro": "Art, Titel und optional ein Termin. Den Call starten die Teilnehmenden selbst; das Protokoll entsteht auf der Meeting-Seite.",
+    "kind": "Art",
     "kinds": {
       "protocol": "Protokoll",
       "audio": "Audio-Call",
       "video": "Video-Call"
+    },
+    "kindHints": {
+      "protocol": "Nur ein Markdown-Protokoll – für Treffen außerhalb der App.",
+      "audio": "Audio-Call in der App, optional mit Mitschnitt.",
+      "video": "Video-Call in der App, optional mit Audio-Mitschnitt."
     },
     "callsUnavailable": "Audio-/Video-Calls sind noch nicht eingerichtet (Verwaltung → Integrationen).",
     "titleLabel": "Titel",
     "titlePlaceholder": "z. B. Wöchentlicher Austausch",
     "descriptionLabel": "Beschreibung (optional)",
     "descriptionPlaceholder": "Worum geht es, wer sollte dabei sein?",
-    "startsAt": "Termin",
+    "startsAt": "Termin (optional)",
+    "startsAtHint": "Leer lassen für spontane Meetings.",
     "recordingEnabled": "Audio-Mitschnitt",
+    "recordingEnabledHint": "Der Ton des Calls wird aufgezeichnet und nach dem Meeting hier abgelegt.",
     "empty": "Noch keine Meetings in diesem Bereich.",
     "sections": {
       "live": "Läuft gerade",
@@ -1184,7 +1254,6 @@
     "deleted": "Meeting gelöscht.",
     "errors": {
       "titleRequired": "Bitte gib einen Titel an.",
-      "startsAtRequired": "Bitte gib einen Termin an.",
       "forbidden": "Du darfst dieses Meeting nicht bearbeiten."
     },
     "protocol": {
