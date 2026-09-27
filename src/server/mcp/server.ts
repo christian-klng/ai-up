@@ -268,11 +268,12 @@ Meetings live in **meeting spaces** (created by admins in the UI only – there 
 Every meeting belongs to exactly one space; the app URL is /meetings/<spaceSlug>/<meetingId>.
 
 ## Meeting fields
-- \`kind\`: \`protocol\` (markdown protocol only, for meetings held outside the app), \`audio\` or \`video\`
-  (a call inside the app). Calls need the LiveKit integration – the context below says whether it is enabled;
-  without it, create protocol meetings only.
+- \`kind\`: new meetings are always \`video\` (a call inside the app; for audio only, participants keep their
+  camera off). \`protocol\` (markdown minutes only) and \`audio\` exist on older meetings only; update_meeting can
+  turn them into \`video\` while they are still scheduled. Calls need the LiveKit integration – the context below
+  says whether it is enabled; without it, meetings can still be planned, the call starts once it is set up.
 - \`title\`, optional \`description\` (plain text), required \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00). The date can be changed later but not removed.
-- \`recordingEnabled\` (audio/video only; defaults to the space's recordingDefault). Protocol meetings never record.
+- \`recordingEnabled\` (audio recording of the call; default off). Protocol meetings never record.
 - \`status\` is managed by the app (\`scheduled\` → \`live\` → \`ended\`) and cannot be set here.
 - The API key's owner becomes host and creator of meetings created here.
 - \`coverUrl\`: optional cover image (set with set_meeting_cover). Shown on the meeting page and used as the
@@ -292,7 +293,7 @@ async function meetingsContext(cid: string): Promise<string> {
     "## Current context",
     `- Community: ${community?.name ?? "?"} – the spaces and meetings below are its own`,
     "- The call server is shared by every community on this installation and configured by the operator",
-    `- Calls (audio/video meetings) available: ${lk?.enabled ? "yes" : "no – create protocol meetings only"}`,
+    `- Calls available: ${lk?.enabled ? "yes" : "no – meetings can be planned, calls start once the operator sets up LiveKit"}`,
     `- App URL: ${env.APP_URL}`,
     "- Meeting spaces:",
     ...spaces.map((s) => `  - ${s.name} (id ${s.id}, slug ${s.slug}, recordingDefault ${s.recordingDefault}, ${s.meetingCount} meetings): ${s.purpose}`),
@@ -1064,26 +1065,20 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "create_meeting",
     {
       title: "Meetings - Create meeting",
-      description: "Creates a meeting in a space (read resource aiup://docs/meetings first). The key's owner becomes host. Audio/video kinds need calls to be available.",
+      description: "Creates a video meeting in a space (read resource aiup://docs/meetings first). The key's owner becomes host.",
       inputSchema: {
         spaceId: z.string().uuid(),
         title: z.string().trim().min(1).max(200),
-        kind: z.enum(["protocol", "audio", "video"]).optional().describe("default protocol"),
         description: z.string().trim().max(4000).optional(),
         startsAt: z.string().min(1).describe("ISO 8601 with timezone, required"),
-        recordingEnabled: z.boolean().optional().describe("audio/video only; default = space's recordingDefault"),
+        recordingEnabled: z.boolean().optional().describe("audio recording of the call; default false"),
       },
     },
-    async ({ spaceId, title, kind, description, startsAt, recordingEnabled }) => {
+    async ({ spaceId, title, description, startsAt, recordingEnabled }) => {
       require(auth, "meetings:write");
       const spaces = await listSpaces(cid);
       const space = spaces.find((s) => s.id === spaceId);
       if (!space) return fail("meeting space not found – use list_meeting_spaces");
-      const k = kind ?? "protocol";
-      if (k !== "protocol") {
-        const lk = await getLiveKitConfig();
-        if (!lk?.enabled) return fail("calls are not available (LiveKit integration disabled) – create a protocol meeting instead");
-      }
       let when: Date | null = null;
       try {
         when = parseStartsAt(startsAt) ?? null;
@@ -1091,8 +1086,8 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         return fail((err as Error).message);
       }
       if (!when) return fail("startsAt is required");
-      const meeting = await createMeeting(cid, spaceId, { title, description: description ?? null, kind: k, startsAt: when, recordingEnabled: recordingEnabled ?? space.recordingDefault }, auth.user.id);
-      await audit(auth, "meeting.created", meeting.id, { spaceId, kind: k }, "meeting");
+      const meeting = await createMeeting(cid, spaceId, { title, description: description ?? null, kind: "video", startsAt: when, recordingEnabled: recordingEnabled ?? false }, auth.user.id);
+      await audit(auth, "meeting.created", meeting.id, { spaceId, kind: "video" }, "meeting");
       const full = await getMeeting(cid, meeting.id);
       return text(full ? meetingOut(full) : { id: meeting.id });
     },
@@ -1106,7 +1101,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         id: z.string().uuid(),
         title: z.string().trim().min(1).max(200).optional(),
         description: z.string().trim().max(4000).nullable().optional(),
-        kind: z.enum(["protocol", "audio", "video"]).optional(),
+        kind: z.literal("video").optional().describe("turns an older audio/protocol meeting into a video call"),
         startsAt: z.string().optional().describe("ISO 8601 with timezone"),
         recordingEnabled: z.boolean().optional(),
       },
@@ -1116,10 +1111,6 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       const existing = await getMeeting(cid, id);
       if (!existing) return fail("meeting not found");
       if (kind !== undefined && kind !== existing.kind && existing.status !== "scheduled") return fail("kind can only change while the meeting is scheduled");
-      if (kind && kind !== "protocol") {
-        const lk = await getLiveKitConfig();
-        if (!lk?.enabled) return fail("calls are not available (LiveKit integration disabled)");
-      }
       let when: Date | null | undefined;
       try {
         when = parseStartsAt(startsAt);

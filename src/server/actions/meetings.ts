@@ -43,8 +43,8 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     recordingEnabled: formData.get("recordingEnabled") === "on",
     coverMediaId: formData.has("coverMediaId") ? String(formData.get("coverMediaId")) : undefined,
   });
-  // "protocol" (minutes without a call) is legacy – kept for existing meetings, no longer created.
-  if (parsed.success && !parsed.data.meetingId && parsed.data.kind === "protocol") return { status: "error", code: "unexpected" };
+  // "protocol" and "audio" are legacy – kept for existing meetings, new ones are always video calls.
+  if (parsed.success && !parsed.data.meetingId && parsed.data.kind !== "video") return { status: "error", code: "unexpected" };
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];
     return { status: "error", code: field === "title" ? "titleRequired" : "unexpected" };
@@ -74,7 +74,7 @@ export async function saveMeetingAction(_prev: MeetingFormState, formData: FormD
     return { status: "saved", meetingId: d.meetingId, spaceSlug: space.slug };
   }
   if (!startsAt) return { status: "error", code: "startsAtRequired" };
-  const created = await createMeeting(user.communityId, d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled ?? space.recordingDefault, coverMediaId: coverMediaId ?? null }, user.id);
+  const created = await createMeeting(user.communityId, d.spaceId, { title: d.title, description: d.description ?? null, kind: d.kind, startsAt, recordingEnabled: d.recordingEnabled, coverMediaId: coverMediaId ?? null }, user.id);
   revalidatePath("/", "layout");
   return { status: "saved", meetingId: created.id, spaceSlug: space.slug };
 }
