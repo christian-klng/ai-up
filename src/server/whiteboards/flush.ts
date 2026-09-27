@@ -2,11 +2,12 @@ import { addContentVersion, getContent } from "@/server/domain/knowledge";
 import { loadCommunity } from "@/server/domain/communities";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { logger } from "@/server/logger";
-import type { WhiteboardItem } from "@/lib/structures/types";
-import { dropState, dropStateIf, markFlushed, participants, publishFlushed, readState, type BoardRef } from "./state";
+import { isLiveBoardElement, storedBoardOf, type LiveBoardKind, type LiveItem } from "@/lib/structures/live-boards";
+import { dropState, dropStateIf, liveHash, markFlushed, participants, publishFlushed, readState, type BoardRef } from "./state";
 
 // ---------------------------------------------------------------------------
-// Saving a live session as an entry version (docs/whiteboard.md 5.4). Runs in
+// Saving a live session (whiteboard or kanban) as an entry version
+// (docs/whiteboard.md 5.4, docs/kanban-board.md 5). Runs in
 // the worker as job { kind: "whiteboard-flush" }; the job postpones itself
 // while people are still busy, so a session produces a handful of versions,
 // not one per drag.
@@ -21,9 +22,14 @@ export const FLUSH_ON_LEAVE_MS = 5_000;
 
 export type FlushResult = { postponeMs: number } | { saved: number } | { skipped: string };
 
+const KIND_NAME: Record<"de" | "en", Record<LiveBoardKind, string>> = {
+  de: { whiteboard: "Whiteboard", kanban: "Kanban-Board" },
+  en: { whiteboard: "Whiteboard", kanban: "Kanban board" },
+};
+
 const NOTE = {
-  de: (label: string, n: number) => `Whiteboard „${label}“: ${n === 1 ? "1 Person" : `${n} Personen`}`,
-  en: (label: string, n: number) => `Whiteboard "${label}": ${n === 1 ? "1 contributor" : `${n} contributors`}`,
+  de: (kind: LiveBoardKind, label: string, n: number) => `${KIND_NAME.de[kind]} „${label}“: ${n === 1 ? "1 Person" : `${n} Personen`}`,
+  en: (kind: LiveBoardKind, label: string, n: number) => `${KIND_NAME.en[kind]} "${label}": ${n === 1 ? "1 contributor" : `${n} contributors`}`,
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -31,25 +37,25 @@ function isUniqueViolation(err: unknown): boolean {
   return e?.code === "23505" || e?.cause?.code === "23505";
 }
 
-type SaveResult = { ok: true; versionNo: number } | { ok: false; reason: "gone" | "invalid" | "conflict" };
+type SaveResult = { ok: true; versionNo: number; hash: string } | { ok: false; reason: "gone" | "invalid" | "conflict" };
 
 /**
  * Writes the live board into a new version of the entry: re-reads the CURRENT version and replaces
  * only this element's answer, so a form save of other fields in between is not overwritten. The
  * version number doubles as optimistic lock – a concurrent save makes the insert fail, we retry.
  */
-async function saveBoard(communityId: string, b: BoardRef, items: WhiteboardItem[], editorId: string, opts: { contributors: number; evaluate: boolean }): Promise<SaveResult> {
+async function saveBoard(communityId: string, b: BoardRef, items: LiveItem[], editorId: string, opts: { contributors: number; evaluate: boolean }): Promise<SaveResult> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const content = await getContent(communityId, b.contentId);
     const version = content?.version;
     const snapshot = version?.meta.structure;
     if (!content || !version || content.type !== "structured" || !snapshot) return { ok: false, reason: "gone" };
     const el = snapshot.definition.elements.find((e) => e.key === b.key);
-    if (!el || el.type !== "whiteboard") return { ok: false, reason: "gone" };
+    if (!el || !isLiveBoardElement(el)) return { ok: false, reason: "gone" };
 
     const community = await loadCommunity(communityId);
-    const note = NOTE[community?.defaultLocale ?? "de"](el.label, opts.contributors);
-    const built = await buildStructuredVersionInput(snapshot, content.title, { ...snapshot.answers, [b.key]: { items } }, {
+    const note = NOTE[community?.defaultLocale ?? "de"](el.type, el.label, opts.contributors);
+    const built = await buildStructuredVersionInput(snapshot, content.title, { ...snapshot.answers, [b.key]: storedBoardOf(el, items) }, {
       changeNote: note,
       prevEnrichment: snapshot.enrichment,
       imageMediaId: version.mediaId,
@@ -58,16 +64,16 @@ async function saveBoard(communityId: string, b: BoardRef, items: WhiteboardItem
       trustedWhiteboardKeys: [b.key],
     });
     if (!built.ok) {
-      logger.info({ ...b, issues: built.issues }, "whiteboard: live board does not validate, not saved");
+      logger.info({ ...b, issues: built.issues }, "live board does not validate, not saved");
       return { ok: false, reason: "invalid" };
     }
     try {
       const saved = await addContentVersion(communityId, b.contentId, { ...built.input, meta: { ...version.meta, ...built.input.meta } }, editorId, { kind: "user" }, { skipEvaluation: !opts.evaluate, expectedVersionCount: content.versionCount, liveBoards: "keep" });
       if (!saved) return { ok: false, reason: "gone" };
-      return { ok: true, versionNo: saved.versionCount };
+      return { ok: true, versionNo: saved.versionCount, hash: liveHash(el, items) };
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
-      logger.debug({ ...b, attempt }, "whiteboard: concurrent save, retrying");
+      logger.debug({ ...b, attempt }, "live board: concurrent save, retrying");
     }
   }
   return { ok: false, reason: "conflict" };
@@ -102,7 +108,7 @@ export async function flushBoard(b: BoardRef): Promise<FlushResult> {
   }
 
   await publishFlushed(b, result.versionNo);
-  const clean = await markFlushed(b, state.seq, state.items);
+  const clean = await markFlushed(b, state.seq, result.hash);
   if (!clean) return { postponeMs: FLUSH_QUIET_MS };
   if (present === 0) await dropStateIf(b, state.seq);
   return { saved: result.versionNo };

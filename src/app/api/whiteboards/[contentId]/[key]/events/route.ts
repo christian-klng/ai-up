@@ -3,10 +3,11 @@ import { getCurrentUser } from "@/server/auth/session";
 import { getMembership } from "@/server/domain/communities";
 import { createSubscriber } from "@/server/redis";
 import { logger } from "@/server/logger";
-import { boardAccess } from "@/server/whiteboards/access";
+import { boardAccess, type BoardAccess } from "@/server/whiteboards/access";
 import { FLUSH_ON_LEAVE_MS, FLUSH_QUIET_MS } from "@/server/whiteboards/flush";
-import { boardChannel, ensureLoaded, heartbeat, issueToken, join, leave, participants, readLocks, readState, staleDirty } from "@/server/whiteboards/state";
+import { boardChannel, ensureLoaded, heartbeat, issueToken, join, leave, liveHash, participants, readLocks, readState, staleDirty } from "@/server/whiteboards/state";
 import { scheduleWhiteboardFlush } from "@/server/workflows/queue";
+import type { LiveItem } from "@/lib/structures/live-boards";
 import type { WhiteboardEvent } from "@/lib/whiteboard-live";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,13 @@ export const maxDuration = 0;
 const HEARTBEAT_MS = 15_000;
 const TOKEN_REFRESH_MS = 5 * 60_000;
 
+/** Token fields that tell the ops endpoint which items to expect. */
+function boardClaims(access: BoardAccess): { kind: BoardAccess["element"]["type"]; lockColumns?: boolean } {
+  return access.element.type === "kanban" ? { kind: "kanban", lockColumns: access.element.lockColumns || undefined } : { kind: "whiteboard" };
+}
+
 /**
- * Event stream of one live whiteboard (docs/whiteboard.md 5.1). First frame is a snapshot with a
+ * Event stream of one live board – whiteboard or kanban (docs/whiteboard.md 5.1). First frame is a snapshot with a
  * board token for the ops endpoint; after that every op, presence change, selection and soft lock
  * of the board. Events published while the snapshot is read are buffered and filtered by seq, so
  * nothing is applied twice or lost.
@@ -30,7 +36,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/whiteboards/[con
 
   const b = { contentId, key };
   const communityId = user.communityId;
-  await ensureLoaded(b, communityId, access.items);
+  await ensureLoaded(b, communityId, access.items, liveHash(access.element, access.items));
 
   const encoder = new TextEncoder();
   const sub = createSubscriber();
@@ -41,7 +47,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/whiteboards/[con
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (event: WhiteboardEvent | string) => {
+      const send = (event: WhiteboardEvent<LiveItem> | string) => {
         if (closed) return;
         try {
           controller.enqueue(encoder.encode(typeof event === "string" ? event : `data: ${JSON.stringify(event)}\n\n`));
@@ -74,7 +80,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/whiteboards/[con
       const buffered: string[] = [];
       const forward = (raw: string) => {
         try {
-          const event = JSON.parse(raw) as WhiteboardEvent;
+          const event = JSON.parse(raw) as WhiteboardEvent<LiveItem>;
           if ((event.t === "ops" || event.t === "reset") && event.seq <= snapshotSeq) return;
         } catch {
           return;
@@ -95,13 +101,13 @@ export async function GET(req: Request, ctx: RouteContext<"/api/whiteboards/[con
           // saved and dropped between our load and now – load again from the (new) version
           const fresh = await boardAccess(user, contentId, key);
           if (!fresh) throw new Error("board gone");
-          await ensureLoaded(b, communityId, fresh.items);
+          await ensureLoaded(b, communityId, fresh.items, liveHash(fresh.element, fresh.items));
           state = await readState(b);
         }
         if (!state) throw new Error("board state unavailable");
         const [locks, people] = await Promise.all([readLocks(b), participants(b)]);
         send(`retry: 3000\n\n`);
-        send({ t: "snapshot", seq: state.seq, items: state.items, participants: people, locks, token: issueToken({ userId: user.id, communityId, contentId, key }), me: user.id });
+        send({ t: "snapshot", seq: state.seq, items: state.items, participants: people, locks, token: issueToken({ userId: user.id, communityId, contentId, key, ...boardClaims(access) }), me: user.id });
         snapshotSeq = state.seq;
         for (const raw of buffered.splice(0)) forward(raw);
       } catch (err) {
@@ -130,7 +136,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/whiteboards/[con
             await cleanup();
             return;
           }
-          send({ t: "token", token: issueToken({ userId: user.id, communityId, contentId, key }) });
+          send({ t: "token", token: issueToken({ userId: user.id, communityId, contentId, key, ...boardClaims(still) }) });
         })().catch((err) => logger.warn({ err, contentId, key }, "whiteboard: token refresh failed"));
       }, TOKEN_REFRESH_MS);
 

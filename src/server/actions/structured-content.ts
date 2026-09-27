@@ -10,8 +10,9 @@ import { enqueueEvaluation } from "@/server/workflows/queue";
 import type { AnswerIssue } from "@/lib/structures/validate";
 import type { StructureEntryMeta } from "@/lib/structures/types";
 import { logger } from "@/server/logger";
-import { markFlushed, readState, type BoardState } from "@/server/whiteboards/state";
-import { isWhiteboardBoard, type StructureAnswers } from "@/lib/structures/types";
+import { liveHash, markFlushed, readState, type BoardState } from "@/server/whiteboards/state";
+import type { StructureAnswers } from "@/lib/structures/types";
+import { isLiveBoardElement, storedBoardOf } from "@/lib/structures/live-boards";
 
 export type SaveStructuredEntryResult =
   | { ok: true; contentId: string; areaSlug: string }
@@ -81,17 +82,18 @@ export async function saveStructuredEntryAction(input: {
   // state (or the stored board), so a form save cannot overwrite what others are drawing right now.
   let answers = d.answers;
   const liveKeys: string[] = [];
-  const liveStates = new Map<string, BoardState>();
+  /** key → session state and the hash of what this save takes from it */
+  const liveStates = new Map<string, { state: BoardState; hash: string }>();
   if (d.contentId && typeof answers === "object" && answers !== null) {
     const merged: StructureAnswers = { ...(answers as StructureAnswers) };
     for (const el of snapshot.definition.elements) {
-      if (el.type !== "whiteboard") continue;
+      if (!isLiveBoardElement(el)) continue;
       const live = await readState({ contentId: d.contentId, key: el.key });
       if (live) {
-        merged[el.key] = { items: live.items };
+        merged[el.key] = storedBoardOf(el, live.items);
         liveKeys.push(el.key);
-        liveStates.set(el.key, live);
-      } else if (isWhiteboardBoard(prevAnswers?.[el.key])) merged[el.key] = prevAnswers[el.key];
+        liveStates.set(el.key, { state: live, hash: liveHash(el, live.items) });
+      } else if (prevAnswers?.[el.key] !== undefined) merged[el.key] = prevAnswers[el.key];
       else delete merged[el.key];
     }
     answers = merged;
@@ -104,7 +106,7 @@ export async function saveStructuredEntryAction(input: {
     if (d.contentId) {
       await addContentVersion(user.communityId, d.contentId, built.input, user.id, { kind: "user" }, { liveBoards: "keep" });
       // The session's state is saved with this version – no second version for it when the session ends.
-      for (const [key, live] of liveStates) await markFlushed({ contentId: d.contentId, key }, live.seq, live.items);
+      for (const [key, live] of liveStates) await markFlushed({ contentId: d.contentId, key }, live.state.seq, live.hash);
       revalidatePath(`/knowledge/${area.slug}`, "layout");
       return { ok: true, contentId: d.contentId, areaSlug: area.slug };
     }

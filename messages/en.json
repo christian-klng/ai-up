@@ -476,7 +476,8 @@
         "todo": "To do",
         "doing": "In progress",
         "done": "Done"
-      }
+      },
+      "kanbanCollaborativeHint": "Every member can edit the board right in the entry – not only whoever created the entry. The title and other fields stay protected."
     },
     "llm": {
       "title": "LLM providers",
@@ -892,7 +893,18 @@
           "outside": "{title} is outside a column.",
           "dropped": "Dropped {title} on {target}.",
           "cancelled": "Moving {title} was cancelled."
-        }
+        },
+        "editOnEntry": "You edit the board right in the entry – everyone works on it together there. This form leaves it unchanged.",
+        "live": "Live",
+        "saved": "Saved",
+        "connecting": "Connecting …",
+        "offline": "Connection lost",
+        "rejected": "A change was not applied – someone else is editing the card right now, or the board is full.",
+        "wasReset": "The board was replaced from outside (e.g. an older version was restored).",
+        "revoked": "You no longer have access to this board.",
+        "lockDenied": "Someone else is editing this card right now.",
+        "isEditing": "{name} is editing",
+        "isEditingLong": "{name} is editing this card right now – you can only view it."
       }
     },
     "picker": {

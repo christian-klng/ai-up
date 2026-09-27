@@ -4,7 +4,7 @@ Ein neuer Element-Typ `kanban` für Vorlagen in Sammlungen: Karten in Spalten na
 gedacht für gemeinsames Planen, etwa von Anforderungen. Karten haben Titel, Beschreibung und Farbe,
 Spalten haben Titel. UI-Name in beiden Sprachen: „Kanban-Board“ / „Kanban board“.
 
-Stand: **Phasen A und B umgesetzt** (27.09.2026), C und D offen. Abweichungen vom Plan in Abschnitt 10.
+Stand: **Phasen A–C umgesetzt** (27.09.2026), D offen. Abweichungen vom Plan in Abschnitt 10 (B) und 11 (C).
 
 ---
 
@@ -190,7 +190,7 @@ Live-Sicherungen bei Bedarf herausfiltern kann (gilt dann auch fürs Whiteboard)
 |---|---|---|
 | A | Typen, `kanban.ts`, Validierung, Markdown, Migration, `describe.ts`, Tests | **umgesetzt** 27.09.2026 |
 | B | `kanban-board.tsx` (`form`/`readOnly`), Vorlagen-Editor, Formular, Ansicht, i18n, `@dnd-kit` | **umgesetzt** 27.09.2026 |
-| C | Live-Schicht verallgemeinern (5.1), Modus `live`, Session-Hook, Präsenz, Sperre im Dialog | offen |
+| C | Live-Schicht verallgemeinern (5.1), Modus `live`, Session-Hook, Präsenz, Sperre im Dialog | **umgesetzt** 27.09.2026 |
 | D | MCP-Doku, `update_board`, Agenten-Werkzeug, Absatz in `CLAUDE.md` unter „Sammlungen“ | offen |
 
 Vor Abschluss jeder Phase: `npm run typecheck && npm run lint && npm run build && npm run worker:build`
@@ -239,3 +239,38 @@ Tastatur-Drag innerhalb und zwischen Spalten, Kartendialog (Beschreibung, Farbe,
 bearbeiten, Nur-Lese-Dialog, gespeichertes Markdown, heller Modus, Handybreite (kein seitliches Scrollen der
 Seite). **Nicht automatisiert prüfbar:** Maus-Drag – der synthetische Klick des Test-Browsers springt ohne
 Zwischenbewegung; bitte einmal von Hand ziehen, auch auf einem Touch-Gerät.
+
+---
+
+## 11. Umsetzung Phase C (27.09.2026)
+
+| Baustein | Datei |
+|---|---|
+| Art-Weiche gespeichert ↔ live, Grenzen, „gemeinsam bearbeitbar“ | `src/lib/structures/live-boards.ts` (+ `live-boards.test.ts`) |
+| Redis-Zustand artneutral, Hash vom Aufrufer, Grenzen je Item-Art im Lua-Skript | `src/server/whiteboards/state.ts` |
+| Zugriff, Sichern, Formular-Speichern für beide Arten | `access.ts`, `flush.ts`, `src/server/actions/structured-content.ts` |
+| Event-Stream / Ops (Art und `lockColumns` im Board-Token) | `src/app/api/whiteboards/[contentId]/[key]/events|ops/route.ts` |
+| Sitzungs-Hook + Statusanzeige, von beiden Oberflächen genutzt | `src/components/structures/live-board.tsx` |
+| Whiteboard auf den Hook umgestellt (Verhalten unverändert) | `live-whiteboard.tsx` |
+| Kanban live im Eintrag | `src/components/structures/live-kanban.tsx` |
+
+Abweichungen und Präzisierungen:
+
+- **Kein „Öffnen“-Schritt:** Wer ein gemeinsam bearbeitbares Board sieht, ist sofort in der Sitzung – so wie bei
+  Trello. Jede Eintragsansicht hält damit einen Event-Stream (und eine Redis-Verbindung) offen, solange sie
+  offen ist; ohne Änderungen verwirft der Worker den Zustand nach dem Verlassen wieder.
+- **Vergleich in gespeicherter Form:** Der Board-Hash (`liveHash`) rechnet für Kanban auf der verschachtelten
+  Form, nicht auf den Items – die Sortierschlüssel einer Sitzung unterscheiden sich sonst von denen eines
+  frisch geladenen Boards, und eine Titeländerung per MCP hätte ungesicherte Live-Änderungen verworfen.
+- **Grenzen atomar:** Das Lua-Skript zählt je Item-Art (`perKind`, Kanban: 500 Karten, 20 Spalten) – nur neue
+  Items zahlen für die Zählung. Feste Spalten sind gesperrte Items; neue Spalten weist schon der Endpunkt ab.
+- **Alle Spalten weg** (zwei Leute löschen gleichzeitig die letzten beiden): Beim Sichern greifen die Spalten der
+  Vorlage, Karten landen in der ersten – das Sichern scheitert nie an der Validierung.
+- **Weiche Sperre im Kartendialog:** Öffnen meldet die Karte als „in Bearbeitung“; andere sehen den Namen an der
+  Karte, können sie nicht ziehen und öffnen sie nur lesend. Wird die Karte währenddessen gelöscht, gibt der
+  Dialog die Sperre frei.
+- **Workflows:** `source: "live"` in der Payload von `content.updated` (5.3) ist **nicht** umgesetzt – je Sicherung
+  kommt ohnehin nur ein Event, und das Whiteboard hat es auch nicht. Bei Bedarf für beide Arten nachziehen.
+- **Pfade und Schlüssel** heißen weiter `whiteboards`/`aiup:wb:` und der Worker-Job `whiteboard-flush` – ein
+  Umbenennen hätte laufende Jobs und Sitzungen beim Deploy verwaist.
+- Das Formular zeigt das Board eines bestehenden Eintrags nur noch an und übernimmt beim Speichern den Live-Stand.

@@ -26,6 +26,7 @@ const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((
 const WhiteboardInput = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardInput), { ssr: false });
 const WhiteboardEditor = dynamic(() => import("./whiteboard-editor").then((m) => m.WhiteboardEditor), { ssr: false });
 const KanbanInput = dynamic(() => import("./kanban-board").then((m) => m.KanbanInput), { ssr: false });
+const KanbanView = dynamic(() => import("./kanban-board").then((m) => m.KanbanView), { ssr: false });
 
 export type StructureFillFormProps = {
   def: StructureDefinition;
@@ -365,7 +366,15 @@ function ElementInput({ element, value, onChange, issue, disabled, maxUploadMb, 
         <div className="grid grid-cols-1 gap-1.5">
           {header}
           {help}
-          <KanbanInput value={board} onChange={(b) => onChange(b)} lockColumns={element.lockColumns} className={cn(issue && "rounded-md ring-1 ring-destructive")} />
+          {liveBoards ? (
+            // existing entries edit their board live on the entry page; the form keeps what the session holds
+            <>
+              <KanbanView board={board} />
+              <p className="text-xs text-muted-foreground">{t("kanban.editOnEntry")}</p>
+            </>
+          ) : (
+            <KanbanInput value={board} onChange={(b) => onChange(b)} lockColumns={element.lockColumns} className={cn(issue && "rounded-md ring-1 ring-destructive")} />
+          )}
           {error}
         </div>
       );

@@ -276,6 +276,20 @@ export type KanbanLiveItem = KanbanLiveColumn | KanbanLiveCard;
 
 export type KanbanOp = { op: "upsert"; item: KanbanLiveItem } | { op: "delete"; id: string };
 
+/** A live item as it arrives from a client (the session layer stamps createdBy, the template alone sets locked). */
+export const kanbanLiveItemSchema = z.discriminatedUnion("kind", [
+  z.object({ id: idSchema, kind: z.literal("column"), order: z.string().regex(KANBAN_ORDER_REGEX), title: z.string().trim().min(1).max(KANBAN_MAX_COLUMN_TITLE) }),
+  z.object({
+    id: idSchema,
+    kind: z.literal("card"),
+    order: z.string().regex(KANBAN_ORDER_REGEX),
+    columnId: idSchema,
+    title: z.string().trim().min(1).max(KANBAN_MAX_TITLE),
+    description: z.string().max(KANBAN_MAX_DESCRIPTION).optional(),
+    color: z.enum(KANBAN_COLORS).optional(),
+  }),
+]);
+
 /** Columns plus cards – the size of a live board in items. */
 export const KANBAN_MAX_LIVE_ITEMS = KANBAN_MAX_COLUMNS + KANBAN_MAX_CARDS;
 

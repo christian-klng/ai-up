@@ -75,8 +75,14 @@ export type KanbanBoardEditorProps = {
   mode?: "fill" | "seed";
   /** extra controls next to the fullscreen button (e.g. participants) */
   headerSlot?: ReactNode;
+  /** live session: card id → who else is editing it (soft lock – read-only here meanwhile) */
+  remoteLocks?: Record<string, KanbanPeer>;
+  /** live session: the card whose dialog is open for editing, null when it closes */
+  onEditingChange?: (cardId: string | null) => void;
   className?: string;
 };
+
+export type KanbanPeer = { name: string; color: string };
 
 // Full class strings (Tailwind scans for literals).
 const COLOR_STRIP: Record<KanbanColor, string> = {
@@ -146,7 +152,7 @@ const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
   return { x: best.left + (isColumn ? 0 : 8), y: best.top + (isColumn ? 0 : 36) };
 };
 
-export function KanbanBoardEditor({ items, onOps, lockColumns, mode = "fill", headerSlot, className }: KanbanBoardEditorProps) {
+export function KanbanBoardEditor({ items, onOps, lockColumns, mode = "fill", headerSlot, remoteLocks, onEditingChange, className }: KanbanBoardEditorProps) {
   const t = useTranslations("knowledge.structured.kanban");
   const dndId = useId();
   const editable = Boolean(onOps);
@@ -161,6 +167,23 @@ export function KanbanBoardEditor({ items, onOps, lockColumns, mode = "fill", he
   const columns = liveColumns(shown);
   const cardTotal = items.filter((i) => i.kind === "card").length;
   const openCard = openCardId ? items.find((i): i is KanbanLiveCard => i.kind === "card" && i.id === openCardId) : undefined;
+  // someone else editing the card at the moment it opens keeps the dialog read-only for us
+  const [openReadOnly, setOpenReadOnly] = useState(false);
+  const openCardDialog = (id: string) => {
+    const lockedByOther = Boolean(remoteLocks?.[id]);
+    setOpenReadOnly(lockedByOther);
+    setOpenCardId(id);
+    if (editable && !lockedByOther) onEditingChange?.(id);
+  };
+  const closeCardDialog = () => {
+    if (editable && !openReadOnly) onEditingChange?.(null);
+    setOpenCardId(null);
+  };
+  // the open card was deleted by someone else: the dialog is gone, so is our soft lock on it
+  const cardGone = Boolean(openCardId && !openCard);
+  useEffect(() => {
+    if (cardGone && editable && !openReadOnly) onEditingChange?.(null);
+  }, [cardGone, editable, openReadOnly, onEditingChange]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -303,7 +326,8 @@ export function KanbanBoardEditor({ items, onOps, lockColumns, mode = "fill", he
                 onRename={(title) => emit({ op: "upsert", item: { ...col, title } })}
                 onMove={(delta) => emit(moveColumnOp(items, col.id, ci + delta))}
                 onDelete={() => emit(deleteColumnOp(items, col.id))}
-                onOpenCard={setOpenCardId}
+                onOpenCard={openCardDialog}
+                remoteLocks={remoteLocks}
               />
             ))}
           </SortableContext>
@@ -346,8 +370,9 @@ export function KanbanBoardEditor({ items, onOps, lockColumns, mode = "fill", he
           key={openCard.id}
           card={openCard}
           columns={liveColumns(items)}
-          editable={editable}
-          onClose={() => setOpenCardId(null)}
+          editable={editable && !openReadOnly}
+          lockedBy={openReadOnly ? remoteLocks?.[openCard.id] : undefined}
+          onClose={closeCardDialog}
           onCommit={(next) => {
             const ops: KanbanOp[] = [];
             let item: KanbanLiveCard = next;
@@ -360,7 +385,7 @@ export function KanbanBoardEditor({ items, onOps, lockColumns, mode = "fill", he
           }}
           onDelete={() => {
             emit({ op: "delete", id: openCard.id });
-            setOpenCardId(null);
+            closeCardDialog();
           }}
         />
       )}
@@ -385,6 +410,7 @@ function ColumnView({
   onMove,
   onDelete,
   onOpenCard,
+  remoteLocks,
 }: {
   column: KanbanLiveColumn;
   cards: KanbanLiveCard[];
@@ -402,6 +428,7 @@ function ColumnView({
   onMove: (delta: -1 | 1) => void;
   onDelete: () => void;
   onOpenCard: (id: string) => void;
+  remoteLocks?: Record<string, KanbanPeer>;
 }) {
   const t = useTranslations("knowledge.structured.kanban");
   // the column stays a drop target for cards even when it cannot be dragged itself
@@ -446,7 +473,7 @@ function ColumnView({
       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
         <div className={cn("flex min-h-3 flex-col gap-2 overflow-y-auto px-2 pb-2", !fullscreen && "max-h-[70vh]")}>
           {cards.map((card) => (
-            <SortableCard key={card.id} card={card} editable={editable} onOpen={() => onOpenCard(card.id)} />
+            <SortableCard key={card.id} card={card} editable={editable} lockedBy={remoteLocks?.[card.id]} onOpen={() => onOpenCard(card.id)} />
           ))}
           {cards.length === 0 && !composerOpen && <p className="px-1 py-2 text-center text-xs text-muted-foreground">{t("emptyColumn")}</p>}
         </div>
@@ -494,14 +521,16 @@ function ColumnTitle({ title, onRename }: { title: string; onRename: (title: str
   );
 }
 
-function SortableCard({ card, editable, onOpen }: { card: KanbanLiveCard; editable: boolean; onOpen: () => void }) {
-  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: "card" }, disabled: !editable });
+function SortableCard({ card, editable, lockedBy, onOpen }: { card: KanbanLiveCard; editable: boolean; lockedBy?: KanbanPeer; onOpen: () => void }) {
+  // a card someone else is editing cannot be dragged away under their hands (the server would refuse anyway)
+  const draggable = editable && !lockedBy;
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: "card" }, disabled: !draggable });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       {...attributes}
-      {...(editable ? listeners : {})}
+      {...(draggable ? listeners : {})}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -514,18 +543,30 @@ function SortableCard({ card, editable, onOpen }: { card: KanbanLiveCard; editab
       }}
       className={cn("touch-manipulation rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring", isDragging && "opacity-40")}
     >
-      <CardFace card={card} className={editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} />
+      <CardFace card={card} lockedBy={lockedBy} className={draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} />
     </div>
   );
 }
 
-function CardFace({ card, className }: { card: KanbanLiveCard; className?: string }) {
+function CardFace({ card, lockedBy, className }: { card: KanbanLiveCard; lockedBy?: KanbanPeer; className?: string }) {
   const t = useTranslations("knowledge.structured.kanban");
   return (
-    <div className={cn("relative rounded-md border bg-card py-2 pr-2 pl-3 text-sm shadow-xs transition-colors hover:border-primary/40", className)}>
+    <div
+      className={cn("relative rounded-md border bg-card py-2 pr-2 pl-3 text-sm shadow-xs transition-colors hover:border-primary/40", lockedBy && "ring-2", className)}
+      style={lockedBy ? { ["--tw-ring-color" as string]: lockedBy.color } : undefined}
+    >
       {card.color && <span aria-hidden className={cn("absolute inset-y-1.5 left-1 w-1 rounded-full", COLOR_STRIP[card.color])} />}
       <div className="break-words whitespace-pre-wrap">{card.title}</div>
-      {card.description && <AlignLeft className="mt-1 size-3.5 text-muted-foreground" aria-label={t("hasDescription")} />}
+      {(card.description || lockedBy) && (
+        <div className="mt-1 flex items-center justify-between gap-2">
+          {card.description ? <AlignLeft className="size-3.5 text-muted-foreground" aria-label={t("hasDescription")} /> : <span />}
+          {lockedBy && (
+            <span className="truncate rounded px-1 text-[10px] font-medium text-white" style={{ backgroundColor: lockedBy.color }}>
+              {t("isEditing", { name: lockedBy.name })}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -578,7 +619,7 @@ function InlineComposer({ placeholder, submitLabel, maxLength, singleLine, onSub
   );
 }
 
-function CardDialog({ card, columns, editable, onCommit, onDelete, onClose }: { card: KanbanLiveCard; columns: KanbanLiveColumn[]; editable: boolean; onCommit: (card: KanbanLiveCard) => void; onDelete: () => void; onClose: () => void }) {
+function CardDialog({ card, columns, editable, lockedBy, onCommit, onDelete, onClose }: { card: KanbanLiveCard; columns: KanbanLiveColumn[]; editable: boolean; lockedBy?: KanbanPeer; onCommit: (card: KanbanLiveCard) => void; onDelete: () => void; onClose: () => void }) {
   const t = useTranslations("knowledge.structured.kanban");
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
@@ -610,6 +651,7 @@ function CardDialog({ card, columns, editable, onCommit, onDelete, onClose }: { 
           <h2 className="pr-8 text-base font-semibold break-words whitespace-pre-wrap">{card.title}</h2>
         )}
         {columnTitle && !editable && <p className="-mt-3 text-xs text-muted-foreground">{t("inColumn", { column: columnTitle })}</p>}
+        {lockedBy && <p className="-mt-2 text-xs font-medium" style={{ color: lockedBy.color }}>{t("isEditingLong", { name: lockedBy.name })}</p>}
 
         <div className="grid grid-cols-1 gap-1.5">
           <div className="flex items-center justify-between gap-2">

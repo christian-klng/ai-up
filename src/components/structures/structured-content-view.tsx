@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import type { ImageAnswer, LinkAnswer, ProcessGraph, QaPair, StructureEntryMeta, VideoAnswer } from "@/lib/structures/types";
-import { isCollaborativeWhiteboard, isKanbanBoard, isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "@/lib/structures/types";
-import { kanbanHasContent } from "@/lib/structures/kanban";
+import { isKanbanBoard, isMarkdownSectionArray, isMediaLikeAnswer, isWhiteboardBoard } from "@/lib/structures/types";
+import { isCollaborativeBoard } from "@/lib/structures/live-boards";
 import { visibleElements } from "@/lib/structures/visibility";
 import { isQaPairArray } from "@/lib/structures/visibility";
 import { Markdown } from "@/components/content/markdown";
@@ -12,8 +12,10 @@ import { LinkCard, VideoPlayer } from "@/components/content/content-body";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { WhiteboardSection } from "./whiteboard-section";
+import { KanbanSection } from "./live-kanban";
 
-export type StructuredViewWhiteboards = {
+/** What the entry page passes so live boards (whiteboard, kanban) can be joined. */
+export type StructuredViewLive = {
   contentId: string;
   /** author or admin – may join boards that are not collaborative */
   canEditEntry: boolean;
@@ -23,10 +25,9 @@ export type StructuredViewWhiteboards = {
 };
 
 const ProcessGraphEditor = dynamic(() => import("./process-graph-editor").then((m) => m.ProcessGraphEditor), { ssr: false });
-const KanbanView = dynamic(() => import("./kanban-board").then((m) => m.KanbanView), { ssr: false });
 
 /** Native view of a structured entry: sections from the stored answers, process graphs rendered read-only. */
-export function StructuredContentView({ meta, whiteboards }: { meta: StructureEntryMeta; whiteboards?: StructuredViewWhiteboards }) {
+export function StructuredContentView({ meta, live }: { meta: StructureEntryMeta; live?: StructuredViewLive }) {
   const t = useTranslations("knowledge");
   const { definition, answers, enrichment } = meta;
   return (
@@ -48,9 +49,15 @@ export function StructuredContentView({ meta, whiteboards }: { meta: StructureEn
         if (el.type === "whiteboard") {
           // rendered even without an answer: the live session is how a board gets filled
           const items = isWhiteboardBoard(value) ? value.items : [];
-          const canJoin = Boolean(whiteboards && (isCollaborativeWhiteboard(el) || whiteboards.canEditEntry));
+          const canJoin = Boolean(live && (isCollaborativeBoard(el) || live.canEditEntry));
           if (!items.length && !canJoin) return null;
-          return <WhiteboardSection key={el.key} label={el.label} elementKey={el.key} items={items} live={whiteboards ? { contentId: whiteboards.contentId, canJoin, authors: whiteboards.authors, maxUploadMb: whiteboards.maxUploadMb } : undefined} />;
+          return <WhiteboardSection key={el.key} label={el.label} elementKey={el.key} items={items} live={live ? { contentId: live.contentId, canJoin, authors: live.authors, maxUploadMb: live.maxUploadMb } : undefined} />;
+        }
+        if (el.type === "kanban") {
+          // edited right here, in a live session – the stored board is the starting point
+          const board = isKanbanBoard(value) ? value : el.seed;
+          const canJoin = Boolean(live && (isCollaborativeBoard(el) || live.canEditEntry));
+          return <KanbanSection key={el.key} label={el.label} elementKey={el.key} board={board} lockColumns={el.lockColumns} live={canJoin && live ? { contentId: live.contentId } : undefined} />;
         }
         if (value === undefined) return null;
         switch (el.type) {
@@ -99,13 +106,6 @@ export function StructuredContentView({ meta, whiteboards }: { meta: StructureEn
                     </div>
                   ))}
                 </div>
-              </section>
-            ) : null;
-          case "kanban":
-            return isKanbanBoard(value) && kanbanHasContent(value) ? (
-              <section key={el.key}>
-                <h2 className="mb-1.5 text-base font-semibold">{el.label}</h2>
-                <KanbanView board={value} />
               </section>
             ) : null;
           case "process": {

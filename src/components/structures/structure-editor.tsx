@@ -556,6 +556,13 @@ function TypeConfig({ element, onChange }: { element: StructureElement; onChange
         <div className="grid grid-cols-1 gap-3">
           <div className="grid grid-cols-1 gap-1">
             <label className="flex items-center gap-2 text-xs font-medium">
+              <input type="checkbox" checked={element.collaborative !== false} onChange={(e) => onChange({ collaborative: e.target.checked ? undefined : false } as Partial<StructureElement>)} className="size-3.5 accent-primary" />
+              {t("collaborativeLabel")}
+            </label>
+            <p className="text-xs text-muted-foreground">{t("kanbanCollaborativeHint")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-1">
+            <label className="flex items-center gap-2 text-xs font-medium">
               <input type="checkbox" checked={Boolean(element.lockColumns)} onChange={(e) => onChange({ lockColumns: e.target.checked || undefined } as Partial<StructureElement>)} className="size-3.5 accent-primary" />
               {t("lockColumnsLabel")}
             </label>

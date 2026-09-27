@@ -476,7 +476,8 @@
         "todo": "Offen",
         "doing": "In Arbeit",
         "done": "Erledigt"
-      }
+      },
+      "kanbanCollaborativeHint": "Alle Mitglieder können das Board direkt im Eintrag mitbearbeiten – nicht nur, wer den Eintrag angelegt hat. Titel und übrige Felder bleiben geschützt."
     },
     "llm": {
       "title": "LLM-Provider",
@@ -892,7 +893,18 @@
           "outside": "{title} ist außerhalb einer Spalte.",
           "dropped": "{title} bei {target} abgelegt.",
           "cancelled": "Verschieben von {title} abgebrochen."
-        }
+        },
+        "editOnEntry": "Das Board bearbeitest du direkt im Eintrag – dort arbeiten alle gleichzeitig daran. Dieses Formular lässt es unverändert.",
+        "live": "Live",
+        "saved": "Gespeichert",
+        "connecting": "Verbinde …",
+        "offline": "Verbindung unterbrochen",
+        "rejected": "Eine Änderung wurde nicht übernommen – jemand anderes bearbeitet die Karte gerade, oder das Board ist voll.",
+        "wasReset": "Das Board wurde von außen ersetzt (z. B. eine ältere Version wiederhergestellt).",
+        "revoked": "Du hast keinen Zugriff mehr auf dieses Board.",
+        "lockDenied": "Jemand anderes bearbeitet diese Karte gerade.",
+        "isEditing": "{name} bearbeitet",
+        "isEditingLong": "{name} bearbeitet diese Karte gerade – du siehst sie nur."
       }
     },
     "picker": {

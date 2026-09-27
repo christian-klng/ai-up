@@ -184,11 +184,6 @@ export function isWhiteboardBoard(value: unknown): value is WhiteboardBoard {
   return typeof value === "object" && value !== null && !Array.isArray(value) && Array.isArray((value as WhiteboardBoard).items);
 }
 
-/** Whiteboards are collaborative unless the template switches it off. */
-export function isCollaborativeWhiteboard(el: StructureElement): el is Extract<StructureElement, { type: "whiteboard" }> {
-  return el.type === "whiteboard" && el.collaborative !== false;
-}
-
 /** Element types that collect an answer ("info" does not). */
 export function isAnswerable(el: StructureElement): boolean {
   return el.type !== "info";

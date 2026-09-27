@@ -83,7 +83,7 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
       )}
 
       {v && content.type === "structured" && v.meta.structure ? (
-        <StructuredContentView meta={v.meta.structure} whiteboards={{ contentId: content.id, canEditEntry: editable, authors: await whiteboardAuthorNames(v.meta.structure.answers), maxUploadMb: env.MAX_UPLOAD_MB }} />
+        <StructuredContentView meta={v.meta.structure} live={{ contentId: content.id, canEditEntry: editable, authors: await whiteboardAuthorNames(v.meta.structure.answers), maxUploadMb: env.MAX_UPLOAD_MB }} />
       ) : (
         v && (
           <ContentBody

@@ -3,13 +3,13 @@ import { getRedis } from "@/server/redis";
 import { env } from "@/server/env";
 import { logger } from "@/server/logger";
 import { CHANNEL_PREFIX } from "@/server/realtime/publish";
-import type { StructureAnswers, StructureDefinition, WhiteboardItem } from "@/lib/structures/types";
-import { isWhiteboardBoard } from "@/lib/structures/types";
-import { WHITEBOARD_MAX_ITEMS, type WhiteboardOp } from "@/lib/structures/whiteboard";
-import type { WhiteboardEvent, WhiteboardParticipant } from "@/lib/whiteboard-live";
+import type { StructureAnswers, StructureDefinition } from "@/lib/structures/types";
+import { canonicalBoard, isLiveBoardElement, liveItemsOf, type LiveBoardElement, type LiveBoardKind, type LiveItem } from "@/lib/structures/live-boards";
+import type { LiveOp, WhiteboardEvent, WhiteboardParticipant } from "@/lib/whiteboard-live";
 
 // ---------------------------------------------------------------------------
-// Live state of a whiteboard session in Redis (docs/whiteboard.md 5). The
+// Live state of a board session in Redis (docs/whiteboard.md 5) – whiteboards
+// and kanban boards alike (src/lib/structures/live-boards.ts translates). The
 // database only sees a version when the session is saved (flush.ts). Every
 // state change runs as one Lua script that also publishes the event, so the
 // channel order is the seq order. No next/* – the worker flushes from here too.
@@ -41,10 +41,16 @@ function allKeys(b: BoardRef): string[] {
   return Object.values(keys(b));
 }
 
-/** Content hash of a board – tells whether a later write actually changed it (see `resetLiveBoard`). */
-export function boardHash(items: WhiteboardItem[]): string {
+/** Content hash of whiteboard items (order-independent). */
+export function boardHash(items: LiveItem[]): string {
   const sorted = [...items].sort((a, b) => (a.id < b.id ? -1 : 1)).map((i) => Object.fromEntries(Object.entries(i).sort(([x], [y]) => (x < y ? -1 : 1))));
   return createHash("sha1").update(JSON.stringify(sorted)).digest("hex");
+}
+
+/** Content hash of a board in its canonical form – tells whether a later write actually changed it (see `resetLiveBoard`). */
+export function liveHash(el: LiveBoardElement, items: LiveItem[]): string {
+  if (el.type === "whiteboard") return boardHash(items);
+  return createHash("sha1").update(JSON.stringify(canonicalBoard(el, items))).digest("hex");
 }
 
 // Lua: KEYS = items, seq, meta, loaded, contrib, locks, sel (+ presence where noted); cjson ships with Redis.
@@ -64,6 +70,7 @@ const APPLY = `
 if redis.call('EXISTS', KEYS[4]) == 0 then return '{"missing":true}' end
 local user, maxItems, now, ttl = ARGV[1], tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4])
 local ops = cjson.decode(ARGV[5])
+local perKind = cjson.decode(ARGV[9])
 local applied, rejected = {}, {}
 for _, op in ipairs(ops) do
   local id = op.op == 'upsert' and op.item.id or op.id
@@ -79,6 +86,15 @@ for _, op in ipairs(ops) do
   if ok and op.op == 'upsert' then
     if op.item.locked == true then ok = false end
     if ok and not cur and redis.call('HLEN', KEYS[1]) >= maxItems then ok = false end
+    local limit = ok and not cur and op.item.kind and perKind[op.item.kind]
+    if limit then
+      -- only new items of a limited kind pay for the count (kanban: cards, columns)
+      local n = 0
+      for _, other in ipairs(redis.call('HVALS', KEYS[1])) do
+        if cjson.decode(other).kind == op.item.kind then n = n + 1 end
+      end
+      if n >= limit then ok = false end
+    end
   end
   if ok then
     if op.op == 'upsert' then
@@ -156,14 +172,14 @@ export async function isLoaded(b: BoardRef): Promise<boolean> {
   return (await getRedis().exists(keys(b).loaded)) === 1;
 }
 
-/** Seeds the live state from the stored board, unless a session already holds it. */
-export async function ensureLoaded(b: BoardRef, communityId: string, items: WhiteboardItem[]): Promise<void> {
-  await getRedis().eval(INIT, 7, ...orderedKeys(b).slice(0, 7), JSON.stringify(items), communityId, boardHash(items), STATE_TTL_S);
+/** Seeds the live state from the stored board, unless a session already holds it. `hash`: `liveHash` of the items. */
+export async function ensureLoaded(b: BoardRef, communityId: string, items: LiveItem[], hash: string): Promise<void> {
+  await getRedis().eval(INIT, 7, ...orderedKeys(b).slice(0, 7), JSON.stringify(items), communityId, hash, STATE_TTL_S);
 }
 
 export type BoardState = {
   seq: number;
-  items: WhiteboardItem[];
+  items: LiveItem[];
   communityId: string | null;
   lastBy: string | null;
   /** time of the last applied op */
@@ -183,7 +199,7 @@ export async function readState(b: BoardRef): Promise<BoardState | null> {
   const meta = (res[3][1] ?? {}) as Record<string, string>;
   return {
     seq: Number(res[1][1] ?? 0),
-    items: Object.values(itemsRaw).map((s) => JSON.parse(s) as WhiteboardItem),
+    items: Object.values(itemsRaw).map((s) => JSON.parse(s) as LiveItem),
     communityId: meta.communityId ?? null,
     lastBy: meta.lastBy ?? null,
     lastAt: meta.lastAt ? Number(meta.lastAt) : null,
@@ -196,9 +212,9 @@ export async function readState(b: BoardRef): Promise<BoardState | null> {
 
 export type ApplyResult = { missing: true } | { missing?: false; seq: number; rejected: string[]; becameDirty: boolean };
 
-/** Applies a batch atomically (locks, item limit, authorship) and publishes it with its seq. */
-export async function applyOps(b: BoardRef, userId: string, clientId: string, ops: WhiteboardOp[]): Promise<ApplyResult> {
-  const raw = (await getRedis().eval(APPLY, 7, ...orderedKeys(b).slice(0, 7), userId, WHITEBOARD_MAX_ITEMS, Date.now(), STATE_TTL_S, JSON.stringify(ops), boardChannel(b), LOCK_MS, clientId)) as string;
+/** Applies a batch atomically (locks, item limits, authorship) and publishes it with its seq. Limits: `liveLimits`. */
+export async function applyOps(b: BoardRef, userId: string, clientId: string, ops: LiveOp<LiveItem>[], limits: { maxItems: number; perKind: Record<string, number> }): Promise<ApplyResult> {
+  const raw = (await getRedis().eval(APPLY, 7, ...orderedKeys(b).slice(0, 7), userId, limits.maxItems, Date.now(), STATE_TTL_S, JSON.stringify(ops), boardChannel(b), LOCK_MS, clientId, JSON.stringify(limits.perKind))) as string;
   const parsed = JSON.parse(raw) as { missing?: boolean; seq?: number; rejected?: string[] | Record<string, never>; becameDirty?: boolean };
   if (parsed.missing) return { missing: true };
   // cjson encodes an empty table as {} – normalize
@@ -210,19 +226,19 @@ export async function applyOps(b: BoardRef, userId: string, clientId: string, op
  * Skipped when the written board is the one the session started from – then the writer did not
  * touch the board (e.g. a title-only edit) and the unsaved live changes must survive.
  */
-export async function resetLiveBoard(b: BoardRef, items: WhiteboardItem[]): Promise<"reset" | "kept" | "none"> {
+export async function resetLiveBoard(b: BoardRef, items: LiveItem[], hash: string): Promise<"reset" | "kept" | "none"> {
   const r = getRedis();
   const k = keys(b);
   const [loaded, currentBase] = await Promise.all([r.exists(k.loaded), r.hget(k.meta, "base")]);
   if (!loaded) return "none";
-  const hash = boardHash(items);
   if (hash === currentBase) return "kept";
   await r.eval(RESET, 7, ...orderedKeys(b).slice(0, 7), JSON.stringify(items), hash, boardChannel(b));
   return "reset";
 }
 
-export async function markFlushed(b: BoardRef, seq: number, items: WhiteboardItem[]): Promise<boolean> {
-  return (await getRedis().eval(MARK_FLUSHED, 7, ...orderedKeys(b).slice(0, 7), seq, boardHash(items))) === 1;
+/** `hash`: `liveHash` of what was saved. */
+export async function markFlushed(b: BoardRef, seq: number, hash: string): Promise<boolean> {
+  return (await getRedis().eval(MARK_FLUSHED, 7, ...orderedKeys(b).slice(0, 7), seq, hash)) === 1;
 }
 
 export async function dropStateIf(b: BoardRef, seq: number): Promise<boolean> {
@@ -352,7 +368,8 @@ export async function publishFlushed(b: BoardRef, versionNo: number): Promise<vo
 
 export const TOKEN_TTL_MS = 10 * 60_000;
 
-export type BoardToken = { userId: string; communityId: string; contentId: string; key: string; exp: number };
+/** `kind` and `lockColumns` let the ops endpoint check items without loading the entry. */
+export type BoardToken = { userId: string; communityId: string; contentId: string; key: string; kind: LiveBoardKind; lockColumns?: boolean; exp: number };
 
 function sign(payload: string): string {
   return createHmac("sha256", env.BETTER_AUTH_SECRET).update(`wb:${payload}`).digest("base64url");
@@ -385,16 +402,15 @@ export async function withinRateLimit(userId: string, perSecond = 30): Promise<b
   return Number(n?.[0]?.[1] ?? 0) <= perSecond;
 }
 
-/** After a version was written outside the session: hand every whiteboard of it to a running session. */
+/** After a version was written outside the session: hand every live board of it to a running session. */
 export async function syncLiveBoards(contentId: string, structure: { definition: StructureDefinition; answers: StructureAnswers }): Promise<void> {
   for (const el of structure.definition.elements) {
-    if (el.type !== "whiteboard") continue;
-    const value = structure.answers[el.key];
-    const items = isWhiteboardBoard(value) ? value.items : (el.seed?.items ?? []);
+    if (!isLiveBoardElement(el)) continue;
+    const items = liveItemsOf(el, structure.answers[el.key]);
     try {
-      await resetLiveBoard({ contentId, key: el.key }, items);
+      await resetLiveBoard({ contentId, key: el.key }, items, liveHash(el, items));
     } catch (err) {
-      logger.warn({ err, contentId, key: el.key }, "whiteboard: live reset failed");
+      logger.warn({ err, contentId, key: el.key }, "live board: reset failed");
     }
   }
 }

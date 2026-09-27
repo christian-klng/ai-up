@@ -1,17 +1,20 @@
 import type { WhiteboardItem } from "@/lib/structures/types";
-import type { WhiteboardOp } from "@/lib/structures/whiteboard";
 
-// Wire format of a live whiteboard session (docs/whiteboard.md 5). Shared by the
-// event stream, the ops endpoint and the client.
+// Wire format of a live board session (docs/whiteboard.md 5) – whiteboards and
+// kanban boards share it, `I` is the item type. Shared by the event stream, the
+// ops endpoint and the clients.
+
+/** An upsert always carries the whole item (last writer wins per item). */
+export type LiveOp<I> = { op: "upsert"; item: I } | { op: "delete"; id: string };
 
 export type WhiteboardParticipant = { userId: string; name: string; avatarMediaId: string | null; selection: string[] };
 
-export type WhiteboardEvent =
+export type WhiteboardEvent<I = WhiteboardItem> =
   /** first frame of every stream (and after a reconnect) */
-  | { t: "snapshot"; seq: number; items: WhiteboardItem[]; participants: WhiteboardParticipant[]; locks: Record<string, string>; token: string; me: string }
-  | { t: "ops"; seq: number; by: string; clientId: string; ops: WhiteboardOp[] }
+  | { t: "snapshot"; seq: number; items: I[]; participants: WhiteboardParticipant[]; locks: Record<string, string>; token: string; me: string }
+  | { t: "ops"; seq: number; by: string; clientId: string; ops: LiveOp<I>[] }
   /** the board was replaced from outside the session (restore, MCP, agent) */
-  | { t: "reset"; seq: number; items: WhiteboardItem[] }
+  | { t: "reset"; seq: number; items: I[] }
   | { t: "presence"; participants: WhiteboardParticipant[] }
   | { t: "select"; userId: string; ids: string[] }
   | { t: "lock"; userId: string; id: string; on: boolean }
@@ -20,10 +23,10 @@ export type WhiteboardEvent =
   /** membership ended or the entry is gone – the client closes the board */
   | { t: "revoked" };
 
-export type WhiteboardPostBody = {
+export type WhiteboardPostBody<I = WhiteboardItem> = {
   token: string;
   clientId: string;
-  ops?: WhiteboardOp[];
+  ops?: LiveOp<I>[];
   select?: string[];
   /** item id being typed in, null = done */
   editing?: string | null;
