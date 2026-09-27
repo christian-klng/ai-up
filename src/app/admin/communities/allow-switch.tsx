@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { setAllowSubcommunitiesAction } from "@/server/actions/communities";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
@@ -33,7 +33,6 @@ export function AllowSubcommunitiesSwitch({ initial }: { initial: boolean }) {
     <Card className="mb-6">
       <CardHeader>
         <CardTitle>{t("title")}</CardTitle>
-        <CardDescription>{t("intro")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-4 rounded-md border p-3">

@@ -695,7 +695,6 @@
       "restoredToast": "„{name}“ ist wieder da.",
       "allow": {
         "title": "Unter-Communities erlauben",
-        "intro": "Wenn aktiv, dürfen alle Mitglieder eigene Unter-Communities anlegen. Administratorinnen und Administratoren dürfen es immer.",
         "label": "Mitglieder dürfen Communities anlegen",
         "enabledToast": "Mitglieder dürfen jetzt Communities anlegen.",
         "disabledToast": "Nur Admins dürfen jetzt Communities anlegen."

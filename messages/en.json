@@ -695,7 +695,6 @@
       "restoredToast": "“{name}” is back.",
       "allow": {
         "title": "Allow sub-communities",
-        "intro": "When on, every member may start their own sub-community. Admins always may.",
         "label": "Members may create communities",
         "enabledToast": "Members may now create communities.",
         "disabledToast": "Only admins may create communities now."
