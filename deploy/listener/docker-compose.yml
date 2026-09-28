@@ -10,7 +10,10 @@
 services:
   listener:
     build:
-      context: ../..
+      # Relative to the PROJECT directory, not to this file: Coolify runs
+      # `docker compose --project-directory <repo root> -f deploy/listener/docker-compose.yml`.
+      # Locally: docker compose --project-directory . -f deploy/listener/docker-compose.yml build
+      context: .
       dockerfile: deploy/listener/Dockerfile
     restart: unless-stopped
     environment:
