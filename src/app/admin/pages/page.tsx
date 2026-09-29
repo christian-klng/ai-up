@@ -2,13 +2,19 @@ import { getTranslations } from "next-intl/server";
 import { requirePagesAdmin } from "@/server/auth/session";
 import { requireCommunity } from "@/server/auth/session";
 import { getCurrentLandingVersion, isPageEnabled, listLandingMedia, listLandingVersions } from "@/server/domain/landing";
+import { getEventsWidgetUrl } from "@/server/domain/integrations";
 import { SITE_PAGES } from "@/lib/landing-schema";
 import { PageHeader } from "@/components/common/page-header";
 import { LandingAdmin, type PageState } from "./landing-admin";
 
 export default async function AdminPagesPage() {
   const user = await requirePagesAdmin();
-  const [t, settings, media] = await Promise.all([getTranslations("admin.landing"), requireCommunity(), listLandingMedia(user.communityId)]);
+  const [t, settings, media, eventsUrl] = await Promise.all([
+    getTranslations("admin.landing"),
+    requireCommunity(),
+    listLandingMedia(user.communityId),
+    getEventsWidgetUrl(user.communityId),
+  ]);
   const pages = Object.fromEntries(
     await Promise.all(
       SITE_PAGES.map(async (page) => {
@@ -30,6 +36,7 @@ export default async function AdminPagesPage() {
       <LandingAdmin
         pages={pages}
         settings={settings}
+        eventsUrl={eventsUrl}
         media={media.map((m) => ({ id: m.id, originalName: m.originalName, width: m.width, height: m.height }))}
       />
     </div>

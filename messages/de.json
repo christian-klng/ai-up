@@ -119,7 +119,9 @@
   "landing": {
     "toApp": "Zur App",
     "signIn": "Anmelden",
-    "register": "Registrieren"
+    "register": "Registrieren",
+    "eventsUnavailable": "Veranstaltungen: Für diese Community ist kein Event-Dienst verbunden. Auf der öffentlichen Seite bleibt dieser Bereich unsichtbar.",
+    "orderStatusHint": "Kaufbestätigung: Dieser Bereich erscheint nur für Käufer, die nach der Bezahlung auf diese Seite zurückkommen."
   },
   "members": {
     "title": "Mitglieder",
@@ -703,6 +705,21 @@
           "apiKeyRequired": "Bitte gib den API-Key an.",
           "recordingsPathRequired": "Bitte gib das Aufzeichnungs-Verzeichnis an.",
           "s3EndpointInvalid": "Der S3-Endpunkt muss mit https:// beginnen. Lass das Feld leer, wenn du keine Übergabe über S3 nutzt."
+        }
+      },
+      "events": {
+        "title": "Event-Dienst (Seminare & Workshops auf den Webseiten)",
+        "intro": "Der Event-Dienst verwaltet Veranstaltungen und verkauft Tickets. Ist er verbunden, können die Webseiten der Haupt-Community eine Veranstaltungsliste, einzelne Veranstaltungen und die Kaufbestätigung anzeigen. Dazu lädt die öffentliche Seite ein Skript von dieser Adresse – trage nur einen Dienst ein, den du selbst betreibst.",
+        "enabled": "Veranstaltungen auf den Webseiten anzeigen",
+        "enabledHint": "Solange ausgeschaltet, bleiben die Event-Bereiche der Webseiten unsichtbar und es wird kein Skript geladen.",
+        "url": "Adresse des Event-Dienstes",
+        "urlHint": "Nur die Adresse ohne Pfad, zum Beispiel https://events.deine-domain.de.",
+        "test": "Verbindung testen",
+        "testOk": "Verbunden – {count, plural, =0 {keine kommenden Veranstaltungen} one {# kommende Veranstaltung} other {# kommende Veranstaltungen}}, {ms} ms.",
+        "testFailed": "Fehler: {error}",
+        "lastTest": "Letzter Test: {result}",
+        "errors": {
+          "urlInvalid": "Bitte gib eine gültige Adresse an, beginnend mit https://."
         }
       }
     },

@@ -43,11 +43,13 @@ export function LandingEditor({
   onOpenChange,
   definition,
   settings,
+  eventsUrl,
 }: {
   page: SitePage;
   onOpenChange: (open: boolean) => void;
   definition: LandingDefinition;
   settings: Community;
+  eventsUrl: string | null;
 }) {
   const t = useTranslations("admin.landing");
   const tl = useTranslations("landing");
@@ -206,7 +208,15 @@ export function LandingEditor({
               settings={settings}
               signedIn
               editing
-              labels={{ toApp: tl("toApp"), signIn: tl("signIn"), register: tl("register"), menu: tc("menu") }}
+              eventsUrl={eventsUrl}
+              labels={{
+                toApp: tl("toApp"),
+                signIn: tl("signIn"),
+                register: tl("register"),
+                menu: tc("menu"),
+                eventsUnavailable: tl("eventsUnavailable"),
+                orderStatusHint: tl("orderStatusHint"),
+              }}
             />
           </div>
         </div>

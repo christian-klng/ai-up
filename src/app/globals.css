@@ -142,3 +142,64 @@
     }
   }
 }
+/*
+ * Event widgets on the public pages (script of the event service, see
+ * src/components/landing/event-widgets.tsx). Deliberately outside of any @layer: the widgets bring
+ * unlayered styles, and those beat every layered rule however specific it is. Their own rules have
+ * no specificity at all, so the ones here win without !important.
+ */
+event-list,
+event-detail,
+event-order-status,
+.ev-dialog {
+  --ev-accent: var(--primary);
+  --ev-accent-text: var(--primary-foreground);
+  --ev-muted: var(--muted-foreground);
+  --ev-border: var(--border);
+  --ev-radius: calc(var(--radius) * 1.4);
+  --ev-gap: 1rem;
+}
+/* Same columns as the features grid, but a row that is not full sits in the middle. */
+.ev-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ev-card {
+  flex: 0 1 100%;
+  background: var(--card);
+  color: var(--card-foreground);
+}
+@media (min-width: 40rem) {
+  .ev-card {
+    flex-basis: calc((100% - var(--ev-gap)) / 2);
+  }
+}
+@media (min-width: 64rem) {
+  .ev-card {
+    flex-basis: calc((100% - 2 * var(--ev-gap)) / 3);
+  }
+}
+.ev-dialog {
+  /* The reset takes the margin a dialog needs to sit in the middle. */
+  margin: auto;
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+.ev-card__title,
+.ev-detail__title,
+.ev-tickets__title,
+.ev-status__title {
+  font-weight: 600;
+}
+/* The description is plain HTML from the event service and relies on margins the reset removed. */
+.ev-detail__description > * + * {
+  margin-top: 1em;
+}
+.ev-detail__description :is(ul, ol) {
+  padding-left: 1.5em;
+  list-style: revert;
+}
+.ev-detail__description :is(h1, h2, h3, h4) {
+  font-weight: 600;
+}

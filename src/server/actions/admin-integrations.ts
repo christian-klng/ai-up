@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { assertRootAdmin } from "@/server/auth/session";
-import { getLiveKitConfig, livekitHttpUrl, recordIntegrationTest, saveIntegration } from "@/server/domain/integrations";
+import { getEventsView, getLiveKitConfig, livekitHttpUrl, recordIntegrationTest, saveIntegration } from "@/server/domain/integrations";
+import { safeFetch } from "@/server/webreader/safe-fetch";
+import { EVENT_WIDGET_SCRIPT_PATH, normalizeEventServiceUrl } from "@/lib/event-widgets";
 
 const schema = z.object({
   enabled: z.boolean(),
@@ -99,6 +101,51 @@ export async function testLiveKitAction(): Promise<{ ok: true; rooms: number; ms
   } catch (err) {
     const message = (err as Error).message;
     await recordIntegrationTest("livekit", `error: ${message}`);
+    revalidatePath("/admin/integrations");
+    return { ok: false, error: message };
+  }
+}
+
+export type EventsErrorCode = "urlInvalid" | "unexpected";
+export type EventsFormState = { status: "idle" } | { status: "saved" } | { status: "error"; code: EventsErrorCode };
+
+/** Event service whose widgets the public pages embed; stored as origin only. */
+export async function saveEventsAction(_prev: EventsFormState, formData: FormData): Promise<EventsFormState> {
+  const admin = await assertRootAdmin();
+  const enabled = formData.get("enabled") === "on";
+  const raw = String(formData.get("url") ?? "").trim();
+  const url = normalizeEventServiceUrl(raw);
+  // Without an address there is nothing to switch on; an empty field is fine while it stays off.
+  if (!url && (enabled || raw !== "")) return { status: "error", code: "urlInvalid" };
+  await saveIntegration("events", { enabled, config: { url: url ?? "" } }, admin.id);
+  revalidatePath("/admin/integrations");
+  // The public pages and the editor preview read the address on render.
+  revalidatePath("/", "layout");
+  return { status: "saved" };
+}
+
+/** Asks the event service for its list and its widget script – the two things a page needs from it. */
+export async function testEventsAction(): Promise<{ ok: true; count: number; ms: number } | { ok: false; error: string }> {
+  await assertRootAdmin();
+  const url = normalizeEventServiceUrl((await getEventsView()).url);
+  if (!url) return { ok: false, error: "not configured" };
+  const started = Date.now();
+  try {
+    const [list, script] = await Promise.all([
+      safeFetch(`${url}/v1/events?when=upcoming`, { timeoutMs: 8000, headers: { accept: "application/json" } }),
+      safeFetch(`${url}${EVENT_WIDGET_SCRIPT_PATH}`, { timeoutMs: 8000, method: "HEAD" }),
+    ]);
+    if (list.status !== 200) throw new Error(`event list answered with status ${list.status}`);
+    if (script.status !== 200) throw new Error(`widget script answered with status ${script.status}`);
+    const events = (JSON.parse(list.body.toString("utf8")) as { events?: unknown }).events;
+    if (!Array.isArray(events)) throw new Error("the event list has an unexpected format");
+    const res = { ok: true as const, count: events.length, ms: Date.now() - started };
+    await recordIntegrationTest("events", `ok: ${res.count} upcoming events, ${res.ms} ms`);
+    revalidatePath("/admin/integrations");
+    return res;
+  } catch (err) {
+    const message = (err as Error).message;
+    await recordIntegrationTest("events", `error: ${message}`);
     revalidatePath("/admin/integrations");
     return { ok: false, error: message };
   }

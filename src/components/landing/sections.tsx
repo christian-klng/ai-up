@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { EventWidget, OrderReturnOnly, type EventWidgetSource } from "./event-widgets";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
 import type { Community } from "@/server/db/schema";
-import type { LandingSection } from "@/lib/landing-schema";
+import { isFragmentHref, type LandingSection } from "@/lib/landing-schema";
 import { Markdown } from "@/components/content/markdown";
 import { BrandLogo } from "@/components/shell/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,10 @@ function CtaLink({ cta, path, variant }: { cta: { label: string; href: string };
         <a href={cta.href} target="_blank" rel="noopener noreferrer" data-ep={`${path}.label`}>
           {cta.label}
         </a>
+      ) : isFragmentHref(cta.href) ? (
+        <a href={cta.href} data-ep={`${path}.label`}>
+          {cta.label}
+        </a>
       ) : (
         <Link href={cta.href} data-ep={`${path}.label`}>
           {cta.label}
@@ -27,17 +32,33 @@ function CtaLink({ cta, path, variant }: { cta: { label: string; href: string };
   );
 }
 
+/** Inline editor only: stands in for a widget that has nothing to show there. */
+function WidgetNote({ text }: { text: string }) {
+  return (
+    <section className="py-10">
+      <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{text}</p>
+    </section>
+  );
+}
+
+export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string };
+
 export function LandingSectionView({
   section,
   path,
   settings,
-  faqOpen,
+  events,
+  labels,
+  editing,
 }: {
   section: LandingSection;
   path: string;
   settings: Community;
-  /** Render FAQ items expanded (inline editor: answers must be clickable) */
-  faqOpen?: boolean;
+  /** Source of the event widgets; null when this community has no event service */
+  events: EventWidgetSource | null;
+  labels: SectionLabels;
+  /** Inline editor: FAQ answers render expanded (they must be clickable), widgets explain themselves */
+  editing?: boolean;
 }) {
   switch (section.type) {
     case "hero":
@@ -127,7 +148,11 @@ export function LandingSectionView({
               </p>
             )}
             <Button asChild size="lg" variant="secondary" className="mt-1">
-              {section.button.href.startsWith("/") ? (
+              {isFragmentHref(section.button.href) ? (
+                <a href={section.button.href} data-ep={`${path}.button.label`}>
+                  {section.button.label}
+                </a>
+              ) : section.button.href.startsWith("/") ? (
                 <Link href={section.button.href} data-ep={`${path}.button.label`}>
                   {section.button.label}
                 </Link>
@@ -150,7 +175,7 @@ export function LandingSectionView({
           )}
           <div className="grid gap-2">
             {section.items.map((item, i) => (
-              <details key={i} open={faqOpen || undefined} className="group rounded-lg border bg-card px-4 py-3">
+              <details key={i} open={editing || undefined} className="group rounded-lg border bg-card px-4 py-3">
                 <summary className="cursor-pointer list-none font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                   <span data-ep={`${path}.items.${i}.question`}>{item.question}</span>
                 </summary>
@@ -175,6 +200,48 @@ export function LandingSectionView({
             )}
           </figure>
         </section>
+      );
+    case "events":
+      if (!events) return editing ? <WidgetNote text={labels.eventsUnavailable} /> : null;
+      return (
+        <section className="py-10">
+          {section.title && (
+            <h2 className="text-center text-2xl font-semibold tracking-tight text-balance" data-ep={`${path}.title`}>
+              {section.title}
+            </h2>
+          )}
+          {section.intro && (
+            <p className="mx-auto mt-2 max-w-2xl text-center text-muted-foreground" data-ep={`${path}.intro`}>
+              {section.intro}
+            </p>
+          )}
+          <div className={section.title || section.intro ? "mt-8" : undefined}>
+            <EventWidget
+              source={events}
+              tag="event-list"
+              attributes={{ when: section.when, format: section.format, limit: section.limit, "empty-text": section.emptyText }}
+              inert={editing}
+            />
+          </div>
+        </section>
+      );
+    case "event":
+      if (!events) return editing ? <WidgetNote text={labels.eventsUnavailable} /> : null;
+      return (
+        <section className="mx-auto max-w-3xl py-10">
+          <EventWidget source={events} tag="event-detail" attributes={{ slug: section.slug }} inert={editing} />
+        </section>
+      );
+    case "order-status":
+      // The editor has no purchase to show, and outside of it the section exists for buyers only.
+      if (editing) return <WidgetNote text={events ? labels.orderStatusHint : labels.eventsUnavailable} />;
+      if (!events) return null;
+      return (
+        <OrderReturnOnly>
+          <section className="mx-auto max-w-3xl py-10">
+            <EventWidget source={events} tag="event-order-status" />
+          </section>
+        </OrderReturnOnly>
       );
   }
 }

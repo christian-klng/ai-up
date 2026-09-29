@@ -207,6 +207,45 @@ const imageSection = z.object({
   caption: z.string().trim().max(300).optional(),
 });
 
+/**
+ * Event widgets: seminars and workshops from the operator's event service. The definition only
+ * says what to show – the script origin is never part of it (a free URL here would let anyone with
+ * `landing:write` run their own JavaScript on a public page). It comes from the "events"
+ * integration, see `getEventsWidgetUrl()`.
+ */
+const eventsSection = z.object({
+  type: z.literal("events"),
+  title: z.string().trim().max(120).optional(),
+  intro: z.string().trim().max(400).optional(),
+  when: z.enum(["upcoming", "past", "all"]).default("upcoming"),
+  /** Hybrid events match both values. */
+  format: z.enum(["online", "onsite"]).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+  /** Shown instead of the list when there is nothing to show. */
+  emptyText: z.string().trim().min(1).max(200).optional(),
+});
+
+/** Slugs come from the event service, e.g. "2026-11-06-lovable-erste-app". */
+const eventSlug = z
+  .string()
+  .trim()
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, digits and single hyphens");
+
+/** One event with description and tickets directly in the page (no dialog). */
+const eventSection = z.object({
+  type: z.literal("event"),
+  slug: eventSlug,
+});
+
+/**
+ * Result of a purchase. Only visible when the address carries `?session_id=…`, as it does for a
+ * buyer returning from the payment – so it can sit on any page, including the landing page.
+ */
+const orderStatusSection = z.object({
+  type: z.literal("order-status"),
+});
+
 export const landingSectionSchema = z.discriminatedUnion("type", [
   heroSection,
   featuresSection,
@@ -215,7 +254,33 @@ export const landingSectionSchema = z.discriminatedUnion("type", [
   ctaSection,
   faqSection,
   imageSection,
+  eventsSection,
+  eventSection,
+  orderStatusSection,
 ]);
+
+/** Section types rendered by the event widgets. */
+export const EVENT_SECTION_TYPES = ["events", "event", "order-status"] as const;
+
+/** Widget texts a page may replace; everything else keeps the wording of the event service. */
+export const EVENT_TEXT_KEYS = [
+  "buy",
+  "soldOut",
+  "cancelled",
+  "priceFrom",
+  "tickets",
+  "quantity",
+  "empty",
+  "details",
+  "inclTax",
+  "paymentNote",
+  "statusPaidTitle",
+] as const;
+export type EventTextKey = (typeof EVENT_TEXT_KEYS)[number];
+
+const eventTexts = z
+  .strictObject(Object.fromEntries(EVENT_TEXT_KEYS.map((key) => [key, z.string().trim().min(1).max(200).optional()])) as Record<EventTextKey, z.ZodOptional<z.ZodString>>)
+  .refine((texts) => !texts.priceFrom || texts.priceFrom.includes("{price}"), { message: 'priceFrom must contain the placeholder "{price}"', path: ["priceFrom"] });
 
 export const landingDefinitionSchema = z.object({
   meta: z
@@ -227,6 +292,8 @@ export const landingDefinitionSchema = z.object({
     })
     .default({}),
   sections: z.array(landingSectionSchema).min(1).max(15),
+  /** Replaces single texts of the event widgets, for all event sections of the page. */
+  eventTexts: eventTexts.optional(),
   footer: z
     .object({
       text: z.string().trim().max(300).optional(),
@@ -250,6 +317,19 @@ export function validateLandingDefinition(input: unknown): LandingValidationResu
     return { ok: false, issues: parsed.error.issues.map((i) => ({ path: i.path.map(String).join("."), message: i.message })) };
   }
   return { ok: true, definition: parsed.data };
+}
+
+/** Whether the page needs the event service to render completely. */
+export function usesEventSections(definition: LandingDefinition): boolean {
+  return definition.sections.some((s) => (EVENT_SECTION_TYPES as readonly string[]).includes(s.type));
+}
+
+/**
+ * Internal links with a fragment ("/#event/<slug>") must be plain anchors: the event list opens
+ * its dialog on `hashchange`, which a client-side router navigation never fires.
+ */
+export function isFragmentHref(href: string): boolean {
+  return href.startsWith("/") && href.includes("#");
 }
 
 /** All media ids referenced by a definition (hero images + image sections). */

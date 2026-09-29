@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { landingPageVersions, mediaFiles, users, type Community, type LandingPageVersion, type MediaFile } from "@/server/db/schema";
-import { validateLandingDefinition, collectLandingMediaIds, type LandingDefinition, type LandingValidationIssue, type SitePage } from "@/lib/landing-schema";
+import { validateLandingDefinition, collectLandingMediaIds, usesEventSections, type LandingDefinition, type LandingValidationIssue, type SitePage } from "@/lib/landing-schema";
+import { getEventsWidgetUrl } from "./integrations";
 
 /**
  * Public site pages domain (landing, imprint, privacy): one definition per page stored as
@@ -89,7 +90,7 @@ export async function saveLandingVersion(
 ): Promise<SaveLandingResult> {
   const validated = validateLandingDefinition(definition);
   if (!validated.ok) return { ok: false, issues: validated.issues };
-  const warnings = await mediaWarnings(validated.definition);
+  const warnings = await landingWarnings(communityId, validated.definition);
   const row = await insertNextVersion(communityId, page, validated.definition, actorId, source, changeNote ?? null);
   return { ok: true, row, warnings };
 }
@@ -124,6 +125,12 @@ async function insertNextVersion(communityId: string, page: SitePage, definition
   }
 }
 
+/** Everything that is valid but would not show on the public page. */
+export async function landingWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
+  const [media, events] = await Promise.all([mediaWarnings(definition), eventWarnings(communityId, definition)]);
+  return [...media, ...events];
+}
+
 /** Warns about referenced media that will not load on a public page (wrong purpose or missing). */
 async function mediaWarnings(definition: LandingDefinition): Promise<string[]> {
   const ids = collectLandingMediaIds(definition);
@@ -142,4 +149,11 @@ async function mediaWarnings(definition: LandingDefinition): Promise<string[]> {
     }
   }
   return warnings;
+}
+
+/** Warns when a page relies on the event service although this community has none to load from. */
+async function eventWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
+  if (!usesEventSections(definition)) return [];
+  if (await getEventsWidgetUrl(communityId)) return [];
+  return ["the page uses event sections (events, event, order-status), but no event service is connected for this community – these sections stay invisible until the operator connects one under Admin → Integrations"];
 }

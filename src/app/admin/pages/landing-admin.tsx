@@ -31,7 +31,17 @@ export type PageState = {
 
 const PAGE_URLS: Record<SitePage, string> = { landing: "/", imprint: "/imprint", privacy: "/privacy" };
 
-export function LandingAdmin({ pages, settings, media }: { pages: Record<SitePage, PageState>; settings: Community; media: MediaRow[] }) {
+export function LandingAdmin({
+  pages,
+  settings,
+  media,
+  eventsUrl,
+}: {
+  pages: Record<SitePage, PageState>;
+  settings: Community;
+  media: MediaRow[];
+  eventsUrl: string | null;
+}) {
   const t = useTranslations("admin.landing");
   const tc = useTranslations("common");
   const format = useFormatter();
@@ -83,7 +93,7 @@ export function LandingAdmin({ pages, settings, media }: { pages: Record<SitePag
   return (
     <div className="grid gap-6">
       {editorPage && editorDefinition && (
-        <LandingEditor page={editorPage} onOpenChange={() => setEditorPage(null)} definition={editorDefinition} settings={settings} />
+        <LandingEditor page={editorPage} onOpenChange={() => setEditorPage(null)} definition={editorDefinition} settings={settings} eventsUrl={eventsUrl} />
       )}
 
       <Tabs defaultValue="landing">

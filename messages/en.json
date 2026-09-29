@@ -119,7 +119,9 @@
   "landing": {
     "toApp": "Open app",
     "signIn": "Sign in",
-    "register": "Register"
+    "register": "Register",
+    "eventsUnavailable": "Events: no event service is connected for this community. On the public page this section stays invisible.",
+    "orderStatusHint": "Purchase confirmation: this section only appears for buyers who return to this page after paying."
   },
   "members": {
     "title": "Members",
@@ -703,6 +705,21 @@
           "apiKeyRequired": "Enter the API key.",
           "recordingsPathRequired": "Enter the recordings directory.",
           "s3EndpointInvalid": "The S3 endpoint must start with https://. Leave it empty if you are not using the S3 handover."
+        }
+      },
+      "events": {
+        "title": "Event service (seminars & workshops on the web pages)",
+        "intro": "The event service manages events and sells tickets. Once connected, the web pages of the main community can show an event list, single events and the purchase confirmation. For that the public page loads a script from this address – only enter a service you run yourself.",
+        "enabled": "Show events on the web pages",
+        "enabledHint": "While off, the event sections of the web pages stay invisible and no script is loaded.",
+        "url": "Address of the event service",
+        "urlHint": "The address without a path, for example https://events.your-domain.com.",
+        "test": "Test connection",
+        "testOk": "Connected – {count, plural, =0 {no upcoming events} one {# upcoming event} other {# upcoming events}}, {ms} ms.",
+        "testFailed": "Error: {error}",
+        "lastTest": "Last test: {result}",
+        "errors": {
+          "urlInvalid": "Enter a valid address starting with https://."
         }
       }
     },

@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { auditLog, integrations, type Integration } from "@/server/db/schema";
+import { auditLog, integrations, ROOT_COMMUNITY_ID, type Integration } from "@/server/db/schema";
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto";
+import { normalizeEventServiceUrl } from "@/lib/event-widgets";
 
 /**
  * Integration settings (LiveKit now, others later). Public config in JSON, secrets encrypted as one JSON blob.
@@ -114,4 +115,37 @@ export type LiveKitS3 = { endpoint: string; region: string; bucket: string; acce
 export function livekitS3(cfg: Pick<LiveKitConfig, "s3Endpoint" | "s3Region" | "s3Bucket" | "s3AccessKey"> & Pick<LiveKitSecrets, "s3SecretKey">): LiveKitS3 | null {
   if (!cfg.s3Endpoint || !cfg.s3Bucket || !cfg.s3AccessKey || !cfg.s3SecretKey) return null;
   return { endpoint: cfg.s3Endpoint, region: cfg.s3Region || "auto", bucket: cfg.s3Bucket, accessKey: cfg.s3AccessKey, secretKey: cfg.s3SecretKey };
+}
+
+/** Event service (seminars, workshops, ticket sales) whose widgets the public pages embed. */
+export type EventsConfig = {
+  /** Origin only, e.g. https://events.example.com – the widget script and the API live below it */
+  url: string;
+};
+
+/** Admin view of the event service. */
+export async function getEventsView() {
+  const row = await getIntegration("events");
+  const c = (row?.config ?? {}) as Partial<EventsConfig>;
+  return {
+    enabled: row?.enabled ?? false,
+    url: c.url ?? "",
+    lastTestAt: row?.lastTestAt ?? null,
+    lastTestResult: row?.lastTestResult ?? null,
+  };
+}
+
+/**
+ * Where the event widgets on a community's public pages load their script from, or null when the
+ * page has to do without them. The service knows a single organizer and is run by the operator, so
+ * only the root gets it: a sub-community showing – and selling – the operator's seminars would be
+ * inheritance through the back door. The stored address is normalized again on the way out, because
+ * whatever this returns ends up as a script source.
+ */
+export async function getEventsWidgetUrl(communityId: string): Promise<string | null> {
+  if (communityId !== ROOT_COMMUNITY_ID) return null;
+  const row = await getIntegration("events");
+  if (!row?.enabled) return null;
+  const url = (row.config as Partial<EventsConfig>).url;
+  return url ? normalizeEventServiceUrl(url) : null;
 }

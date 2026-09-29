@@ -1,13 +1,14 @@
 import Link from "next/link";
 import type { Community } from "@/server/db/schema";
-import type { LandingDefinition } from "@/lib/landing-schema";
+import { isFragmentHref, type LandingDefinition } from "@/lib/landing-schema";
+import { eventWidgetLocale } from "@/lib/event-widgets";
 import { Menu } from "lucide-react";
 import { BrandLogo } from "@/components/shell/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { LandingSectionView } from "./sections";
+import { LandingSectionView, type SectionLabels } from "./sections";
 
-export type LandingLabels = { toApp: string; signIn: string; register: string; menu: string };
+export type LandingLabels = { toApp: string; signIn: string; register: string; menu: string } & SectionLabels;
 
 /**
  * Presentational landing page (header + sections + footer). Used by the public page (server)
@@ -19,15 +20,19 @@ export function LandingShell({
   settings,
   signedIn,
   labels,
+  eventsUrl,
   editing,
 }: {
   definition: LandingDefinition;
   settings: Community;
   signedIn: boolean;
   labels: LandingLabels;
+  /** Origin of the event service for this community (`getEventsWidgetUrl`); null = no event widgets */
+  eventsUrl: string | null;
   /** Inline-editor mode: FAQ items render expanded so their answers are clickable */
   editing?: boolean;
 }) {
+  const events = eventsUrl ? { url: eventsUrl, locale: eventWidgetLocale(settings.defaultLocale), texts: definition.eventTexts ?? {} } : null;
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
@@ -88,7 +93,7 @@ export function LandingShell({
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6 lg:px-8">
         {definition.sections.map((section, i) => (
-          <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} faqOpen={editing} />
+          <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} labels={labels} editing={editing} />
         ))}
       </main>
 
@@ -102,7 +107,11 @@ export function LandingShell({
           {definition.footer.links.length > 0 && (
             <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
               {definition.footer.links.map((link, i) =>
-                link.href.startsWith("/") ? (
+                isFragmentHref(link.href) ? (
+                  <a key={i} href={link.href} className="hover:text-foreground hover:underline" data-ep={`footer.links.${i}.label`}>
+                    {link.label}
+                  </a>
+                ) : link.href.startsWith("/") ? (
                   <Link key={i} href={link.href} className="hover:text-foreground hover:underline" data-ep={`footer.links.${i}.label`}>
                     {link.label}
                   </Link>

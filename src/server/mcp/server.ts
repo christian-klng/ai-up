@@ -11,13 +11,13 @@ import { startRun } from "@/server/workflows/dispatch";
 import { getAction, getTrigger, loadRegistry } from "@/server/workflows/registry";
 import { createWorkflow, deleteWorkflow, getRunWithSteps, getWorkflow, listRuns, listWorkflowVersions, listWorkflows, setWorkflowStatus, toDefinition, updateWorkflow, workflowStats } from "@/server/workflows/service";
 import { createMeeting, getMeeting, listMeetings, listSpaces, updateMeeting } from "@/server/domain/meetings";
-import { getLiveKitConfig } from "@/server/domain/integrations";
+import { getEventsWidgetUrl, getLiveKitConfig } from "@/server/domain/integrations";
 import { getMeetingInvite, setInviteEnabled } from "@/server/domain/invites";
 import { db } from "@/server/db/client";
 import { auditLog } from "@/server/db/schema";
 import { ROOT_COMMUNITY_ID, loadCommunity, updateCommunity } from "@/server/domain/communities";
-import { getCurrentLandingVersion, isPageEnabled, listLandingMedia, listLandingVersions, pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
-import { LANDING_ICONS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
+import { getCurrentLandingVersion, isPageEnabled, landingWarnings, listLandingMedia, listLandingVersions, pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
+import { EVENT_TEXT_KEYS, LANDING_ICONS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { importImageFromUrl } from "@/server/media/import-image";
@@ -143,8 +143,13 @@ come from the app theme automatically: write copy, don't style.
     { "type": "markdown", "title": "optional", "body": "GFM markdown, max 8000 chars; raw HTML is stripped" },
     { "type": "cta", "headline": "…", "text": "optional", "button": { "label": "…", "href": "/register" } },
     { "type": "faq", "title": "optional", "items": [ { "question": "…", "answer": "…" } ] },
-    { "type": "image", "mediaId": "uuid", "alt": "required alt text", "caption": "optional" }
+    { "type": "image", "mediaId": "uuid", "alt": "required alt text", "caption": "optional" },
+    { "type": "events", "title": "optional", "intro": "optional", "when": "upcoming | past | all",
+      "format": "optional: online | onsite", "limit": 6, "emptyText": "optional, shown when there is nothing to list" },
+    { "type": "event", "slug": "slug of one event" },
+    { "type": "order-status" }
   ],
+  "eventTexts": { "buy": "optional – replaces single texts of the event sections, see below" },
   "footer": { "text": "optional", "links": [ { "label": "Impressum", "href": "https://…" } ] }
 }
 
@@ -160,6 +165,28 @@ Rules
   (admin uploads them under Admin → Web pages, or use list_page_media). Other purposes are not public.
 - German sites typically need imprint + privacy pages; link them from the landing footer
   (footer.links → "/imprint", "/privacy").
+
+Events (seminars and workshops with ticket sales)
+- The events themselves – titles, dates, prices, tickets, pictures – live in a separate event service
+  and are maintained there, never in a page. A page only says where they appear. Whether a service is
+  connected is part of the current app context below; without one these sections stay invisible.
+- "events": cards of all matching events, newest data on every visit. A click on a card opens a dialog
+  with description, tickets and the button that leads to the payment. "when" defaults to "upcoming";
+  "format" narrows to online or onsite (hybrid events match both); "limit" caps the number of cards.
+  Use "title"/"intro" for the heading above the list – the cards bring their own texts.
+- "event": one event with description and tickets directly in the page, without a dialog. Takes the
+  slug of the event as the event service reports it (e.g. "2026-11-06-lovable-erste-app").
+- "order-status": confirmation after a purchase. It is only visible to buyers returning from the
+  payment (the address then carries "?session_id=…") and invisible to everyone else, so it can sit on
+  any page – put it FIRST on the page the event service sends buyers back to (its checkout success
+  address), usually the landing page. Without it buyers return to a page that says nothing about
+  their purchase.
+- Link straight to one event with the href "/#event/<slug>" (e.g. from a hero or cta button): it opens
+  the dialog of that event. The target page needs an "events" section.
+- "eventTexts" (optional, top level) replaces single texts in all event sections of the page. Keys:
+  ${EVENT_TEXT_KEYS.join(", ")}. "priceFrom" must keep the placeholder "{price}". Everything else keeps the
+  wording of the event service. Use the same texts on every page that shows event sections.
+- Do not describe events by hand in markdown or features sections – dates and prices would go stale.
 - Pages are monolingual – write them in the community's language (see current app context below).
 - Every update creates a new version per page (traceable, restorable). Validate first with validate_page.
 - A page only goes public when the admin (or set_page_enabled) turns it on; each page has its own flag.
@@ -355,7 +382,7 @@ async function collectionsContext(cid: string): Promise<string> {
 
 /** Current app context appended to the pages doc so the calling LLM knows name, purpose and theme. */
 async function pagesContext(cid: string): Promise<string> {
-  const settings = await loadCommunity(cid);
+  const [settings, eventsUrl] = await Promise.all([loadCommunity(cid), getEventsWidgetUrl(cid)]);
   if (!settings) return "## Current app context\n- community not found";
   const perPage = await Promise.all(
     SITE_PAGES.map(async (page) => {
@@ -371,6 +398,7 @@ async function pagesContext(cid: string): Promise<string> {
     `- theme: primaryColor ${settings.theme.primaryColor}, mode ${settings.theme.mode}, radius ${settings.theme.radius}rem`,
     `- logo uploaded: ${settings.logoMediaId ? "yes" : "no"}`,
     `- default locale: ${settings.defaultLocale}`,
+    `- event service: ${eventsUrl ? `connected (${eventsUrl}) – event sections are available` : "not connected – event sections stay invisible (the operator connects one under Admin → Integrations)"}`,
     ...perPage,
   ].join("\n");
 }
@@ -655,7 +683,10 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     if (!settings) return fail("community not found");
     return text({ page, enabled: isPageEnabled(settings, page), version: current?.version ?? null, definition: current?.definition ?? null });
   });
-  server.registerTool("validate_page", { title: "Pages - Validate", description: "Dry-run validation of a page definition against the shared section schema. Returns issues without saving.", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => text(validateLandingDefinition(definition)));
+  server.registerTool("validate_page", { title: "Pages - Validate", description: "Dry-run validation of a page definition against the shared section schema. Returns issues without saving, plus warnings about things that would not show on the public page (missing images, event sections without a connected event service).", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
+    const res = validateLandingDefinition(definition);
+    return text(res.ok ? { ...res, warnings: await landingWarnings(cid, res.definition) } : res);
+  });
   server.registerTool(
     "update_page",
     { title: "Pages - Update", description: "Validates and saves the full definition of one page as a new version (append-only history per page; restore is always possible). Does not change the enabled flag.", inputSchema: { page: pageParam, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
