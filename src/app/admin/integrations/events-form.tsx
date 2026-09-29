@@ -33,7 +33,8 @@ export function EventsForm({ initial, lastTest }: { initial: { enabled: boolean;
         <CardTitle className="text-base">{t("events.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={action} className="grid gap-4">
+        {/* keyed by the stored values: React resets the form after the action, the fresh defaults must win */}
+        <form key={`${initial.enabled}-${initial.url}`} action={action} className="grid gap-4">
           <p className="text-sm text-muted-foreground">{t("events.intro")}</p>
           <div className="flex items-start gap-3">
             <Switch id="ev-enabled" name="enabled" defaultChecked={initial.enabled} />

@@ -48,7 +48,8 @@ export function LiveKitForm({ initial, lastTest }: { initial: Initial; lastTest:
         <CardTitle className="text-base">{t("livekit.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={action} className="grid gap-4">
+        {/* keyed by the stored values: React resets the form after the action, the fresh defaults must win */}
+        <form key={JSON.stringify(initial)} action={action} className="grid gap-4">
           <p className="text-sm text-muted-foreground">{t("livekit.intro")}</p>
           <div className="flex items-start gap-3">
             <Switch id="lk-enabled" name="enabled" defaultChecked={initial.enabled} />
