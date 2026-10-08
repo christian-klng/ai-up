@@ -10,7 +10,7 @@ import { env } from "@/server/env";
 import { hostOf } from "@/lib/community";
 import { logger } from "@/server/logger";
 import { sendMail } from "@/server/mail/mailer";
-import { magicLinkMail } from "@/server/mail/templates";
+import { magicLinkMail, mailContext } from "@/server/mail/templates";
 import { getPublicCommunity } from "@/server/community-context";
 import { getUserByEmail } from "@/server/domain/users";
 
@@ -91,7 +91,7 @@ export const auth = betterAuth({
         // whose host the sign-in page was served under, so the mail carries the right name.
         // (`requireCommunity()` is a *page* guard and would redirect, which broke the send.)
         const community = await getPublicCommunity();
-        await sendMail(magicLinkMail({ appName: community.name, appUrl: env.APP_URL, locale: user.locale }, email, url));
+        await sendMail(magicLinkMail(mailContext(community, user.locale), email, url));
       },
     }),
     // Stage B (spike): lets a community on its own domain receive the session after signing in on

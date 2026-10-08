@@ -1,4 +1,5 @@
 import type { Community } from "@/server/db/schema";
+import { brandInitials } from "@/lib/brand";
 
 /** Logo from settings, or a monogram fallback derived from the app name. */
 export function BrandLogo({ settings, size = 32 }: { settings: Pick<Community, "name" | "logoMediaId">; size?: number }) {
@@ -15,19 +16,13 @@ export function BrandLogo({ settings, size = 32 }: { settings: Pick<Community, "
       />
     );
   }
-  const initials = settings.name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
   return (
     <span
       className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground font-semibold"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
       aria-hidden
     >
-      {initials || "A"}
+      {brandInitials(settings.name)}
     </span>
   );
 }

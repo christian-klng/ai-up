@@ -1,7 +1,29 @@
 import type { Locale } from "@/i18n/config";
-import { escapeHtml, mailButton, mailLayout, type MailMessage } from "./mailer";
+import type { Community } from "@/server/db/schema";
+import { env } from "@/server/env";
+import { mailBrandColors } from "@/lib/brand";
+import { escapeHtml, mailButton, mailLayout, neutralBrand, type MailBrand, type MailMessage } from "./mailer";
 
-type Ctx = { appName: string; appUrl: string; locale: Locale };
+type Ctx = { appName: string; appUrl: string; locale: Locale; brand: MailBrand };
+
+/**
+ * Sender context for a mail of one community. The logo is linked from the main host: its purpose
+ * makes it public there, whichever host the community itself is served under.
+ */
+export function mailContext(community: Pick<Community, "name" | "logoMediaId" | "theme"> | undefined, locale: Locale): Ctx {
+  const appUrl = env.APP_URL.replace(/\/$/, "");
+  if (!community) return { appName: "AI-Up", appUrl, locale, brand: neutralBrand("AI-Up") };
+  return {
+    appName: community.name,
+    appUrl,
+    locale,
+    brand: {
+      appName: community.name,
+      logoUrl: community.logoMediaId ? `${appUrl}/api/files/${community.logoMediaId}` : null,
+      colors: mailBrandColors(community.theme.primaryColor),
+    },
+  };
+}
 
 const t = {
   de: {
@@ -49,9 +71,9 @@ export function magicLinkMail(ctx: Ctx, to: string, url: string): MailMessage {
     subject: s.magicSubject(ctx.appName),
     text: `${s.magicBody(ctx.appName)}\n\n${url}\n\n${s.magicFooter}`,
     html: mailLayout({
-      appName: ctx.appName,
+      brand: ctx.brand,
       title: s.magicTitle,
-      bodyHtml: `<p>${escapeHtml(s.magicBody(ctx.appName))}</p>${mailButton(url, s.magicButton)}${linkFallback(ctx.locale, url)}`,
+      bodyHtml: `<p>${escapeHtml(s.magicBody(ctx.appName))}</p>${mailButton(url, s.magicButton, ctx.brand.colors)}${linkFallback(ctx.locale, url)}`,
       footer: s.magicFooter,
     }),
   };
@@ -64,9 +86,9 @@ export function accountApprovedMail(ctx: Ctx, to: string, loginUrl: string): Mai
     subject: s.approvedSubject(ctx.appName),
     text: `${s.approvedBody(ctx.appName)}\n\n${loginUrl}`,
     html: mailLayout({
-      appName: ctx.appName,
+      brand: ctx.brand,
       title: s.approvedTitle,
-      bodyHtml: `<p>${escapeHtml(s.approvedBody(ctx.appName))}</p>${mailButton(loginUrl, s.approvedButton)}${linkFallback(ctx.locale, loginUrl)}`,
+      bodyHtml: `<p>${escapeHtml(s.approvedBody(ctx.appName))}</p>${mailButton(loginUrl, s.approvedButton, ctx.brand.colors)}${linkFallback(ctx.locale, loginUrl)}`,
     }),
   };
 }
@@ -80,9 +102,9 @@ export function pendingMemberAdminMail(ctx: Ctx, to: string, member: { name: str
     subject: s.pendingAdminSubject(ctx.appName),
     text: `${s.pendingAdminBody(member.name, member.email)}\n\n${url}`,
     html: mailLayout({
-      appName: ctx.appName,
+      brand: ctx.brand,
       title: s.pendingAdminTitle,
-      bodyHtml: `<p>${escapeHtml(s.pendingAdminBody(member.name, member.email))}</p>${mailButton(url, s.pendingAdminButton)}`,
+      bodyHtml: `<p>${escapeHtml(s.pendingAdminBody(member.name, member.email))}</p>${mailButton(url, s.pendingAdminButton, ctx.brand.colors)}`,
     }),
   };
 }

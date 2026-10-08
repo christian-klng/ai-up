@@ -6,7 +6,7 @@ import { env } from "@/server/env";
 import type { Locale } from "@/i18n/config";
 import { logger } from "@/server/logger";
 import { sendMail } from "@/server/mail/mailer";
-import { accountApprovedMail, pendingMemberAdminMail } from "@/server/mail/templates";
+import { accountApprovedMail, mailContext, pendingMemberAdminMail } from "@/server/mail/templates";
 import { generateRandomAvatar } from "@/server/media/avatars";
 import { addMembership, communityUrl, getMembership, loadCommunity, listAdminIds } from "./communities";
 import { countCommunityInviteUse } from "./community-invites";
@@ -192,7 +192,6 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
   // Notify this community's admins in-app + by mail (best effort)
   try {
     const [admins, community] = await Promise.all([listAdmins(input.communityId), loadCommunity(input.communityId)]);
-    const appName = community?.name ?? "AI-Up";
     await createNotifications(
       admins.map((a) => ({
         communityId: input.communityId,
@@ -207,7 +206,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     await Promise.allSettled(
       admins.map((a) =>
         sendMail(
-          pendingMemberAdminMail({ appName, appUrl: env.APP_URL, locale: a.locale }, a.email, { ...user, registrationMessage: message }, reviewUrl),
+          pendingMemberAdminMail(mailContext(community, a.locale), a.email, { ...user, registrationMessage: message }, reviewUrl),
         ),
       ),
     );
@@ -256,7 +255,7 @@ export async function approveMember(
     const next = community ? await communityUrl(community, "/home") : `${env.APP_URL}/home`;
     await sendMail(
       accountApprovedMail(
-        { appName: community?.name ?? "AI-Up", appUrl: env.APP_URL, locale: user.locale },
+        mailContext(community, user.locale),
         user.email,
         `${env.APP_URL}/login?next=${encodeURIComponent(new URL(next).pathname)}`,
       ),
