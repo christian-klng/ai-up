@@ -72,7 +72,7 @@
     "invite": {
       "title": "Invitation to {app}",
       "intro": "You have been invited to this meeting. Enter your name and e-mail address – your account is activated right away and you receive a sign-in link.",
-      "submit": "Join",
+      "submit": "Register",
       "sentTitle": "Check your inbox",
       "sentBody": "We sent a sign-in link to {email} that takes you straight to the meeting. It is valid for 15 minutes.",
       "invalidTitle": "This invitation is no longer valid",

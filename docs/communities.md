@@ -234,6 +234,9 @@ Community-Vorgänge und lassen sich 1:1 übertragen:
   wenn die Sub das erlaubt; Standard: aus).
 - Meeting-Einladungslinks bleiben wie sie sind und aktivieren die Mitgliedschaft in der Community des
   Meetings.
+- Beide Links schalten auch eine **wartende** Registrierung frei (Mitgliedschaft und Konto `pending` →
+  `active`, nur `member.approved`) – sonst bliebe, wer sich früher registriert hat, ohne Anmeldelink
+  hängen, während die Seite „Prüfe dein Postfach" zeigt. Eine gesperrte Mitgliedschaft bleibt gesperrt.
 - **Neu und für Subs der Hauptweg:** ein Community-Einladungslink (`community_invites`, gleicher
   Mechanismus wie `meeting_invites`: Token, `enabled`, Zähler). Ein bestehender Nutzer, der ihn
   öffnet, wird sofort Mitglied; ein neuer registriert sich darüber. Damit braucht die Sub-Community

@@ -138,7 +138,7 @@ export async function MeetingFacts({ startsAt, startedAt, kind, recordingEnabled
 function FactRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 text-sm">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground">{icon}</span>
+      <span className="flex size-14 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground [&_svg]:size-5">{icon}</span>
       <div className="min-w-0 self-center leading-snug">{children}</div>
     </div>
   );

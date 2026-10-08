@@ -92,7 +92,8 @@ export type RegisterResult = { ok: true; status: MemberStatus; user: User } | { 
  *
  * Through a link – a meeting invite or the community's join link – the membership is `active` right
  * away (the admin vouched by handing the link out) and member.approved fires alongside
- * member.registered. Without one it stays `pending` and the community's admins are notified.
+ * member.registered. A registration still waiting for approval here is activated by the link too
+ * (only member.approved fires then). Without a link it stays `pending` and the admins are notified.
  */
 export async function registerUser(input: RegisterInput): Promise<RegisterResult> {
   const email = input.email.toLowerCase().trim();
@@ -102,12 +103,20 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
   const message = input.message?.trim().slice(0, 1000) || null;
   const existing = await getUserByEmail(email);
 
+  // A link vouches for a registration that is still waiting for approval here; an active or
+  // suspended membership stays as it is.
+  let awaitedApproval = false;
   if (existing) {
     const membership = await getMembership(input.communityId, existing.id);
-    if (membership) return { ok: false, reason: "exists", user: existing };
+    if (membership && !(vouched && membership.status === "pending")) return { ok: false, reason: "exists", user: existing };
+    awaitedApproval = !!membership;
   }
 
   let user = existing;
+  if (user && vouched && user.status === "pending") {
+    // Without this the account could never sign in, although the membership below is active.
+    [user] = await db.update(users).set({ status: "active" }).where(eq(users.id, user.id)).returning();
+  }
   if (!user) {
     const id = crypto.randomUUID();
     [user] = await db
@@ -130,7 +139,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     }
   }
 
-  const membership = await addMembership({
+  let membership = await addMembership({
     communityId: input.communityId,
     userId: user.id,
     status: vouched ? "active" : "pending",
@@ -138,6 +147,13 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     approvedBy: invite?.createdBy ?? joinLink?.approvedBy ?? null,
     invitedViaId: invite?.id ?? null,
   });
+  if (vouched && membership.status === "pending") {
+    [membership] = await db
+      .update(communityMembers)
+      .set({ status: "active", approvedAt: new Date(), approvedBy: invite?.createdBy ?? joinLink?.approvedBy ?? null, invitedViaId: invite?.id ?? membership.invitedViaId })
+      .where(and(eq(communityMembers.communityId, input.communityId), eq(communityMembers.userId, user.id)))
+      .returning();
+  }
 
   if (joinLink) {
     await db.insert(auditLog).values({
@@ -149,7 +165,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
       details: { joinLinkId: joinLink.id },
     });
     await countCommunityInviteUse(joinLink.id);
-    emitDomainEvent("member.registered", input.communityId, memberEventPayload(user, message, `/members/${user.id}`, user.id));
+    if (!awaitedApproval) emitDomainEvent("member.registered", input.communityId, memberEventPayload(user, message, `/members/${user.id}`, user.id));
     emitDomainEvent("member.approved", input.communityId, memberEventPayload(user, message, `/members/${user.id}`, joinLink.approvedBy));
     return { ok: true, status: membership.status, user };
   }
@@ -165,7 +181,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
     });
     await countInviteUse(invite.id);
     const eventInvite = { id: invite.id, meetingId: invite.meetingId, meetingTitle: invite.meetingTitle, meetingHref: invite.meetingHref };
-    emitDomainEvent("member.registered", input.communityId, memberEventPayload(user, message, `/members/${user.id}`, user.id, eventInvite));
+    if (!awaitedApproval) emitDomainEvent("member.registered", input.communityId, memberEventPayload(user, message, `/members/${user.id}`, user.id, eventInvite));
     emitDomainEvent("member.approved", input.communityId, memberEventPayload(user, message, `/members/${user.id}`, invite.createdBy, eventInvite));
     return { ok: true, status: membership.status, user };
   }
