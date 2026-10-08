@@ -153,7 +153,7 @@ const featuresSection = z.object({
     .max(9),
 });
 
-/** Animated hub-and-spoke diagram: one central icon, satellites connected by data streams. */
+/** Hub-and-spoke diagram: one central icon, satellites on spokes; a spoke's data stream moves on hover. */
 const hubSection = z.object({
   type: z.literal("hub"),
   title: z.string().trim().max(120).optional(),
@@ -162,7 +162,7 @@ const hubSection = z.object({
     icon: z.enum(LANDING_ICONS),
     label: z.string().trim().min(1).max(40),
   }),
-  /** Placed clockwise starting at the top; `flow` sets the direction of the animated stream. */
+  /** Placed clockwise starting at the top; `flow` sets the direction of the stream shown on hover. */
   nodes: z
     .array(
       z.object({

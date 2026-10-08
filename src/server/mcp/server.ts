@@ -157,9 +157,10 @@ Rules
 - 1–15 sections; landing typically: hero first, then features/markdown, a cta, faq, footer.
   Imprint/privacy pages are usually just markdown sections (plus a minimal footer).
 - hrefs: internal path ("/register", "/login", "/imprint", "/privacy") or https:// URL. No other protocols.
-- hub: animated diagram – a central icon with 3–8 satellite nodes (placed clockwise from the top), each
-  connected by a moving data stream; flow "in" streams toward the center (default), "out" away from it,
-  "both" in two lanes. Keep labels to 1–2 words and texts short (they sit around the diagram).
+- hub: still diagram – a central icon with 3–8 satellite nodes (placed clockwise from the top), each
+  connected to the center by a spoke. Hovering a node moves a data stream along its spoke: flow "in"
+  streams toward the center (default), "out" away from it, "both" in two lanes. Keep labels to 1–2
+  words and texts short (they sit around the diagram).
 - feature and hub icons – allowed values: ${LANDING_ICONS.join(", ")}.
 - images: mediaId must reference a media file with purpose "landing" – one shared pool for all pages
   (admin uploads them under Admin → Web pages, or use list_page_media). Other purposes are not public.
