@@ -51,6 +51,9 @@ export function MeetingDialog({ spaceId, meeting, trigger, callsAvailable, canSe
   };
   // Every new meeting is a video call (audio only = camera off). Legacy "audio"/"protocol" meetings keep their kind.
   const kind: MeetingKind = meeting?.kind ?? "video";
+  // An explicit switch instead of an empty date field: Safari shows today's date as placeholder in an
+  // empty datetime-local input, which looks like a value that cannot be removed.
+  const [hasDate, setHasDate] = useState(meeting ? !!meeting.startsAt : true);
   const [startsAt, setStartsAt] = useState(toLocalInput(meeting?.startsAt ?? null));
   const [state, action, pending] = useActionState<MeetingFormState, FormData>(saveMeetingAction, { status: "idle" });
   const isEdit = !!meeting;
@@ -81,7 +84,7 @@ export function MeetingDialog({ spaceId, meeting, trigger, callsAvailable, canSe
           {meeting && <input type="hidden" name="meetingId" value={meeting.id} />}
           <input type="hidden" name="kind" value={kind} />
           {/* startsAt is sent as ISO so the server does not depend on the browser's timezone format */}
-          <input type="hidden" name="startsAt" value={startsAt ? new Date(startsAt).toISOString() : ""} />
+          <input type="hidden" name="startsAt" value={hasDate && startsAt ? new Date(startsAt).toISOString() : ""} />
 
           {!callsAvailable && <p className="text-xs text-muted-foreground">{t("callsUnavailable")}</p>}
           <div className="grid gap-2">
@@ -93,16 +96,15 @@ export function MeetingDialog({ spaceId, meeting, trigger, callsAvailable, canSe
             <Textarea id="m-desc" name="description" defaultValue={meeting?.description ?? ""} rows={3} maxLength={4000} placeholder={t("descriptionPlaceholder")} />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="m-starts">{t("startsAt")}</Label>
-            <div className="flex items-center gap-2">
-              <Input id="m-starts" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="max-w-64" />
-              {startsAt && (
-                <Button type="button" variant="ghost" size="icon" aria-label={t("clearDate")} title={t("clearDate")} onClick={() => setStartsAt("")}>
-                  <X className="size-4" />
-                </Button>
-              )}
+            <div className="flex items-center gap-3">
+              <Switch id="m-has-date" checked={hasDate} onCheckedChange={setHasDate} />
+              <Label htmlFor="m-has-date">{t("hasDate")}</Label>
             </div>
-            <p className="text-xs text-muted-foreground">{t("startsAtHint")}</p>
+            {hasDate ? (
+              <Input id="m-starts" type="datetime-local" aria-label={t("startsAt")} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className="max-w-64" />
+            ) : (
+              <p className="text-xs text-muted-foreground">{t("openRoomFormHint")}</p>
+            )}
           </div>
           {canSetCover && (
             <div className="grid gap-2">

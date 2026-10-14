@@ -1277,9 +1277,9 @@
     "titlePlaceholder": "e.g. Weekly sync",
     "descriptionLabel": "Description (optional)",
     "descriptionPlaceholder": "What is it about, who should join?",
-    "startsAt": "Date (optional)",
-    "startsAtHint": "Leave empty for an open room without a fixed date – it can be entered any time.",
-    "clearDate": "Remove date",
+    "startsAt": "Date",
+    "hasDate": "Fixed date",
+    "openRoomFormHint": "Without a fixed date the meeting is an open room – it can be entered any time and reopens after every call.",
     "recordingEnabled": "Audio recording",
     "empty": "No meetings in this space yet.",
     "sections": {

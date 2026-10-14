@@ -1277,9 +1277,9 @@
     "titlePlaceholder": "z. B. Wöchentlicher Austausch",
     "descriptionLabel": "Beschreibung (optional)",
     "descriptionPlaceholder": "Worum geht es, wer sollte dabei sein?",
-    "startsAt": "Termin (optional)",
-    "startsAtHint": "Leer lassen für einen offenen Raum ohne festes Datum – er ist jederzeit betretbar.",
-    "clearDate": "Termin entfernen",
+    "startsAt": "Termin",
+    "hasDate": "Fester Termin",
+    "openRoomFormHint": "Ohne festen Termin ist das Meeting ein offener Raum – jederzeit betretbar und nach jedem Call wieder offen.",
     "recordingEnabled": "Audio-Mitschnitt",
     "empty": "Noch keine Meetings in diesem Bereich.",
     "sections": {
