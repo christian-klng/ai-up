@@ -1300,7 +1300,6 @@
     "host": "Host: {name}",
     "startsRelative": "Starts {rel}",
     "openRoom": "Open room",
-    "openRoomHint": "No fixed date – enter any time",
     "lastUsed": "last used {date}",
     "hostedBy": "Hosted by",
     "recordingOn": "audio recording on",

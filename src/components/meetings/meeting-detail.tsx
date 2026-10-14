@@ -84,7 +84,6 @@ export async function MeetingDateRow({ startsAt, status }: { startsAt: Date | nu
     return (
       <FactRow icon={<CalendarClock className="size-4" aria-hidden />}>
         <div className="font-medium">{t("openRoom")}</div>
-        <div className="text-xs text-muted-foreground">{t("openRoomHint")}</div>
       </FactRow>
     );
   }

@@ -1300,7 +1300,6 @@
     "host": "Gastgeber:in: {name}",
     "startsRelative": "Beginnt {rel}",
     "openRoom": "Offener Raum",
-    "openRoomHint": "Ohne festes Datum – jederzeit betretbar",
     "lastUsed": "zuletzt genutzt {date}",
     "hostedBy": "Gastgeber:in",
     "recordingOn": "Audio-Mitschnitt an",
