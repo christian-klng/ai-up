@@ -94,7 +94,15 @@ export function MeetingDialog({ spaceId, meeting, trigger, callsAvailable, canSe
           </div>
           <div className="grid gap-2">
             <Label htmlFor="m-starts">{t("startsAt")}</Label>
-            <Input id="m-starts" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required={!isEdit || !!meeting.startsAt} className="max-w-64" />
+            <div className="flex items-center gap-2">
+              <Input id="m-starts" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="max-w-64" />
+              {startsAt && (
+                <Button type="button" variant="ghost" size="icon" aria-label={t("clearDate")} title={t("clearDate")} onClick={() => setStartsAt("")}>
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("startsAtHint")}</p>
           </div>
           {canSetCover && (
             <div className="grid gap-2">

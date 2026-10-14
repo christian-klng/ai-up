@@ -39,10 +39,10 @@ function startsAhead(status: MeetingStatus, startsAt: Date | null): startsAt is 
   return status === "scheduled" && !!startsAt && startsAt.getTime() > Date.now();
 }
 
-/** Status pill: live, "starts in 2 weeks" for dated upcoming meetings, otherwise the plain status. */
+/** Status pill: live, "starts in 2 weeks" for dated upcoming meetings, "open room" without a date, otherwise the plain status. */
 export async function MeetingStatusPill({ status, startsAt }: { status: MeetingStatus; startsAt: Date | null }) {
   const [t, format] = await Promise.all([getTranslations("meetings"), getFormatter()]);
-  const label = startsAhead(status, startsAt) ? t("startsRelative", { rel: format.relativeTime(startsAt) }) : t(`status.${status}`);
+  const label = startsAhead(status, startsAt) ? t("startsRelative", { rel: format.relativeTime(startsAt) }) : status === "scheduled" && !startsAt ? t("openRoom") : t(`status.${status}`);
   return <MeetingStatusBadge status={status} label={label} />;
 }
 
@@ -76,14 +76,15 @@ export async function MeetingHeader({ status, startsAt, kind, title, host, descr
   );
 }
 
-/** Date tile plus weekday, date and time (with zone); "date to follow" while scheduled without one. */
+/** Date tile plus weekday, date and time (with zone); an open room (scheduled without a date) says so instead. */
 export async function MeetingDateRow({ startsAt, status }: { startsAt: Date | null; status: MeetingStatus }) {
   const [t, format] = await Promise.all([getTranslations("meetings"), getFormatter()]);
   if (!startsAt) {
     if (status !== "scheduled") return null;
     return (
       <FactRow icon={<CalendarClock className="size-4" aria-hidden />}>
-        <span className="text-muted-foreground">{t("noDate")}</span>
+        <div className="font-medium">{t("openRoom")}</div>
+        <div className="text-xs text-muted-foreground">{t("openRoomHint")}</div>
       </FactRow>
     );
   }

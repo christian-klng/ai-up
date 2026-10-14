@@ -219,8 +219,8 @@ export async function listMeetings(communityId: string, opts: { spaceId?: string
     .leftJoin(users, eq(users.id, meetings.hostId))
     .leftJoin(mediaFiles, eq(mediaFiles.id, meetings.recordingMediaId))
     .where(and(...conds))
-    // live first, then upcoming soonest first, then past newest first
-    .orderBy(sql`case ${meetings.status} when 'live' then 0 when 'scheduled' then 1 else 2 end`, sql`case when ${meetings.status} = 'ended' then null else coalesce(${meetings.startsAt}, ${meetings.createdAt}) end asc nulls last`, desc(sql`coalesce(${meetings.endedAt}, ${meetings.startsAt}, ${meetings.createdAt})`))
+    // live first, then upcoming soonest first, then open rooms (no date) and past meetings, each most recently used first
+    .orderBy(sql`case ${meetings.status} when 'live' then 0 when 'scheduled' then 1 else 2 end`, sql`case when ${meetings.status} = 'ended' then null else ${meetings.startsAt} end asc nulls last`, desc(sql`coalesce(${meetings.endedAt}, ${meetings.startsAt}, ${meetings.createdAt})`))
     .limit(opts.limit ?? 100);
   return rows.map((r) => ({ ...r.m, host: r.host?.id ? r.host : null, recording: r.recording, spaceSlug: r.spaceSlug, spaceName: r.spaceName, communityId: r.communityId }));
 }

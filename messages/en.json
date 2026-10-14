@@ -1277,12 +1277,15 @@
     "titlePlaceholder": "e.g. Weekly sync",
     "descriptionLabel": "Description (optional)",
     "descriptionPlaceholder": "What is it about, who should join?",
-    "startsAt": "Date",
+    "startsAt": "Date (optional)",
+    "startsAtHint": "Leave empty for an open room without a fixed date – it can be entered any time.",
+    "clearDate": "Remove date",
     "recordingEnabled": "Audio recording",
     "empty": "No meetings in this space yet.",
     "sections": {
       "live": "Live now",
       "upcoming": "Upcoming",
+      "rooms": "Open rooms",
       "past": "Past"
     },
     "status": {
@@ -1296,7 +1299,9 @@
     "startsAtLabel": "Date: {date}",
     "host": "Host: {name}",
     "startsRelative": "Starts {rel}",
-    "noDate": "Date to follow",
+    "openRoom": "Open room",
+    "openRoomHint": "No fixed date – enter any time",
+    "lastUsed": "last used {date}",
     "hostedBy": "Hosted by",
     "recordingOn": "audio recording on",
     "recordingOff": "no recording",
@@ -1354,7 +1359,6 @@
     "deleted": "Meeting deleted.",
     "errors": {
       "titleRequired": "Please enter a title.",
-      "startsAtRequired": "Please set a date.",
       "forbidden": "You are not allowed to edit this meeting."
     },
     "protocol": {

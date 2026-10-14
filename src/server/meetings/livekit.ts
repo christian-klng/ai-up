@@ -179,11 +179,11 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
         await stopRecording(meeting);
       }
       await db.update(meetingParticipants).set({ leftAt: new Date() }).where(and(eq(meetingParticipants.meetingId, meeting.id), isNull(meetingParticipants.leftAt)));
-      const [m] = await db.update(meetings).set({ status: "ended", endedAt: new Date(), participantCount: 0 }).where(eq(meetings.id, meeting.id)).returning();
+      const [m] = await db.update(meetings).set(afterCallPatch(meeting)).where(eq(meetings.id, meeting.id)).returning();
       {
-          const cid = await communityOf(m);
-          if (cid) emitDomainEvent("meeting.ended", cid, { meeting: await eventPayload(m), actorId: null, origin: { kind: "system" } });
-        }
+        const cid = await communityOf(m);
+        if (cid) emitDomainEvent("meeting.ended", cid, { meeting: { ...(await eventPayload(m)), status: "ended" }, actorId: null, origin: { kind: "system" } });
+      }
       await broadcastMeeting(m);
       break;
     }
@@ -200,6 +200,17 @@ export async function handleWebhookEvent(ev: WebhookEvent): Promise<void> {
   }
 }
 
+/**
+ * State after a call: a dated meeting is over, an open room (no date) is ready for the next call
+ * right away – with the recording slot reset like in `reopenMeeting`, so the next session can
+ * auto-record. `endedAt` stays as "last used". meeting.ended fires either way.
+ */
+function afterCallPatch(meeting: Pick<Meeting, "startsAt">) {
+  const base = { endedAt: new Date(), participantCount: 0 };
+  if (meeting.startsAt) return { ...base, status: "ended" as const };
+  return { ...base, status: "scheduled" as const, recordingStatus: "none" as const, recordingEgressId: null, recordingError: null };
+}
+
 /** Marks a meeting ended locally (used by "end meeting" for instant feedback; webhook confirms). */
 export async function markMeetingEnded(meetingId: string): Promise<Meeting | undefined> {
   const current = await db.query.meetings.findFirst({ where: eq(meetings.id, meetingId) });
@@ -208,10 +219,11 @@ export async function markMeetingEnded(meetingId: string): Promise<Meeting | und
     await stopRecording(current);
   }
   await db.update(meetingParticipants).set({ leftAt: new Date() }).where(and(eq(meetingParticipants.meetingId, meetingId), isNull(meetingParticipants.leftAt)));
-  const [m] = await db.update(meetings).set({ status: "ended", endedAt: new Date(), participantCount: 0 }).where(eq(meetings.id, meetingId)).returning();
+  if (!current) return undefined;
+  const [m] = await db.update(meetings).set(afterCallPatch(current)).where(eq(meetings.id, meetingId)).returning();
   if (m) {
     const cid = await communityOf(m);
-    if (cid) emitDomainEvent("meeting.ended", cid, { meeting: await eventPayload(m), actorId: null, origin: { kind: "user" } });
+    if (cid) emitDomainEvent("meeting.ended", cid, { meeting: { ...(await eventPayload(m)), status: "ended" }, actorId: null, origin: { kind: "user" } });
     await broadcastMeeting(m);
   }
   return m;

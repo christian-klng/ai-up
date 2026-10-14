@@ -19,7 +19,8 @@ export default async function MeetingSpacePage({ params }: PageProps<"/meetings/
   const [t, items, lk] = await Promise.all([getTranslations("meetings"), listMeetings(user.communityId, { spaceId: space.id }), getLiveKitConfig()]);
   const callsAvailable = !!lk?.enabled;
   const live = items.filter((m) => m.status === "live");
-  const upcoming = items.filter((m) => m.status === "scheduled");
+  const upcoming = items.filter((m) => m.status === "scheduled" && m.startsAt);
+  const rooms = items.filter((m) => m.status === "scheduled" && !m.startsAt);
   const past = items.filter((m) => m.status === "ended");
 
   return (
@@ -39,6 +40,7 @@ export default async function MeetingSpacePage({ params }: PageProps<"/meetings/
         <div className="grid gap-6">
           <MeetingSection title={t("sections.live")} list={live} spaceSlug={space.slug} />
           <MeetingSection title={t("sections.upcoming")} list={upcoming} spaceSlug={space.slug} />
+          <MeetingSection title={t("sections.rooms")} list={rooms} spaceSlug={space.slug} />
           <MeetingSection title={t("sections.past")} list={past} spaceSlug={space.slug} />
         </div>
       )}
@@ -67,13 +69,14 @@ async function MeetingSection({ title, list, spaceSlug }: { title: string; list:
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{m.title}</span>
-                  <MeetingStatusBadge status={m.status} label={t(`status.${m.status}`)} />
+                  <MeetingStatusBadge status={m.status} label={m.status === "scheduled" && !m.startsAt ? t("openRoom") : t(`status.${m.status}`)} />
                   {m.status === "live" && m.participantCount > 0 && <span className="text-xs text-muted-foreground">{t("participants", { count: m.participantCount })}</span>}
                 </span>
                 <span className="block text-xs text-muted-foreground">
                   {t(`kinds.${m.kind}`)}
                   {m.startsAt && ` · ${format.dateTime(m.startsAt, { dateStyle: "medium", timeStyle: "short" })}`}
                   {m.status === "ended" && m.endedAt && ` · ${t("endedAt", { date: format.dateTime(m.endedAt, { dateStyle: "medium", timeStyle: "short" }) })}`}
+                  {m.status === "scheduled" && !m.startsAt && m.endedAt && ` · ${t("lastUsed", { date: format.dateTime(m.endedAt, { dateStyle: "medium", timeStyle: "short" }) })}`}
                   {m.recording && ` · ${t("hasRecording")}`}
                 </span>
               </span>

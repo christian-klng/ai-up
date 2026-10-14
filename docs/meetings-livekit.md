@@ -66,6 +66,17 @@ Erwartung für 30 × 720p: ≈ 75–100 Mbit/s Upload, CPU des `livekit`-Contain
 - Aufzeichnungen, Variante **gemeinsames Verzeichnis** (ein Host): S3-Felder leer lassen. `web` mountet `RECORDINGS_PATH` read-only nach `/data/recordings` (in `docker-compose.yml` vorbereitet), als Aufzeichnungs-Verzeichnis **`/data/recordings`** eintragen (Container-Pfad). Die Quelldatei wird nach erfolgreichem Import gelöscht.
 - Webhook-Endpunkt `/api/livekit/webhook` (signiert mit API-Key/-Secret): `room_started`, `participant_joined/left`, `room_finished` setzen Status/Teilnehmer (Live-Punkt); `egress_*` für Aufzeichnungen (4e). In `livekit.yaml` muss `webhook.urls` auf `https://<app-domain>/api/livekit/webhook` zeigen und `webhook.api_key` dem App-Key entsprechen.
 
+## 5b. Offene Räume (Meetings ohne Termin)
+
+Der Termin ist optional. Ein Meeting ohne `startsAt` ist ein **offener Raum**: jederzeit betretbar, eigene
+Rubrik „Offene Räume" in der Bereichsliste, Status-Pille „Offener Raum". Nach jedem Call (`room_finished`
+bzw. „Meeting beenden") geht es zurück auf `scheduled` statt `ended` – samt zurückgesetztem
+Aufzeichnungs-Slot wie bei `reopenMeeting`, damit der nächste Call wieder automatisch mitschneidet
+(`afterCallPatch` in `src/server/meetings/livekit.ts`). `endedAt` bleibt als „zuletzt genutzt" stehen,
+`meeting.ended` feuert trotzdem (Payload-Status `ended`), Workflows nach dem Call laufen also weiter. Wird
+der Termin eines beendeten Meetings entfernt (Dialog oder MCP `update_meeting` mit `startsAt: null`),
+öffnet es sich wieder. Die Startseiten-Vorschau zeigt offene Räume nur, solange jemand drin ist.
+
 ## 5a. Einladungslink (Onboarding von außen)
 
 Jedes Meeting hat genau einen Einladungslink, den Admins im Meeting-Menü unter „Einladungslink“ ein- oder ausschalten (Standard: aus). Die URL lautet `https://<app-domain>/invite/<token>`, ist öffentlich erreichbar und bleibt beim Aus- und Wiedereinschalten dieselbe.

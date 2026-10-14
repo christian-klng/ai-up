@@ -1277,12 +1277,15 @@
     "titlePlaceholder": "z. B. Wöchentlicher Austausch",
     "descriptionLabel": "Beschreibung (optional)",
     "descriptionPlaceholder": "Worum geht es, wer sollte dabei sein?",
-    "startsAt": "Termin",
+    "startsAt": "Termin (optional)",
+    "startsAtHint": "Leer lassen für einen offenen Raum ohne festes Datum – er ist jederzeit betretbar.",
+    "clearDate": "Termin entfernen",
     "recordingEnabled": "Audio-Mitschnitt",
     "empty": "Noch keine Meetings in diesem Bereich.",
     "sections": {
       "live": "Läuft gerade",
       "upcoming": "Geplant",
+      "rooms": "Offene Räume",
       "past": "Vergangen"
     },
     "status": {
@@ -1296,7 +1299,9 @@
     "startsAtLabel": "Termin: {date}",
     "host": "Gastgeber:in: {name}",
     "startsRelative": "Beginnt {rel}",
-    "noDate": "Termin folgt",
+    "openRoom": "Offener Raum",
+    "openRoomHint": "Ohne festes Datum – jederzeit betretbar",
+    "lastUsed": "zuletzt genutzt {date}",
     "hostedBy": "Gastgeber:in",
     "recordingOn": "Audio-Mitschnitt an",
     "recordingOff": "ohne Mitschnitt",
@@ -1354,7 +1359,6 @@
     "deleted": "Meeting gelöscht.",
     "errors": {
       "titleRequired": "Bitte gib einen Titel an.",
-      "startsAtRequired": "Bitte gib einen Termin an.",
       "forbidden": "Du darfst dieses Meeting nicht bearbeiten."
     },
     "protocol": {

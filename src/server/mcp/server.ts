@@ -334,9 +334,12 @@ Every meeting belongs to exactly one space; the app URL is /meetings/<spaceSlug>
   camera off). \`protocol\` (markdown minutes only) and \`audio\` exist on older meetings only; update_meeting can
   turn them into \`video\` while they are still scheduled. Calls need the LiveKit integration – the context below
   says whether it is enabled; without it, meetings can still be planned, the call starts once it is set up.
-- \`title\`, optional \`description\` (plain text), required \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00). The date can be changed later but not removed.
+- \`title\`, optional \`description\` (plain text), optional \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00).
+  Without a date the meeting is an **open room**: members can enter it any time, and after each call it goes
+  back to \`scheduled\` instead of \`ended\` (meeting.ended still fires). update_meeting with \`startsAt: null\`
+  removes a date (an ended meeting is reopened); setting a date makes it a regular one-off meeting again.
 - \`recordingEnabled\` (audio recording of the call; default off). Protocol meetings never record.
-- \`status\` is managed by the app (\`scheduled\` → \`live\` → \`ended\`) and cannot be set here.
+- \`status\` is managed by the app (\`scheduled\` → \`live\` → \`ended\`, open rooms \`live\` → \`scheduled\`) and cannot be set here.
 - The API key's owner becomes host and creator of meetings created here.
 - \`coverUrl\`: optional cover image (set with set_meeting_cover). Shown on the meeting page and used as the
   social preview (OpenGraph) of the invite link – **1200×630 px** is the ideal size; other sizes work but
@@ -1164,7 +1167,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         spaceId: z.string().uuid(),
         title: z.string().trim().min(1).max(200),
         description: z.string().trim().max(4000).optional(),
-        startsAt: z.string().min(1).describe("ISO 8601 with timezone, required"),
+        startsAt: z.string().optional().describe("ISO 8601 with timezone; omit for an open room without a date"),
         recordingEnabled: z.boolean().optional().describe("audio recording of the call; default false"),
       },
     },
@@ -1179,7 +1182,6 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       } catch (err) {
         return fail((err as Error).message);
       }
-      if (!when) return fail("startsAt is required");
       const meeting = await createMeeting(cid, spaceId, { title, description: description ?? null, kind: "video", startsAt: when, recordingEnabled: recordingEnabled ?? false }, auth.user.id);
       await audit(auth, "meeting.created", meeting.id, { spaceId, kind: "video" }, "meeting");
       const full = await getMeeting(cid, meeting.id);
@@ -1190,13 +1192,13 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     "update_meeting",
     {
       title: "Meetings - Update meeting",
-      description: "Changes title, description, date or recording flag of a meeting. Kind can only change while the meeting is still scheduled. Omitted fields stay; a date can be changed but not removed.",
+      description: "Changes title, description, date or recording flag of a meeting. Kind can only change while the meeting is still scheduled. Omitted fields stay; startsAt null removes the date and turns the meeting into an open room.",
       inputSchema: {
         id: z.string().uuid(),
         title: z.string().trim().min(1).max(200).optional(),
         description: z.string().trim().max(4000).nullable().optional(),
         kind: z.literal("video").optional().describe("turns an older audio/protocol meeting into a video call"),
-        startsAt: z.string().optional().describe("ISO 8601 with timezone"),
+        startsAt: z.string().nullable().optional().describe("ISO 8601 with timezone; null removes the date (open room)"),
         recordingEnabled: z.boolean().optional(),
       },
     },
@@ -1211,8 +1213,12 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       } catch (err) {
         return fail((err as Error).message);
       }
-      if (when === null && existing.startsAt) return fail("startsAt cannot be removed – a meeting keeps its date");
       await updateMeeting(cid, id, { title, description, kind, startsAt: when, recordingEnabled }, auth.user.id);
+      // Removing the date of a finished meeting turns it into an open room – open it again.
+      if (when === null && existing.status === "ended") {
+        const { reopenMeeting } = await import("@/server/meetings/livekit");
+        await reopenMeeting(id);
+      }
       await audit(auth, "meeting.updated", id, {}, "meeting");
       const full = await getMeeting(cid, id);
       return text(full ? meetingOut(full) : { id });
