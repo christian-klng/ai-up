@@ -31,6 +31,7 @@ import { validateStructure } from "@/lib/structures/validate";
 import { kanbanIntentSchema } from "@/lib/structures/kanban";
 import { applyKanbanIntents, findKanbanElement } from "@/server/whiteboards/kanban-intents";
 import { REASONING_LEVELS } from "@/server/db/schema";
+import { MEETING_DESCRIPTION_MAX } from "@/lib/meetings";
 import type { ContentTemplate, KnowledgeArea } from "@/server/db/schema";
 
 /**
@@ -334,7 +335,7 @@ Every meeting belongs to exactly one space; the app URL is /meetings/<spaceSlug>
   camera off). \`protocol\` (markdown minutes only) and \`audio\` exist on older meetings only; update_meeting can
   turn them into \`video\` while they are still scheduled. Calls need the LiveKit integration – the context below
   says whether it is enabled; without it, meetings can still be planned, the call starts once it is set up.
-- \`title\`, optional \`description\` (plain text), optional \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00).
+- \`title\`, optional \`description\` (Markdown, max 10000 chars: paragraphs, \`##\`/\`###\` headings, bold/italic, lists, quotes, links – e.g. a short agenda and who it is for; no raw HTML), optional \`startsAt\` (ISO 8601 with timezone, e.g. 2026-10-01T18:00:00+02:00).
   Without a date the meeting is an **open room**: members can enter it any time, and after each call it goes
   back to \`scheduled\` instead of \`ended\` (meeting.ended still fires). update_meeting with \`startsAt: null\`
   removes a date (an ended meeting is reopened); setting a date makes it a regular one-off meeting again.
@@ -1166,7 +1167,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       inputSchema: {
         spaceId: z.string().uuid(),
         title: z.string().trim().min(1).max(200),
-        description: z.string().trim().max(4000).optional(),
+        description: z.string().trim().max(MEETING_DESCRIPTION_MAX).optional().describe("Markdown"),
         startsAt: z.string().optional().describe("ISO 8601 with timezone; omit for an open room without a date"),
         recordingEnabled: z.boolean().optional().describe("audio recording of the call; default false"),
       },
@@ -1196,7 +1197,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       inputSchema: {
         id: z.string().uuid(),
         title: z.string().trim().min(1).max(200).optional(),
-        description: z.string().trim().max(4000).nullable().optional(),
+        description: z.string().trim().max(MEETING_DESCRIPTION_MAX).nullable().optional().describe("Markdown"),
         kind: z.literal("video").optional().describe("turns an older audio/protocol meeting into a video call"),
         startsAt: z.string().nullable().optional().describe("ISO 8601 with timezone; null removes the date (open room)"),
         recordingEnabled: z.boolean().optional(),

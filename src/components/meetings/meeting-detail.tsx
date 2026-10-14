@@ -5,6 +5,7 @@ import type { MeetingKind, MeetingStatus } from "@/server/db/schema";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { AreaIcon } from "@/components/knowledge/area-icon";
+import { Markdown } from "@/components/content/markdown";
 import { MeetingKindIcon, MeetingStatusBadge } from "./meeting-badges";
 
 /**
@@ -71,7 +72,7 @@ export async function MeetingHeader({ status, startsAt, kind, title, host, descr
         )}
         {actions && <div className="flex items-center gap-1">{actions}</div>}
       </div>
-      {description && <p className="mt-5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{description}</p>}
+      {description && <Markdown className="prose-sm mt-5 prose-p:text-muted-foreground prose-li:text-muted-foreground prose-blockquote:text-muted-foreground">{description}</Markdown>}
     </header>
   );
 }

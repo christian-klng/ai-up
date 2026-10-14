@@ -8,6 +8,7 @@ import { getMembership } from "@/server/domain/communities";
 import { resolveInvite, type ResolvedInvite } from "@/server/domain/invites";
 import { getMedia } from "@/server/media/storage";
 import { env } from "@/server/env";
+import { markdownToPlainText } from "@/lib/meetings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { MeetingCover, MeetingFacts, MeetingHeader, MeetingLayout } from "@/components/meetings/meeting-detail";
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: PageProps<"/invite/[token]">)
   const [resolved, settings] = await Promise.all([resolveInvite(token), getPublicCommunity()]);
   if (!resolved) return { title: settings.name, robots: { index: false } };
   const when = await startsAtLabel(resolved);
-  const description = [when, resolved.space.name, resolved.meeting.description].filter(Boolean).join(" · ").slice(0, 300);
+  const description = [when, resolved.space.name, resolved.meeting.description && markdownToPlainText(resolved.meeting.description)].filter(Boolean).join(" · ").slice(0, 300);
   const cover = resolved.meeting.coverMediaId ? await getMedia(resolved.meeting.coverMediaId) : undefined;
   const images = cover ? [{ url: `${env.APP_URL}/api/files/${cover.id}`, width: cover.width ?? undefined, height: cover.height ?? undefined, alt: resolved.meeting.title }] : undefined;
   return {

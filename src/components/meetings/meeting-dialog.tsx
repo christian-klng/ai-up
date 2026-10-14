@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownEditor } from "@/components/content/markdown-editor";
+import { MEETING_DESCRIPTION_MAX } from "@/lib/meetings";
 import { Switch } from "@/components/ui/switch";
 
 export type MeetingFormValues = { id: string; title: string; description: string | null; kind: MeetingKind; startsAt: string | null; recordingEnabled: boolean; status: "scheduled" | "live" | "ended"; coverMediaId: string | null };
@@ -93,7 +94,7 @@ export function MeetingDialog({ spaceId, meeting, trigger, callsAvailable, canSe
           </div>
           <div className="grid gap-2">
             <Label htmlFor="m-desc">{t("descriptionLabel")}</Label>
-            <Textarea id="m-desc" name="description" defaultValue={meeting?.description ?? ""} rows={3} maxLength={4000} placeholder={t("descriptionPlaceholder")} />
+            <MarkdownEditor id="m-desc" name="description" defaultValue={meeting?.description} maxLength={MEETING_DESCRIPTION_MAX} placeholder={t("descriptionPlaceholder")} />
           </div>
           <div className="grid gap-2">
             <div className="flex items-center gap-3">

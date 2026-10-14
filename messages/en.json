@@ -1,4 +1,16 @@
 {
+  "markdownEditor": {
+    "toolbar": "Formatting",
+    "bold": "Bold",
+    "italic": "Italic",
+    "heading2": "Heading",
+    "heading3": "Subheading",
+    "bulletList": "Bulleted list",
+    "orderedList": "Numbered list",
+    "quote": "Quote",
+    "link": "Link",
+    "linkPrompt": "Link address (leave empty to remove)"
+  },
   "common": {
     "appName": "AI-Up",
     "save": "Save",
@@ -1276,7 +1288,7 @@
     "titleLabel": "Title",
     "titlePlaceholder": "e.g. Weekly sync",
     "descriptionLabel": "Description (optional)",
-    "descriptionPlaceholder": "What is it about, who should join?",
+    "descriptionPlaceholder": "What is it about, who is it for, what is on the agenda?",
     "startsAt": "Date",
     "hasDate": "Fixed date",
     "openRoomFormHint": "Without a fixed date the meeting is an open room – it can be entered any time and reopens after every call.",

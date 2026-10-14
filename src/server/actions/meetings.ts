@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { MEETING_DESCRIPTION_MAX } from "@/lib/meetings";
 import { assertUser } from "@/server/auth/session";
 import { setInviteEnabled } from "@/server/domain/invites";
 import { getMedia } from "@/server/media/storage";
@@ -13,7 +14,7 @@ const schema = z.object({
   meetingId: z.string().uuid().optional(),
   spaceId: z.string().uuid(),
   title: z.string().trim().min(1).max(200),
-  description: z.string().trim().max(4000).optional(),
+  description: z.string().trim().max(MEETING_DESCRIPTION_MAX).optional(),
   kind: z.enum(["protocol", "audio", "video"]),
   startsAt: z.string().optional(),
   recordingEnabled: z.boolean().optional(),

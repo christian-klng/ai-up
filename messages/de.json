@@ -1,4 +1,16 @@
 {
+  "markdownEditor": {
+    "toolbar": "Formatierung",
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "heading2": "Überschrift",
+    "heading3": "Zwischenüberschrift",
+    "bulletList": "Aufzählung",
+    "orderedList": "Nummerierte Liste",
+    "quote": "Zitat",
+    "link": "Link",
+    "linkPrompt": "Adresse des Links (leer lassen zum Entfernen)"
+  },
   "common": {
     "appName": "AI-Up",
     "save": "Speichern",
@@ -1276,7 +1288,7 @@
     "titleLabel": "Titel",
     "titlePlaceholder": "z. B. Wöchentlicher Austausch",
     "descriptionLabel": "Beschreibung (optional)",
-    "descriptionPlaceholder": "Worum geht es, wer sollte dabei sein?",
+    "descriptionPlaceholder": "Worum geht es, für wen ist es, wie sieht die Agenda aus?",
     "startsAt": "Termin",
     "hasDate": "Fester Termin",
     "openRoomFormHint": "Ohne festen Termin ist das Meeting ein offener Raum – jederzeit betretbar und nach jedem Call wieder offen.",
