@@ -33,7 +33,20 @@ function CommunityMark({ community, size = 28 }: { community: SwitcherCommunity;
  * The community name in the sidebar, as a switcher when the account belongs to more than one.
  * With a single membership it stays a plain label – nothing to choose, nothing to explain.
  */
-export function CommunitySwitcher({ current, communities, canCreate, logo }: { current: SwitcherCommunity; communities: SwitcherCommunity[]; canCreate: boolean; logo: React.ReactNode }) {
+export function CommunitySwitcher({
+  current,
+  communities,
+  canCreate,
+  logo,
+  collapsed,
+}: {
+  current: SwitcherCommunity;
+  communities: SwitcherCommunity[];
+  canCreate: boolean;
+  logo: React.ReactNode;
+  /** sidebar collapsed to the icon rail: logo only */
+  collapsed?: boolean;
+}) {
   const t = useTranslations("communities");
   const tRole = useTranslations("role");
   const tc = useTranslations("common");
@@ -44,9 +57,9 @@ export function CommunitySwitcher({ current, communities, canCreate, logo }: { c
   // With one membership and nothing to create there is no choice to offer – stay a plain label.
   if (communities.length < 2 && !canCreate) {
     return (
-      <div className="flex items-center gap-2.5 px-4 py-4">
+      <div className={cn("flex items-center py-4", collapsed ? "justify-center" : "gap-2.5 px-4")}>
         {logo}
-        <span className="truncate font-semibold tracking-tight">{current.name}</span>
+        <span className={collapsed ? "sr-only" : "truncate font-semibold tracking-tight"}>{current.name}</span>
       </div>
     );
   }
@@ -73,10 +86,19 @@ export function CommunitySwitcher({ current, communities, canCreate, logo }: { c
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-4 text-left hover:bg-sidebar-accent/50" aria-label={t("switch")}>
+        <button
+          type="button"
+          className={cn("flex w-full items-center py-4 text-left hover:bg-sidebar-accent/50", collapsed ? "justify-center" : "gap-2.5 px-4")}
+          aria-label={t("switch")}
+          title={collapsed ? current.name : undefined}
+        >
           {logo}
-          <span className="truncate font-semibold tracking-tight">{current.name}</span>
-          <ChevronsUpDown className="ml-auto size-4 shrink-0 opacity-60" aria-hidden />
+          {!collapsed && (
+            <>
+              <span className="truncate font-semibold tracking-tight">{current.name}</span>
+              <ChevronsUpDown className="ml-auto size-4 shrink-0 opacity-60" aria-hidden />
+            </>
+          )}
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

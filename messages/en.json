@@ -117,7 +117,10 @@
     "home": "Home",
     "noAreasYet": "No collections yet",
     "noSpacesYet": "No meeting spaces yet",
-    "agents": "AI agents"
+    "agents": "AI agents",
+    "live": "live now",
+    "resizeSidebar": "Sidebar width",
+    "resizeSidebarHint": "Drag to resize, all the way left to collapse. Double-click or ⌘/Ctrl+B to collapse and expand."
   },
   "home": {
     "welcome": "Welcome, {name}!",

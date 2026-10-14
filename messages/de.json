@@ -117,7 +117,10 @@
     "home": "Start",
     "noAreasYet": "Noch keine Sammlungen",
     "noSpacesYet": "Noch keine Meeting-Bereiche",
-    "agents": "KI-Agenten"
+    "agents": "KI-Agenten",
+    "live": "läuft gerade",
+    "resizeSidebar": "Breite der Seitenleiste",
+    "resizeSidebarHint": "Ziehen ändert die Breite, ganz nach links klappt sie ein. Doppelklick oder ⌘/Strg+B klappt ein und aus."
   },
   "home": {
     "welcome": "Willkommen, {name}!",

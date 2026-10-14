@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import type { CurrentUser } from "@/server/auth/session";
 import { getCommunity, listMembershipsForUser } from "@/server/domain/communities";
@@ -17,6 +18,7 @@ import { listSpaces } from "@/server/domain/meetings";
 import { listAgentsForUser } from "@/server/domain/agents";
 import { AGENTS_IN_NAV } from "@/lib/agents";
 import { BrandLogo } from "./brand-logo";
+import { SIDEBAR_COOKIE, parseSidebarPref } from "@/lib/sidebar";
 
 /**
  * Server wrapper: loads everything the shell needs (community, nav data, counters) once per request.
@@ -41,6 +43,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
   const memberships = await listMembershipsForUser(user.id, { status: "active" });
   const canCreateCommunity = await canCreateCommunityAction();
   const settings = community!;
+  const sidebar = parseSidebarPref((await cookies()).get(SIDEBAR_COOKIE)?.value);
 
   return (
     <RealtimeProvider userId={user.id} communityId={cid} initialCounts={{ unreadMessages, unreadNotifications }}>
@@ -64,6 +67,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
           admin: tNav("admin"),
           noAreasYet: tNav("noAreasYet"),
           noSpacesYet: tNav("noSpacesYet"),
+          live: tNav("live"),
         },
         knowledgeAreas: areas.map((a) => ({ id: a.id, name: a.name, slug: a.slug, icon: a.icon })),
         meetingSpaces: spaces.map((s) => ({ id: s.id, name: s.name, slug: s.slug, icon: s.icon, live: s.liveCount > 0 })),
@@ -77,7 +81,10 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
         admin: tNav("admin"),
         signOut: tAuth("signOut"),
         menu: tCommon("menu"),
+        resizeSidebar: tNav("resizeSidebar"),
+        resizeSidebarHint: tNav("resizeSidebarHint"),
       }}
+      initialSidebar={sidebar}
       signOutAction={signOut}
     >
       {children}
