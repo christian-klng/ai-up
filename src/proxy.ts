@@ -24,6 +24,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets and the upload endpoint (large bodies must not be buffered by the proxy).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|api/upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)"],
+  // Skip static assets (incl. /vendor, the noise filter's WASM + model) and the upload endpoint
+  // (large bodies must not be buffered by the proxy).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|vendor/|api/upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)"],
 };

@@ -1368,7 +1368,28 @@
       },
       "transcribingBadge": "Live transcript",
       "captureBoth": "Recording + live transcript",
-      "transcribingHint": "The conversation is transcribed live and stored."
+      "transcribingHint": "The conversation is transcribed live and stored.",
+      "noiseFilter": {
+        "title": "Noise suppression",
+        "close": "Close",
+        "hint": "Filters your microphone before the sound is sent – the others hear the difference, you don't. The choice applies to this device.",
+        "levels": {
+          "standard": {
+            "label": "Standard",
+            "description": "Browser filter only. Easy on weaker devices."
+          },
+          "medium": {
+            "label": "Medium",
+            "description": "AI filter (DeepFilterNet3) clearly reduces typing, fans and street noise."
+          },
+          "strong": {
+            "label": "Strong",
+            "description": "Removes background noise almost completely. For loud places; your voice may sound a little smoother."
+          }
+        },
+        "loading": "Loading the filter – about 24 MB the first time, cached afterwards.",
+        "failed": "The noise filter can't run on this device. The browser filter applies."
+      }
     },
     "confirmDelete": "Really delete this meeting?",
     "deleted": "Meeting deleted.",

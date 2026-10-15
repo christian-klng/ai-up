@@ -2,11 +2,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Room, RoomEvent } from "livekit-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { RoomAudioRenderer } from "@livekit/components-react";
 import { toast } from "sonner";
 import { joinMeetingAction } from "@/server/actions/meetings";
 import { useRealtimeEvent } from "@/components/realtime/realtime-provider";
+import { applyNoiseFilter } from "@/components/meetings/noise-filter";
+import { DEFAULT_NOISE_FILTER_LEVEL, NOISE_FILTER_STORAGE_KEY, parseNoiseFilterLevel, type NoiseFilterLevel } from "@/lib/noise-filter";
 
 export type ActiveCall = {
   meetingId: string;
@@ -19,6 +21,8 @@ export type ActiveCall = {
 };
 
 export type CallStatus = "idle" | "connecting" | "connected";
+/** "loading" covers the first-time download of the DeepFilterNet assets (~24 MB, then browser-cached). */
+export type NoiseFilterStatus = "idle" | "loading" | "active" | "failed";
 
 type JoinInput = { meetingId: string; spaceSlug: string; title: string; kind: "audio" | "video" };
 type JoinFailure = "notConfigured" | "notFound" | "ended" | "protocol" | "connect";
@@ -29,7 +33,18 @@ type CallContextValue = {
   room: Room | null;
   join: (m: JoinInput) => Promise<{ ok: true } | { ok: false; error: JoinFailure }>;
   leave: () => Promise<void>;
+  noiseFilter: NoiseFilterLevel;
+  noiseFilterStatus: NoiseFilterStatus;
+  setNoiseFilter: (level: NoiseFilterLevel) => void;
 };
+
+function readStoredNoiseFilter(): NoiseFilterLevel {
+  try {
+    return parseNoiseFilterLevel(localStorage.getItem(NOISE_FILTER_STORAGE_KEY));
+  } catch {
+    return DEFAULT_NOISE_FILTER_LEVEL;
+  }
+}
 
 const CallContext = createContext<CallContextValue | null>(null);
 
@@ -46,6 +61,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [room, setRoom] = useState<Room | null>(null);
   const activeCallRef = useRef<ActiveCall | null>(null);
   const roomRef = useRef<Room | null>(null);
+  // The noise filter level belongs to this device, not to a call: it is read once and kept across calls.
+  const [noiseFilter, setNoiseFilterState] = useState<NoiseFilterLevel>(readStoredNoiseFilter);
+  const [noiseFilterStatus, setNoiseFilterStatus] = useState<NoiseFilterStatus>("idle");
+  const noiseFilterRef = useRef(noiseFilter);
+  const noiseFilterChain = useRef<Promise<void>>(Promise.resolve());
 
   const leave = useCallback(async () => {
     const current = roomRef.current;
@@ -54,8 +74,46 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setRoom(null);
     setActiveCall(null);
     setStatus("idle");
+    setNoiseFilterStatus("idle");
     if (current) await current.disconnect();
   }, []);
+
+  // Brings the mic track in line with the chosen level. Runs one at a time and reads the level when it
+  // starts, so clicking around while the model is still loading ends on the last choice, not a race.
+  const syncNoiseFilter = useCallback(
+    (target: Room) => {
+      noiseFilterChain.current = noiseFilterChain.current.then(async () => {
+        const track = target.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack;
+        if (!track || roomRef.current !== target) return;
+        const level = noiseFilterRef.current;
+        setNoiseFilterStatus(level === "standard" ? "idle" : "loading");
+        try {
+          await applyNoiseFilter(track, level);
+          if (roomRef.current === target) setNoiseFilterStatus(level === "standard" ? "idle" : "active");
+        } catch {
+          // The choice stays saved; the next call tries again. Until then the browser filter applies.
+          await track.stopProcessor().catch(() => {});
+          if (roomRef.current === target) setNoiseFilterStatus("failed");
+          toast.error(t("noiseFilter.failed"));
+        }
+      });
+    },
+    [t]
+  );
+
+  const setNoiseFilter = useCallback(
+    (level: NoiseFilterLevel) => {
+      noiseFilterRef.current = level;
+      setNoiseFilterState(level);
+      try {
+        localStorage.setItem(NOISE_FILTER_STORAGE_KEY, level);
+      } catch {
+        // private mode / blocked storage: the choice holds for this tab only
+      }
+      if (roomRef.current) syncNoiseFilter(roomRef.current);
+    },
+    [syncNoiseFilter]
+  );
 
   const join = useCallback(
     async (m: JoinInput): Promise<{ ok: true } | { ok: false; error: JoinFailure }> => {
@@ -76,6 +134,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         setRoom(null);
         setActiveCall(null);
         setStatus("idle");
+        setNoiseFilterStatus("idle");
+      });
+      // Covers the first publish and a mic that is only allowed later in the call.
+      next.on(RoomEvent.LocalTrackPublished, (pub) => {
+        if (pub.source === Track.Source.Microphone) syncNoiseFilter(next);
       });
       next.on(RoomEvent.MediaDevicesError, () => toast.error(t("deviceError")));
       try {
@@ -107,7 +170,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
       return { ok: true };
     },
-    [leave, t]
+    [leave, syncNoiseFilter, t]
   );
 
   useRealtimeEvent("meeting.updated", (p) => {
@@ -133,7 +196,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const value = useMemo(() => ({ activeCall, status, room, join, leave }), [activeCall, status, room, join, leave]);
+  const value = useMemo(
+    () => ({ activeCall, status, room, join, leave, noiseFilter, noiseFilterStatus, setNoiseFilter }),
+    [activeCall, status, room, join, leave, noiseFilter, noiseFilterStatus, setNoiseFilter]
+  );
   return (
     <CallContext.Provider value={value}>
       {children}

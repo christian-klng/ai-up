@@ -20,6 +20,7 @@ import {
   type TrackReferenceOrPlaceholder,
   type WidgetState,
 } from "@livekit/components-react";
+import { CallSettings } from "@/components/meetings/call-settings";
 
 function sameTrack(a: TrackReferenceOrPlaceholder | undefined, b: TrackReferenceOrPlaceholder | undefined): boolean {
   if (!a || !b) return false;
@@ -31,7 +32,8 @@ function sameTrack(a: TrackReferenceOrPlaceholder | undefined, b: TrackReference
  * get no tile. The live listener (docs/live-ki-agenten.md) joins as an agent without camera and would
  * otherwise show up as an empty placeholder tile. Everything else follows the prefab: grid, auto-focus on
  * screen share, pinning, chat, control bar. Leaving through the control bar asks first – one stray click
- * on the red button used to drop people out of the call.
+ * on the red button used to drop people out of the call. The settings button opens our own small panel
+ * (noise filter) instead of the prefab's half-screen settings modal.
  *
  * No `RoomAudioRenderer` here: CallProvider already renders one for the shared room, a second one would
  * play every voice twice.
@@ -101,9 +103,10 @@ export function VideoConference() {
               </FocusLayoutContainer>
             </div>
           )}
-          <ControlBar controls={{ chat: true, settings: false }} />
+          <ControlBar controls={{ chat: true, settings: true }} />
         </div>
         <Chat style={{ display: widgetState.showChat ? "grid" : "none" }} />
+        {widgetState.showSettings && <CallSettings onClose={() => layoutContext.widget.dispatch?.({ msg: "toggle_settings" })} />}
       </LayoutContextProvider>
       <ConnectionStateToast />
     </div>

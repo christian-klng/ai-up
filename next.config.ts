@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        // DeepFilterNet3 WASM + model for the call noise filter (~24 MB). The path carries the package
+        // version (scripts/fetch-noise-filter-assets.mjs), so browsers may keep them forever.
+        source: "/vendor/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+    ];
+  },
   // Dev only: allow opening the dev server via 127.0.0.1 as a second "browser identity" for multi-user testing.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
 };

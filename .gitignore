@@ -33,3 +33,6 @@ npm-debug.log*
 
 # Lokale Betriebsnotizen (Server-IPs, Zugangswege)
 CLAUDE.local.md
+
+# DeepFilterNet3 assets for the call noise filter (scripts/fetch-noise-filter-assets.mjs)
+/public/vendor/
