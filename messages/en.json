@@ -1333,6 +1333,7 @@
       "startVideo": "Start video call",
       "end": "End meeting",
       "confirmEnd": "End the meeting for everyone?",
+      "confirmLeave": "Leave the call?",
       "ended": "Meeting ended.",
       "reopen": "Reopen",
       "liveWith": "{count, plural, =0 {live} =1 {live · # participant} other {live · # participants}}",

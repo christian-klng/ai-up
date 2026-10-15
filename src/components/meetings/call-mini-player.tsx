@@ -91,7 +91,7 @@ function MiniPlayerCard({ call, onLeave }: { call: ActiveCall; onLeave: () => Pr
         <span className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground">
           {connectionState === ConnectionState.Connected ? t("liveWith", { count: participants.length }) : t("mini.reconnecting")}
         </span>
-        <Button variant="ghost" size="icon" title={t("mini.leave")} className="text-red-600 hover:text-red-600" onClick={() => void onLeave()}>
+        <Button variant="ghost" size="icon" title={t("mini.leave")} className="text-red-600 hover:text-red-600" onClick={() => { if (confirm(t("confirmLeave"))) void onLeave(); }}>
           <PhoneOff className="size-4" />
         </Button>
       </div>
