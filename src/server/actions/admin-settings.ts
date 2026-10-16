@@ -82,6 +82,7 @@ export async function uploadBrandingImageAction(kind: "logo" | "favicon", _prev:
         buffer: Buffer.from(await file.arrayBuffer()),
         originalName: file.name,
         purpose: kind,
+        communityId: admin.communityId,
         uploadedBy: admin.id,
         maxEdge: kind === "favicon" ? 256 : 1024,
         square: kind === "favicon",

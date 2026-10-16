@@ -31,6 +31,8 @@ const ALLOWED: Record<string, Set<string>> = {
  *   PUT /api/upload?purpose=content&name=<filename>
  * Data is streamed straight to a temp file on the volume (no buffering in memory), the real MIME type is
  * sniffed from the first bytes, images are re-encoded through the image pipeline, other media stays as-is.
+ * Every file belongs to the community the uploader is acting in – without it the file is invisible to
+ * community-scoped lists (site images) and, for non-public purposes, readable by any signed-in account.
  * Returns the media_files row summary.
  */
 export async function PUT(req: NextRequest) {
@@ -82,7 +84,7 @@ export async function PUT(req: NextRequest) {
       const buf = await fh.readFile();
       await fh.close();
       await unlink(tmpPath).catch(() => {});
-      const media = await processAndStoreImage({ buffer: buf, originalName, purpose, uploadedBy: user.id, maxEdge: 2048, thumbEdge: 320 });
+      const media = await processAndStoreImage({ buffer: buf, originalName, purpose, communityId: user.communityId, uploadedBy: user.id, maxEdge: 2048, thumbEdge: 320 });
       return Response.json(summary(media));
     }
 
@@ -95,7 +97,7 @@ export async function PUT(req: NextRequest) {
     const size = (await stat(abs)).size;
     const [row] = await db
       .insert(mediaFiles)
-      .values({ id, kind: kindForMime(mime), storagePath, originalName, mime, size, sha256: hash.digest("hex"), purpose, uploadedBy: user.id })
+      .values({ id, communityId: user.communityId, kind: kindForMime(mime), storagePath, originalName, mime, size, sha256: hash.digest("hex"), purpose, uploadedBy: user.id })
       .returning();
     return Response.json(summary(row));
   } catch (err) {

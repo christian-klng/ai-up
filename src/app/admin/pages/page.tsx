@@ -37,7 +37,7 @@ export default async function AdminPagesPage() {
         pages={pages}
         settings={settings}
         eventsUrl={eventsUrl}
-        media={media.map((m) => ({ id: m.id, originalName: m.originalName, width: m.width, height: m.height }))}
+        media={media.map((m) => ({ id: m.id, originalName: m.originalName, width: m.width, height: m.height, size: m.size, createdAt: m.createdAt.toISOString() }))}
       />
     </div>
   );

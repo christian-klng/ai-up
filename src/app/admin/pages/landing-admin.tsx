@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Copy, ExternalLink, Eye, History, ImagePlus } from "lucide-react";
-import { uploadFile } from "@/lib/upload-client";
+import { uploadFile, type UploadError } from "@/lib/upload-client";
 import { restoreLandingVersionAction, setPageEnabledAction } from "@/server/actions/admin-landing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import { SITE_PAGES, type LandingDefinition, type SitePage } from "@/lib/landing
 import { LandingEditor } from "./landing-editor";
 
 type VersionRow = { id: string; version: number; source: string; changeNote: string | null; createdAt: string; changedByName: string | null };
-type MediaRow = { id: string; originalName: string; width: number | null; height: number | null };
+type MediaRow = { id: string; originalName: string; width: number | null; height: number | null; size: number; createdAt: string };
 
 export type PageState = {
   enabled: boolean;
@@ -49,6 +49,8 @@ export function LandingAdmin({
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  /** Freshly uploaded image – marked in the gallery so a successful upload is visible at a glance. */
+  const [highlight, setHighlight] = useState<string | null>(null);
   const [editorPage, setEditorPage] = useState<SitePage | null>(null);
 
   const toggle = (page: SitePage, next: boolean) => {
@@ -76,11 +78,15 @@ export function LandingAdmin({
     if (!file) return;
     setUploading(true);
     try {
-      await uploadFile(file, "landing");
+      const media = await uploadFile(file, "landing");
       toast.success(t("imageUploaded"));
+      setHighlight(media.id);
       router.refresh();
-    } catch {
-      toast.error(tc("unexpectedError"));
+    } catch (e) {
+      const err = e as UploadError;
+      if (err.code === "too_large") toast.error(t("imageTooLarge", { mb: Math.round((err.maxBytes ?? 0) / 1024 / 1024) }));
+      else if (err.code === "unsupported_type") toast.error(t("imageUnsupported"));
+      else toast.error(tc("unexpectedError"));
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -198,37 +204,53 @@ export function LandingAdmin({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("imagesTitle")}</CardTitle>
+          <CardTitle className="text-base">
+            {t("imagesTitle")} {media.length > 0 && <span className="font-normal text-muted-foreground">({media.length})</span>}
+          </CardTitle>
           <CardDescription>{t("imagesHint")}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3">
+        <CardContent className="grid gap-4">
           <div>
             <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => onUpload(e.target.files?.[0])} />
             <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileInput.current?.click()}>
               <ImagePlus className="size-4" /> {uploading ? t("uploading") : t("uploadImage")}
             </Button>
           </div>
-          {media.length > 0 && (
-            <ul className="grid gap-2 sm:grid-cols-2">
+          {media.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("noImages")}</p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {media.map((m) => (
-                <li key={m.id} className="flex items-center gap-2 rounded-md border p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/api/files/${m.id}`} alt={m.originalName} className="size-10 shrink-0 rounded object-cover" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{m.originalName}</p>
-                    <p className="truncate font-mono text-xs text-muted-foreground">{m.id}</p>
+                <li key={m.id} className={`overflow-hidden rounded-md border ${m.id === highlight ? "ring-2 ring-primary" : ""}`}>
+                  <a href={`/api/files/${m.id}`} target="_blank" rel="noreferrer" title={t("openImage")} className="block bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/files/${m.id}?v=thumb`} alt={m.originalName} loading="lazy" className="aspect-video w-full object-contain" />
+                  </a>
+                  <div className="flex items-start gap-1 p-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm" title={m.originalName}>
+                        {m.originalName}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {[m.width && m.height ? `${m.width}×${m.height}` : null, formatBytes(m.size), format.dateTime(new Date(m.createdAt), { dateStyle: "short" })]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label={t("copyId")}
+                      title={t("copyId")}
+                      onClick={() => {
+                        navigator.clipboard.writeText(m.id);
+                        toast.success(t("idCopied"));
+                      }}
+                    >
+                      <Copy className="size-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("copyId")}
-                    onClick={() => {
-                      navigator.clipboard.writeText(m.id);
-                      toast.success(t("idCopied"));
-                    }}
-                  >
-                    <Copy className="size-4" />
-                  </Button>
                 </li>
               ))}
             </ul>
@@ -237,4 +259,9 @@ export function LandingAdmin({
       </Card>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

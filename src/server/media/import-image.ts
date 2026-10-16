@@ -16,7 +16,7 @@ export class ImageImportError extends Error {
  * Imports an external image into media_files (SSRF-guarded, magic-bytes checked,
  * re-encoded with a thumb variant like /api/upload). Used by MCP entry images and meeting covers.
  */
-export async function importImageFromUrl(url: string, uploadedBy: string, purpose: MediaPurpose = "content"): Promise<MediaFile> {
+export async function importImageFromUrl(url: string, communityId: string, uploadedBy: string, purpose: MediaPurpose = "content"): Promise<MediaFile> {
   const maxBytes = env.MAX_UPLOAD_MB * 1024 * 1024;
   const res = await safeFetch(url, { maxBytes, timeoutMs: 15_000, headers: { accept: "image/*" } });
   if (res.status < 200 || res.status >= 300) throw new ImageImportError(`fetch failed with status ${res.status}`);
@@ -26,5 +26,5 @@ export async function importImageFromUrl(url: string, uploadedBy: string, purpos
   const detected = await fileTypeFromBuffer(res.body.subarray(0, 4100));
   if (!detected || !IMAGE_MIMES.has(detected.mime)) throw new ImageImportError("url does not point to a supported image (jpeg, png, webp, gif)");
   const name = decodeURIComponent(new URL(res.url).pathname.split("/").pop() || "") || "imported-image";
-  return processAndStoreImage({ buffer: res.body, originalName: name, purpose, uploadedBy, maxEdge: 2048, thumbEdge: 320 });
+  return processAndStoreImage({ buffer: res.body, originalName: name, purpose, communityId, uploadedBy, maxEdge: 2048, thumbEdge: 320 });
 }

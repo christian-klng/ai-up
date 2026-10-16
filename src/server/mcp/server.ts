@@ -764,7 +764,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     if ((image.mediaId ? 1 : 0) + (image.url ? 1 : 0) !== 1) return { error: "image: pass exactly one of mediaId or url" };
     if (image.mediaId) return { mediaId: image.mediaId };
     try {
-      const media = await importImageFromUrl(image.url!, auth.user.id);
+      const media = await importImageFromUrl(image.url!, auth.community.id, auth.user.id);
       return { mediaId: media.id };
     } catch (err) {
       return { error: `image url could not be imported: ${err instanceof Error ? err.message : "unknown error"} – must be a public http(s) URL returning jpeg/png/webp/gif under ${env.MAX_UPLOAD_MB} MB` };
@@ -1243,7 +1243,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         if (!imageUrl) return fail("pass imageUrl or remove=true");
         let media;
         try {
-          media = await importImageFromUrl(imageUrl, auth.user.id, "meeting");
+          media = await importImageFromUrl(imageUrl, auth.community.id, auth.user.id, "meeting");
         } catch (err) {
           return fail(`image import failed: ${(err as Error).message}`);
         }
