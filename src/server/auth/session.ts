@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "./auth";
-import { COMMUNITY_COOKIE, pickActiveCommunity } from "@/lib/community";
+import { COMMUNITY_COOKIE, accessBlock, pickActiveCommunity, type AccessBlock } from "@/lib/community";
 import { getHostCommunity, getPublicCommunity } from "@/server/community-context";
 import { ROOT_COMMUNITY_ID, getMembership, listMembershipsForUser, touchMembershipSeen } from "@/server/domain/communities";
 import { primaryHostOf } from "@/server/domain/community-domains";
@@ -88,6 +88,20 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   return { ...user, role: membership.role, communityId: community.id, membership };
 });
+
+/**
+ * Why the signed-in account cannot enter the app on this host – waiting for approval, suspended, or
+ * not a member of the community the host names – or null when it can (or nobody is signed in).
+ * Counts the same memberships as `getActiveCommunity()`, so /pending and `requireUser()` never
+ * send someone back and forth.
+ */
+export async function getAccessBlock(): Promise<AccessBlock | null> {
+  const account = await getAccount();
+  if (!account) return null;
+  const [host, memberships] = await Promise.all([getHostCommunity(), listMembershipsForUser(account.id)]);
+  const counted = host ? memberships.filter((m) => m.communityId === host.id) : memberships;
+  return accessBlock(account.status, counted.map((m) => m.status));
+}
 
 /** Requires a signed-in account that is an active member of the community it is acting in. */
 export async function requireUser(): Promise<CurrentUser> {

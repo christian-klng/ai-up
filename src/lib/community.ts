@@ -102,6 +102,26 @@ export function pickActiveCommunity<T extends { communityId: string }>(membershi
   return asked ?? memberships[0];
 }
 
+type AccessStatus = "pending" | "active" | "suspended";
+export type AccessBlock = "pending" | "suspended" | "notMember";
+
+/**
+ * Why a signed-in account cannot enter the app right now, or null when it can.
+ *
+ * `memberships` are the statuses that count for this request: the host community's membership when
+ * the host names one, every membership of the account on the main host. That mirrors
+ * `getActiveCommunity()`, which is what makes /pending and the app guards agree – if they did not,
+ * the two would bounce a visitor back and forth. Pure, so the combinations are testable.
+ */
+export function accessBlock(account: AccessStatus, memberships: AccessStatus[]): AccessBlock | null {
+  if (account === "suspended") return "suspended";
+  if (account === "pending") return "pending";
+  if (memberships.includes("active")) return null;
+  if (memberships.includes("pending")) return "pending";
+  if (memberships.includes("suspended")) return "suspended";
+  return "notMember";
+}
+
 // ---------------------------------------------------------------------------
 // Sub-domains (docs/communities.md §7, stage A)
 // ---------------------------------------------------------------------------
@@ -142,6 +162,22 @@ export function subdomainSlug(requestHost: string | null | undefined, appHost: s
   if (!label || label.includes(".")) return null;
   const checked = checkCommunitySlug(label);
   return checked.ok ? checked.slug : null;
+}
+
+/**
+ * Where a request on the `www.` alias of the app host has to go instead: the app's own origin, or
+ * null for every other host.
+ *
+ * The session cookie belongs to the app host alone (the magic link is always redeemed there), so a
+ * page served under `www.` always looks signed out. One canonical host is the only cure – the proxy
+ * redirects permanently. Only the app host's own alias: `www.` in front of a community's domain is
+ * a host of its own that would have to be verified, and the proxy cannot ask the database.
+ */
+export function canonicalHostRedirect(requestHost: string | null | undefined, appUrl: string): string | null {
+  const host = normalizeHost(requestHost);
+  const base = hostOf(appUrl);
+  if (!host || !base || host !== `www.${base}`) return null;
+  return new URL(appUrl).origin;
 }
 
 /** The host a community is reachable under when sub-domains are switched on. */

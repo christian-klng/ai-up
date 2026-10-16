@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCurrentUser, getPublicCommunity } from "@/server/auth/session";
+import { getAccount, getPublicCommunity } from "@/server/auth/session";
 import { getCurrentLandingVersion } from "@/server/domain/landing";
 import { LandingView } from "@/components/landing/landing-view";
 
@@ -17,8 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ImprintPage() {
-  const [settings, user] = await Promise.all([getPublicCommunity(), getCurrentUser()]);
+  const [settings, account] = await Promise.all([getPublicCommunity(), getAccount()]);
   const page = settings.imprintEnabled ? await getCurrentLandingVersion(settings.id, "imprint") : undefined;
   if (!page) notFound();
-  return <LandingView definition={page.definition} settings={settings} signedIn={Boolean(user)} />;
+  return <LandingView definition={page.definition} settings={settings} signedIn={Boolean(account)} />;
 }

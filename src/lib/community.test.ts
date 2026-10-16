@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkCommunitySlug, checkCustomHost, communityHost, communityPath, hostOf, normalizeHost, pickActiveCommunity, proofMatches, slugifyCommunityName, subdomainSlug, verifyRecordName } from "./community";
+import { accessBlock, canonicalHostRedirect, checkCommunitySlug, checkCustomHost, communityHost, communityPath, hostOf, normalizeHost, pickActiveCommunity, proofMatches, slugifyCommunityName, subdomainSlug, verifyRecordName } from "./community";
 
 /**
  * The slug doubles as a DNS label for a community's sub-domain (see docs/communities.md §7), so the
@@ -110,6 +110,28 @@ describe("pickActiveCommunity", () => {
  * A community's sub-domain is its slug – there is no table of domains at this stage. The host
  * decides which community a request acts in, so the parsing has to be strict about what counts.
  */
+describe("accessBlock", () => {
+  it("lets an active account with an active membership in", () => {
+    expect(accessBlock("active", ["active"])).toBeNull();
+    expect(accessBlock("active", ["pending", "active"])).toBeNull();
+  });
+
+  it("puts the account's own status first", () => {
+    expect(accessBlock("suspended", ["active"])).toBe("suspended");
+    expect(accessBlock("pending", ["active"])).toBe("pending");
+  });
+
+  it("names the membership that holds the visitor back, waiting before suspended", () => {
+    expect(accessBlock("active", ["pending"])).toBe("pending");
+    expect(accessBlock("active", ["suspended", "pending"])).toBe("pending");
+    expect(accessBlock("active", ["suspended"])).toBe("suspended");
+  });
+
+  it("says so when there is no membership at all", () => {
+    expect(accessBlock("active", [])).toBe("notMember");
+  });
+});
+
 describe("subdomainSlug", () => {
   const base = "ai-up.club";
 
@@ -164,6 +186,20 @@ describe("hostOf / normalizeHost / communityHost", () => {
   it("gives the root the main host and everyone else a sub-domain", () => {
     expect(communityHost("default", "ai-up.club")).toBe("ai-up.club");
     expect(communityHost("lesekreis", "ai-up.club")).toBe("lesekreis.ai-up.club");
+  });
+});
+
+describe("canonicalHostRedirect", () => {
+  it("sends the www alias of the app host to the app origin", () => {
+    expect(canonicalHostRedirect("www.ai-up.club", "https://ai-up.club")).toBe("https://ai-up.club");
+    expect(canonicalHostRedirect("WWW.ai-up.club:443", "https://ai-up.club")).toBe("https://ai-up.club");
+    expect(canonicalHostRedirect("www.localhost:3000", "http://localhost:3000")).toBe("http://localhost:3000");
+  });
+
+  it("leaves the app host, community sub-domains and foreign hosts alone", () => {
+    for (const host of ["ai-up.club", "lesekreis.ai-up.club", "www.verein-xy.de", "www.lesekreis.ai-up.club", "", null, undefined]) {
+      expect(canonicalHostRedirect(host, "https://ai-up.club"), String(host)).toBeNull();
+    }
   });
 });
 

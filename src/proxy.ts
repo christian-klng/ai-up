@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { canonicalHostRedirect } from "@/lib/community";
 
 /**
  * Lightweight routing gate: redirects visitors without a session cookie to /login.
@@ -10,6 +11,16 @@ const PUBLIC_PREFIXES = ["/login", "/register", "/pending", "/invite", "/join", 
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // `www.` would be a second cookie jar in which nobody is ever signed in: send it to the app host.
+  // The Host header, not request.url – that one carries the configured origin, not the requested host.
+  // Next shortens a redirect to a relative path when its host equals the server's own (`nextUrl` –
+  // in production `0.0.0.0:3000`, behind Traefik), which the browser would resolve against `www.`
+  // again: a loop. That only happens when the server listens on the app host itself, as `next dev`
+  // on localhost does; there the alias is left alone.
+  const canonical = canonicalHostRedirect(request.headers.get("host"), process.env.APP_URL ?? "");
+  if (canonical && new URL(canonical).host !== request.nextUrl.host) {
+    return NextResponse.redirect(`${canonical}${pathname}${request.nextUrl.search}`, 308);
+  }
   // "/" is public (landing page); the page itself redirects to /login or /home when the landing is disabled.
   if (pathname === "/" || PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();

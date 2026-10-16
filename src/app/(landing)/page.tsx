@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getCurrentUser, getPublicCommunity } from "@/server/auth/session";
+import { getAccount, getPublicCommunity } from "@/server/auth/session";
 import { getCurrentLandingVersion } from "@/server/domain/landing";
 import { LandingView } from "@/components/landing/landing-view";
 
@@ -21,11 +21,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function LandingPage() {
-  const [settings, user] = await Promise.all([getPublicCommunity(), getCurrentUser()]);
+  // The account, not the membership: someone with a session belongs in the app, whose guards then
+  // decide between /home and /pending. Offering "sign in" to a signed-in visitor only sends them in circles.
+  const [settings, account] = await Promise.all([getPublicCommunity(), getAccount()]);
   const landing = settings.landingEnabled ? await getCurrentLandingVersion(settings.id, "landing") : undefined;
   if (!landing) {
     // Disabled or never written: never show an empty landing page.
-    redirect(user ? (user.status === "active" ? "/home" : "/pending") : "/login");
+    redirect(account ? "/home" : "/login");
   }
-  return <LandingView definition={landing.definition} settings={settings} signedIn={Boolean(user)} />;
+  return <LandingView definition={landing.definition} settings={settings} signedIn={Boolean(account)} />;
 }

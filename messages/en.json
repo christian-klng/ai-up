@@ -74,6 +74,9 @@
     "pendingBody": "An admin will approve your account shortly. You'll receive an e-mail when it's ready.",
     "suspendedTitle": "Your account is suspended",
     "suspendedBody": "Please contact an admin if you think this is a mistake.",
+    "notMemberTitle": "No access to this community",
+    "notMemberBody": "You're signed in, but you're not a member of {community}. Ask a member or an admin for an invite link.",
+    "signedInAs": "Signed in as {email}",
     "invalidLinkTitle": "This sign-in link is invalid or has expired",
     "invalidLinkBody": "Simply request a new link.",
     "errors": {

@@ -74,6 +74,9 @@
     "pendingBody": "Ein Admin schaltet dein Konto in Kürze frei. Du erhältst dann eine E-Mail.",
     "suspendedTitle": "Dein Konto ist gesperrt",
     "suspendedBody": "Bitte wende dich an einen Admin, wenn du glaubst, dass das ein Irrtum ist.",
+    "notMemberTitle": "Kein Zugang zu dieser Community",
+    "notMemberBody": "Du bist angemeldet, aber kein Mitglied von {community}. Bitte ein Mitglied oder einen Admin um einen Einladungslink.",
+    "signedInAs": "Angemeldet als {email}",
     "invalidLinkTitle": "Dieser Anmeldelink ist ungültig oder abgelaufen",
     "invalidLinkBody": "Fordere einfach einen neuen Link an.",
     "errors": {

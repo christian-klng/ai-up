@@ -906,3 +906,31 @@ braucht Caddys On-Demand-TLS; der `ask`-Endpunkt dafür steht und antwortet nur 
 | 7.c | Darf die Root ihre Landing weiter auf `ai-up.club` zeigen, während Subs Subdomains haben? | Ja, die Root ist die Hauptdomain. |
 | 7.d | Wer darf eine Subdomain ändern oder löschen? | Sub-Admins; Root-Admins zusätzlich (Sperrliste pflegen, Missbrauch). |
 | 7.e | Custom Domain per Traefik-Datei oder Caddy? | Nach Spike; Tendenz Caddy, wenn mehr als eine Handvoll Domains erwartet werden. |
+
+### 7.11 Ein Host je Sitzung: `www` und der Zugangsstatus (16.10.2026)
+
+**Befund.** Auf `www.ai-up.club` war niemand angemeldet, obwohl dieselbe Person auf `ai-up.club`
+eingeloggt war. Coolify routet `www` als eigenen Host auf die App, das Session-Cookie gehört aber nur
+dem App-Host – der Magic Link wird immer auf `APP_URL` eingelöst. Auf `www` kann deshalb **nie** eine
+Sitzung entstehen. Mit Communities hat das nichts zu tun: Angemeldet ist ein Konto je Host, die
+Communities sind Mitgliedschaften dieses Kontos.
+
+**Lösung.** `src/proxy.ts` leitet `www.<App-Host>` per **308** auf `APP_URL` um (Pfad und Query
+bleiben, Entscheidung pur in `canonicalHostRedirect`). In der App statt in Traefik, weil Coolify die
+Router-Namen vergibt und Labels die geplante Umstellung auf Caddy nicht überleben. `www` bleibt im
+Coolify-Domain-Feld – Zertifikat und Routing werden für die Weiterleitung gebraucht. Nicht erfasst:
+`www.` vor einer Community-Domain; das wäre ein eigener Host mit eigenem Nachweis, und der Proxy hat
+keinen Datenbankzugriff.
+
+**Angemeldet, aber nicht drin.** `getCurrentUser()` ist `null`, sobald das Konto in der Community
+dieses Hosts keine *aktive* Mitgliedschaft hat. Bisher zeigte die Landing Page dann „Anmelden“, `/login`
+das Formular und `/pending` leitete nach `/login` – eine Schleife. Jetzt:
+
+- Landing, Impressum, Datenschutz fragen `getAccount()`: Wer eine Sitzung hat, sieht „Zur App“.
+- `/login` und `/register` schicken ein Konto ohne Zugang nach `/pending`.
+- `/pending` fragt `getAccessBlock()` (`ausstehend | gesperrt | kein Mitglied`, pur in `accessBlock`)
+  und zählt dabei **dieselben** Mitgliedschaften wie `getActiveCommunity()` (Host-Community, sonst
+  alle) – sonst schickten `/pending` und `requireUser()` sich den Besuch gegenseitig zu.
+
+Offen (Stufe B): Auf einer Community-Domain führt „Anmelden“ noch auf das lokale `/login`, und der
+Magic Link endet auf dem Haupthost. Gedacht ist der Weg über `/auth/handoff?to=<host>` (§7.4 Schritt 1).
