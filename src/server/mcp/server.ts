@@ -162,10 +162,11 @@ Rules
 - 1–15 sections; landing typically: hero first, then features/markdown, a cta, faq, footer.
   Imprint/privacy pages are usually just markdown sections (plus a minimal footer).
 - hrefs: internal path ("/register", "/login", "/imprint", "/privacy") or https:// URL. No other protocols.
-- hub: still diagram – a central icon with 3–8 satellite nodes (placed clockwise from the top), each
-  connected to the center by a spoke. Hovering a node moves a data stream along its spoke: flow "in"
-  streams toward the center (default), "out" away from it, "both" in two lanes. Keep labels to 1–2
-  words and texts short (they sit around the diagram).
+- hub: a central icon with 3–8 satellite nodes (placed clockwise from the top), each connected to the
+  center by a spoke, plus a card beside the diagram. A calm tour lights up one node after the other
+  (pointing at or tapping a node holds it): its spoke shows a data stream – flow "in" toward the center
+  (default), "out" away from it, "both" in two lanes – and the card shows its label and text. Keep
+  labels to 1–2 words (they sit around the diagram); the text is one short sentence for the card.
 - feature and hub icons – allowed values: ${LANDING_ICONS.join(", ")}.
 - team: one card per person (1–6) – portrait, name, role, a short summary, focus tags and links are
   always visible; "facts" (label + text, max 8) sit in a collapsible block below, headed by

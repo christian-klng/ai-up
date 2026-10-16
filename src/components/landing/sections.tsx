@@ -132,7 +132,7 @@ export function LandingSectionView({
         </section>
       );
     case "hub":
-      return <HubDiagram section={section} path={path} />;
+      return <HubDiagram section={section} path={path} editing={editing} />;
     case "markdown":
       return (
         <section className="mx-auto max-w-3xl py-10">

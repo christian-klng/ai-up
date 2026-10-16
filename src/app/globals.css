@@ -141,6 +141,16 @@
       stroke-dashoffset: -36;
     }
   }
+  /* Tour progress of the active node; the duration is set inline to the tour step. */
+  --animate-hub-progress: hub-progress linear forwards;
+  @keyframes hub-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
 }
 /*
  * Event widgets on the public pages (script of the event service, see
