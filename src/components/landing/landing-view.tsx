@@ -32,6 +32,7 @@ export async function LandingView({
         menu: tCommon("menu"),
         eventsUnavailable: t("eventsUnavailable"),
         orderStatusHint: t("orderStatusHint"),
+        teamDetails: t("teamDetails"),
       }}
     />
   );

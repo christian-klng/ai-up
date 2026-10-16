@@ -216,6 +216,7 @@ export function LandingEditor({
                 menu: tc("menu"),
                 eventsUnavailable: tl("eventsUnavailable"),
                 orderStatusHint: tl("orderStatusHint"),
+                teamDetails: tl("teamDetails"),
               }}
             />
           </div>

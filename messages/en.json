@@ -139,7 +139,8 @@
     "signIn": "Sign in",
     "register": "Register",
     "eventsUnavailable": "Events: no event service is connected for this community. On the public page this section stays invisible.",
-    "orderStatusHint": "Purchase confirmation: this section only appears for buyers who return to this page after paying."
+    "orderStatusHint": "Purchase confirmation: this section only appears for buyers who return to this page after paying.",
+    "teamDetails": "Background"
   },
   "members": {
     "title": "Members",

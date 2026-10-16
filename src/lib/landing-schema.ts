@@ -207,6 +207,35 @@ const imageSection = z.object({
   caption: z.string().trim().max(300).optional(),
 });
 
+/** People behind the community: one card per member with portrait, short bio, focus tags and a collapsible CV. */
+const teamSection = z.object({
+  type: z.literal("team"),
+  title: z.string().trim().max(120).optional(),
+  intro: z.string().trim().max(400).optional(),
+  /** Heading of the collapsible facts block; falls back to the app's "Background" label. */
+  detailsLabel: z.string().trim().min(1).max(40).optional(),
+  members: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        role: z.string().trim().max(80).optional(),
+        location: z.string().trim().max(60).optional(),
+        /** Portrait; same rules as image sections (purpose "landing"). Without one a monogram is shown. */
+        mediaId: z.string().uuid().optional(),
+        summary: z.string().trim().max(400).optional(),
+        tags: z.array(z.string().trim().min(1).max(40)).max(6).default([]),
+        /** Short labelled lines ("Aktuell", "Studium") shown in the collapsible block. */
+        facts: z
+          .array(z.object({ label: z.string().trim().min(1).max(40), text: z.string().trim().min(1).max(400) }))
+          .max(8)
+          .default([]),
+        links: z.array(z.object({ label: z.string().trim().min(1).max(40), href })).max(3).default([]),
+      }),
+    )
+    .min(1)
+    .max(6),
+});
+
 /**
  * Event widgets: seminars and workshops from the operator's event service. The definition only
  * says what to show – the script origin is never part of it (a free URL here would let anyone with
@@ -254,6 +283,7 @@ export const landingSectionSchema = z.discriminatedUnion("type", [
   ctaSection,
   faqSection,
   imageSection,
+  teamSection,
   eventsSection,
   eventSection,
   orderStatusSection,
@@ -332,12 +362,13 @@ export function isFragmentHref(href: string): boolean {
   return href.startsWith("/") && href.includes("#");
 }
 
-/** All media ids referenced by a definition (hero images + image sections). */
+/** All media ids referenced by a definition (hero images, image sections, team portraits). */
 export function collectLandingMediaIds(definition: LandingDefinition): string[] {
   const ids = new Set<string>();
   for (const s of definition.sections) {
     if (s.type === "hero" && s.imageMediaId) ids.add(s.imageMediaId);
     if (s.type === "image") ids.add(s.mediaId);
+    if (s.type === "team") for (const m of s.members) if (m.mediaId) ids.add(m.mediaId);
   }
   return [...ids];
 }

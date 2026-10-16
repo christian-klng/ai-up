@@ -145,6 +145,10 @@ come from the app theme automatically: write copy, don't style.
     { "type": "cta", "headline": "…", "text": "optional", "button": { "label": "…", "href": "/register" } },
     { "type": "faq", "title": "optional", "items": [ { "question": "…", "answer": "…" } ] },
     { "type": "image", "mediaId": "uuid", "alt": "required alt text", "caption": "optional" },
+    { "type": "team", "title": "optional", "intro": "optional", "detailsLabel": "optional, max 40",
+      "members": [ { "name": "…", "role": "optional", "location": "optional", "mediaId": "optional uuid (portrait)",
+        "summary": "optional, max 400", "tags": ["optional, max 6, each max 40"],
+        "facts": [ { "label": "Aktuell", "text": "max 400" } ], "links": [ { "label": "LinkedIn", "href": "https://…" } ] } ] },
     { "type": "events", "title": "optional", "intro": "optional", "when": "upcoming | past | all",
       "format": "optional: online | onsite", "limit": 6, "emptyText": "optional, shown when there is nothing to list" },
     { "type": "event", "slug": "slug of one event" },
@@ -163,7 +167,11 @@ Rules
   streams toward the center (default), "out" away from it, "both" in two lanes. Keep labels to 1–2
   words and texts short (they sit around the diagram).
 - feature and hub icons – allowed values: ${LANDING_ICONS.join(", ")}.
-- images: mediaId must reference a media file with purpose "landing" – one shared pool for all pages
+- team: one card per person (1–6) – portrait, name, role, a short summary, focus tags and links are
+  always visible; "facts" (label + text, max 8) sit in a collapsible block below, headed by
+  "detailsLabel" (defaults to the app's "Background" label). Keep facts to one or two sentences each;
+  use one team section for the whole team instead of image + faq pairs. Portraits are square-cropped.
+- images (also team portraits): mediaId must reference a media file with purpose "landing" – one shared pool for all pages
   (admin uploads them under Admin → Web pages, or use list_page_media). Other purposes are not public.
 - German sites typically need imprint + privacy pages; link them from the landing footer
   (footer.links → "/imprint", "/privacy").

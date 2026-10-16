@@ -139,7 +139,8 @@
     "signIn": "Anmelden",
     "register": "Registrieren",
     "eventsUnavailable": "Veranstaltungen: Für diese Community ist kein Event-Dienst verbunden. Auf der öffentlichen Seite bleibt dieser Bereich unsichtbar.",
-    "orderStatusHint": "Kaufbestätigung: Dieser Bereich erscheint nur für Käufer, die nach der Bezahlung auf diese Seite zurückkommen."
+    "orderStatusHint": "Kaufbestätigung: Dieser Bereich erscheint nur für Käufer, die nach der Bezahlung auf diese Seite zurückkommen.",
+    "teamDetails": "Werdegang"
   },
   "members": {
     "title": "Mitglieder",

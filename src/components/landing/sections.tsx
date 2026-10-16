@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowUpRight, ChevronDown, MapPin } from "lucide-react";
 import { EventWidget, OrderReturnOnly, type EventWidgetSource } from "./event-widgets";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
@@ -41,7 +42,17 @@ function WidgetNote({ text }: { text: string }) {
   );
 }
 
-export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string };
+export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string; teamDetails: string };
+
+/** Chevron of a `<details className="group">`; turns over while open. */
+function DisclosureChevron() {
+  return <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" aria-hidden />;
+}
+
+function initials(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
 
 export function LandingSectionView({
   section,
@@ -176,8 +187,9 @@ export function LandingSectionView({
           <div className="grid gap-2">
             {section.items.map((item, i) => (
               <details key={i} open={editing || undefined} className="group rounded-lg border bg-card px-4 py-3">
-                <summary className="cursor-pointer list-none font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                   <span data-ep={`${path}.items.${i}.question`}>{item.question}</span>
+                  <DisclosureChevron />
                 </summary>
                 <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground" data-ep={`${path}.items.${i}.answer`}>
                   {item.answer}
@@ -199,6 +211,112 @@ export function LandingSectionView({
               </figcaption>
             )}
           </figure>
+        </section>
+      );
+    case "team":
+      return (
+        <section className="py-10">
+          {section.title && (
+            <h2 className="text-center text-2xl font-semibold tracking-tight text-balance" data-ep={`${path}.title`}>
+              {section.title}
+            </h2>
+          )}
+          {section.intro && (
+            <p className="mx-auto mt-2 max-w-2xl text-center text-muted-foreground text-balance" data-ep={`${path}.intro`}>
+              {section.intro}
+            </p>
+          )}
+          <div
+            className={`mx-auto grid items-start gap-4 ${section.members.length > 1 ? "max-w-4xl md:grid-cols-2" : "max-w-xl"} ${section.title || section.intro ? "mt-8" : ""}`}
+          >
+            {section.members.map((m, i) => {
+              const mp = `${path}.members.${i}`;
+              return (
+                <Card key={i}>
+                  <CardContent className="flex flex-col gap-4 pt-5">
+                    <div className="flex items-center gap-4">
+                      {m.mediaId ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/api/files/${m.mediaId}`} alt="" className="size-20 shrink-0 rounded-xl border object-cover sm:size-24" />
+                      ) : (
+                        <span className="inline-flex size-20 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xl font-semibold text-primary sm:size-24" aria-hidden>
+                          {initials(m.name)}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-semibold leading-tight" data-ep={`${mp}.name`}>
+                          {m.name}
+                        </h3>
+                        {m.role && (
+                          <p className="mt-0.5 text-sm font-medium text-primary" data-ep={`${mp}.role`}>
+                            {m.role}
+                          </p>
+                        )}
+                        {m.location && (
+                          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="size-3.5" aria-hidden />
+                            <span data-ep={`${mp}.location`}>{m.location}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {m.summary && (
+                      <p className="text-sm text-muted-foreground" data-ep={`${mp}.summary`}>
+                        {m.summary}
+                      </p>
+                    )}
+                    {m.tags.length > 0 && (
+                      <ul className="flex flex-wrap gap-1.5">
+                        {m.tags.map((tag, j) => (
+                          <li key={j} className="rounded-full border bg-muted/50 px-2.5 py-0.5 text-xs text-muted-foreground" data-ep={`${mp}.tags.${j}`}>
+                            {tag}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {m.facts.length > 0 && (
+                      <details open={editing || undefined} className="group border-t pt-3">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                          <span data-ep={section.detailsLabel ? `${path}.detailsLabel` : undefined}>{section.detailsLabel ?? labels.teamDetails}</span>
+                          <DisclosureChevron />
+                        </summary>
+                        <dl className="mt-1 grid gap-2.5">
+                          {m.facts.map((f, j) => (
+                            <div key={j} className="mt-1.5">
+                              <dt className="text-xs text-muted-foreground" data-ep={`${mp}.facts.${j}.label`}>
+                                {f.label}
+                              </dt>
+                              <dd className="mt-0.5 text-sm whitespace-pre-line" data-ep={`${mp}.facts.${j}.text`}>
+                                {f.text}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </details>
+                    )}
+                    {m.links.length > 0 && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {m.links.map((l, j) => {
+                          const external = !l.href.startsWith("/");
+                          return (
+                            <a
+                              key={j}
+                              href={l.href}
+                              {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                              className="inline-flex items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                            >
+                              <span data-ep={`${mp}.links.${j}.label`}>{l.label}</span>
+                              {external && <ArrowUpRight className="size-3.5" aria-hidden />}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </section>
       );
     case "events":
