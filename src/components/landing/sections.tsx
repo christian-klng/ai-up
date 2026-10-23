@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown, MapPin } from "lucide-react";
 import { EventWidget, OrderReturnOnly, type EventWidgetSource } from "./event-widgets";
+import { FeaturePreview } from "./feature-previews";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
 import type { Community } from "@/server/db/schema";
@@ -115,9 +116,15 @@ export function LandingSectionView({
               return (
                 <Card key={i}>
                   <CardContent className="flex flex-col gap-2.5 pt-5">
-                    <span className="inline-flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <Icon className="size-5" aria-hidden />
-                    </span>
+                    {item.preview ? (
+                      <div className="mb-1.5">
+                        <FeaturePreview preview={item.preview} />
+                      </div>
+                    ) : (
+                      <span className="inline-flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Icon className="size-5" aria-hidden />
+                      </span>
+                    )}
                     <h3 className="font-semibold" data-ep={`${path}.items.${i}.title`}>
                       {item.title}
                     </h3>

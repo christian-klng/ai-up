@@ -17,7 +17,7 @@ import { db } from "@/server/db/client";
 import { auditLog } from "@/server/db/schema";
 import { ROOT_COMMUNITY_ID, loadCommunity, updateCommunity } from "@/server/domain/communities";
 import { getCurrentLandingVersion, isPageEnabled, landingWarnings, listLandingMedia, listLandingVersions, pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
-import { EVENT_TEXT_KEYS, LANDING_ICONS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
+import { EVENT_TEXT_KEYS, LANDING_ICONS, LANDING_PREVIEWS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { importImageFromUrl } from "@/server/media/import-image";
@@ -137,7 +137,7 @@ come from the app theme automatically: write copy, don't style.
       "primaryCta": { "label": "Join us", "href": "/register" }, "secondaryCta": { "label": "Sign in", "href": "/login" },
       "imageMediaId": "optional uuid" },
     { "type": "features", "title": "optional", "intro": "optional",
-      "items": [ { "icon": "sparkles", "title": "…", "text": "…" } ] },
+      "items": [ { "icon": "sparkles", "title": "…", "text": "…", "preview": "optional, see below" } ] },
     { "type": "hub", "title": "optional", "intro": "optional",
       "center": { "icon": "bot", "label": "max 40" },
       "nodes": [ { "icon": "message-square", "label": "max 40", "text": "optional, max 80", "flow": "in | out | both" } ] },
@@ -168,6 +168,10 @@ Rules
   (default), "out" away from it, "both" in two lanes – and the card shows its label and text. Keep
   labels to 1–2 words (they sit around the diagram); the text is one short sentence for the card.
 - feature and hub icons – allowed values: ${LANDING_ICONS.join(", ")}.
+- feature "preview" (optional) replaces the icon with a small built-in mockup of a content template:
+  ${LANDING_PREVIEWS.join(", ")}. The mockups are drawn from the theme with placeholder lines (no
+  words), so they work in every language. Use them for a section that presents the templates; give
+  either all items of a section a preview or none, so the cards line up.
 - team: one card per person (1–6) – portrait, name, role, a short summary, focus tags and links are
   always visible; "facts" (label + text, max 8) sit in a collapsible block below, headed by
   "detailsLabel" (defaults to the app's "Background" label). Keep facts to one or two sentences each;

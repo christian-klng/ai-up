@@ -116,6 +116,13 @@ export const LANDING_ICONS = [
 ] as const;
 export type LandingIcon = (typeof LANDING_ICONS)[number];
 
+/**
+ * Small built-in mockups of the content templates a feature card can show above its title.
+ * Drawn from theme tokens and placeholder lines (no words), so they fit every theme and language.
+ */
+export const LANDING_PREVIEWS = ["whiteboard", "kanban", "article", "video", "gallery", "list", "process"] as const;
+export type LandingPreview = (typeof LANDING_PREVIEWS)[number];
+
 /** Internal path ("/register") or absolute https URL – no protocol-relative or javascript: URLs. */
 const href = z
   .string()
@@ -147,6 +154,8 @@ const featuresSection = z.object({
         icon: z.enum(LANDING_ICONS),
         title: z.string().trim().min(1).max(80),
         text: z.string().trim().max(400),
+        /** Replaces the icon with a mockup of that template. */
+        preview: z.enum(LANDING_PREVIEWS).optional(),
       }),
     )
     .min(1)
