@@ -15,6 +15,16 @@ export function useCallCapture(): { recording: boolean; transcribing: boolean } 
   return { recording, transcribing: participants.some((p) => p.kind === ParticipantKind.AGENT) };
 }
 
+/** Red marker laid over the top-left corner of the call area, readable on any video. */
+export function CaptureMarker({ label, title }: { label: string; title?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur" title={title}>
+      <span className="size-1.5 rounded-full bg-red-500 animate-pulse" />
+      {label}
+    </span>
+  );
+}
+
 /** `recordingEnabled`: the meeting is set to record, shown even before the egress is up. */
 export function CaptureBadge({ recordingEnabled }: { recordingEnabled: boolean }) {
   const t = useTranslations("meetings.call");
@@ -23,9 +33,6 @@ export function CaptureBadge({ recordingEnabled }: { recordingEnabled: boolean }
   if (!rec && !transcribing) return null;
   const label = rec && transcribing ? t("captureBoth") : rec ? t("recordingBadge") : t("transcribingBadge");
   return (
-    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600" title={transcribing ? t("transcribingHint") : undefined}>
-      <span className="size-1.5 rounded-full bg-red-500 animate-pulse" />
-      {label}
-    </span>
+    <CaptureMarker label={label} title={transcribing ? t("transcribingHint") : undefined} />
   );
 }

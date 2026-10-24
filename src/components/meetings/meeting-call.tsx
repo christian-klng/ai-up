@@ -6,12 +6,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AudioConference, RoomContext } from "@livekit/components-react";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { MeetingKindIcon } from "./meeting-badges";
+import { Loader2 } from "lucide-react";
 import { useCall } from "./call-provider";
-import { CaptureBadge } from "./capture-badge";
+import { CaptureBadge, CaptureMarker } from "./capture-badge";
 import { VideoConference } from "./video-conference";
 
 type Props = {
@@ -27,6 +24,10 @@ type Props = {
  * Full-page call UI rendering against the shared room owned by CallProvider – navigating away keeps
  * the call alive (mini player takes over). Video meetings get the full VideoConference layout
  * (tiles, screen share, chat); audio meetings a compact AudioConference.
+ *
+ * No header row: the way back is the sidebar or the leave button, so the call gets the full height. The
+ * negative margin cancels the shell's vertical padding – otherwise the page is taller than the viewport
+ * and the control bar slides below the fold. The capture marker sits on the call area instead.
  */
 export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recordingEnabled }: Props) {
   const t = useTranslations("meetings.call");
@@ -62,45 +63,32 @@ export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recor
   const connectedHere = room !== null && activeCall?.meetingId === meetingId;
 
   return (
-    <div className="flex h-[calc(100svh-3.5rem)] flex-col" data-lk-theme="default">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-background px-3">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={backHref}>
-            <ArrowLeft className="size-4" /> {t("back")}
-          </Link>
-        </Button>
-        <MeetingKindIcon kind={kind} className="text-muted-foreground" />
-        <span className="truncate text-sm font-medium">{title}</span>
+    <div className="relative -my-6 h-[calc(100svh-3.5rem)] bg-black/95" data-lk-theme="default">
+      <div className="pointer-events-none absolute left-3 top-3 z-10 [&>*]:pointer-events-auto">
         {connectedHere ? (
           <RoomContext.Provider value={room}>
             <CaptureBadge recordingEnabled={recordingEnabled} />
           </RoomContext.Provider>
         ) : (
-          recordingEnabled && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" />{t("recordingBadge")}</span>
-        )}
-        {!connectedHere && (
-          <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" /> {t("connecting")}
-          </span>
-        )}
-      </header>
-      <div className="min-h-0 flex-1 bg-black/95">
-        {connectedHere ? (
-          <RoomContext.Provider value={room}>
-            {kind === "video" ? (
-              <VideoConference />
-            ) : (
-              <div className="mx-auto flex h-full max-w-3xl flex-col justify-center p-4">
-                <AudioConference />
-              </div>
-            )}
-          </RoomContext.Provider>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="size-6 animate-spin text-white/50" />
-          </div>
+          recordingEnabled && <CaptureMarker label={t("recordingBadge")} />
         )}
       </div>
+      {connectedHere ? (
+        <RoomContext.Provider value={room}>
+          {kind === "video" ? (
+            <VideoConference />
+          ) : (
+            <div className="mx-auto flex h-full max-w-3xl flex-col justify-center p-4">
+              <AudioConference />
+            </div>
+          )}
+        </RoomContext.Provider>
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-white/60">
+          <Loader2 className="size-6 animate-spin" />
+          {t("connecting")}
+        </div>
+      )}
     </div>
   );
 }
