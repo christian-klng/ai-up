@@ -140,7 +140,12 @@
     "register": "Register",
     "eventsUnavailable": "Events: no event service is connected for this community. On the public page this section stays invisible.",
     "orderStatusHint": "Purchase confirmation: this section only appears for buyers who return to this page after paying.",
-    "teamDetails": "Background"
+    "teamDetails": "Background",
+    "noPosts": "There are no posts yet.",
+    "olderPosts": "Older posts",
+    "newerPosts": "Newer posts",
+    "postsUnavailable": "Posts: the selected collection is missing or not cleared for public pages (Admin → Collections). This section stays invisible on the public page.",
+    "backTo": "Back to {page}"
   },
   "members": {
     "title": "Members",
@@ -272,7 +277,7 @@
     },
     "landing": {
       "title": "Web pages",
-      "intro": "Public pages of the community: landing page (/), imprint (/imprint) and privacy (/privacy). Content is edited via MCP (e.g. with Claude Code) or directly in the preview; manage activation, images and versions here.",
+      "intro": "Public pages of the community: landing page (/), imprint (/imprint), privacy (/privacy) and up to five custom pages such as a blog, changelog or features page. Content is edited via MCP (e.g. with Claude Code) or directly in the preview; here you manage pages, activation, images and versions.",
       "statusTitle": "Status",
       "statusHint": "Current version: v{version}. Publicly reachable at {url} once enabled.",
       "noContentYet": "No content yet – create the first version via MCP (resource aiup://docs/pages).",
@@ -299,7 +304,7 @@
       "note": "Change note",
       "restore": "Restore",
       "confirmRestore": "Restore version v{version} as the new current version?",
-      "editorTitle": "Edit landing page",
+      "editorTitle": "Edit {page}",
       "editHint": "Click any text to edit it in place. Enter applies, Escape discards. Links, images and icons are edited via MCP.",
       "saveAndClose": "Save and close",
       "discard": "Discard",
@@ -311,7 +316,46 @@
       "tabLanding": "Landing page",
       "tabImprint": "Imprint",
       "tabPrivacy": "Privacy",
-      "enablePage": "Enable page ({url})"
+      "enablePage": "Enable page ({url})",
+      "addPage": "Add page",
+      "customCount": "{count} of {max} custom pages",
+      "limitReached": "At most {max} custom pages",
+      "slugReservedBadge": "Address reserved",
+      "slugReservedHint": "The address /{slug} now belongs to the app itself, so the page is no longer reachable there. Please give it a new address under Settings.",
+      "mcpHintCustom": "Editing via MCP: an API key with the scopes landing:read and landing:write, then update_page with page \"{slug}\".",
+      "settingsTitle": "Settings",
+      "settingsHint": "The title appears in the navigation, the address is the path of the page.",
+      "fieldTitle": "Title",
+      "fieldSlug": "Address",
+      "slugChangeHint": "Old links to this page will stop working.",
+      "showInNav": "Show in the navigation of the public pages",
+      "moveUp": "Move forward",
+      "moveDown": "Move back",
+      "deletePage": "Delete page",
+      "confirmDelete": "Delete the page “{title}” with all its versions? A collection created with it is kept.",
+      "addPageTitle": "Add custom page",
+      "addPageHint": "The page starts switched off. Edit its content afterwards in the preview or via MCP.",
+      "fieldKind": "Kind",
+      "kind": {
+        "blank": "Blank",
+        "features": "Features",
+        "blog": "Blog",
+        "changelog": "Changelog"
+      },
+      "kindHint": {
+        "blank": "An empty text page.",
+        "features": "Header, three features and a call to sign up.",
+        "blog": "Posts from a new collection “Blog” with a matching template. Published entries appear as cards.",
+        "changelog": "Changes from a new collection “Changelog” with a matching template. Published entries appear as a timeline."
+      },
+      "createdOffHint": "Addresses the app uses itself (e.g. /home, /admin, /login) are blocked.",
+      "createPage": "Create page",
+      "pageCreated": "Page created",
+      "errorLimit": "There are already five custom pages.",
+      "errorSlugInvalid": "Only lowercase letters, digits and single hyphens.",
+      "errorSlugReserved": "The app uses this address itself.",
+      "errorSlugTaken": "This address is already taken.",
+      "errorTitle": "Title is missing or longer than {max} characters."
     },
     "members": {
       "title": "Members",
@@ -395,7 +439,11 @@
       "assignSaved": "Assignment saved.",
       "systemBadge": "System",
       "templateCount": "{count, plural, one {# template} other {# templates}}",
-      "defaultTemplatesBadge": "Default templates"
+      "defaultTemplatesBadge": "Default templates",
+      "publicBadge": "Public",
+      "makePublic": "Show on public pages",
+      "makePrivate": "Stop showing on public pages",
+      "confirmPublic": "Clear the collection “{name}” for public pages? Only entries an admin publishes one by one become visible – without sign-in, to everyone on the internet."
     },
     "templates": {
       "listTitle": "Templates",
@@ -1047,6 +1095,16 @@
       "recheck": "Re-check",
       "noReason": "No reason provided.",
       "checkedAt": "Checked on {date}"
+    },
+    "publish": {
+      "publish": "Publish",
+      "withdraw": "Withdraw",
+      "confirmPublish": "Publish this entry? It becomes visible to everyone without sign-in, including its images. Later changes appear right away.",
+      "published": "Published",
+      "withdrawn": "Withdrawn",
+      "collectionNotPublic": "The collection is not cleared for public pages.",
+      "publicSince": "Public since {date}",
+      "publicNoPage": "Public since {date} – not shown on any page yet"
     }
   },
   "agents": {

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import type { Community } from "@/server/db/schema";
-import type { LandingDefinition, SitePage } from "@/lib/landing-schema";
-import { saveLandingInlineAction } from "@/server/actions/admin-landing";
+import type { LandingDefinition } from "@/lib/landing-schema";
+import type { PostFeed } from "@/server/domain/posts";
+import { saveLandingInlineAction, type PageKey } from "@/server/actions/admin-landing";
 import { LandingShell } from "@/components/landing/landing-shell";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,16 +41,24 @@ const EDIT_CSS = `
 /** Mounted per editing session (parent renders it only while open) – state starts fresh on mount. */
 export function LandingEditor({
   page,
+  title,
   onOpenChange,
   definition,
   settings,
   eventsUrl,
+  nav,
+  posts,
 }: {
-  page: SitePage;
+  page: PageKey;
+  /** Name of the page in the dialog title */
+  title: string;
   onOpenChange: (open: boolean) => void;
   definition: LandingDefinition;
   settings: Community;
   eventsUrl: string | null;
+  nav: { title: string; href: string }[];
+  /** Posts as of opening the editor; a newly added posts section shows them after saving */
+  posts: Record<string, PostFeed>;
 }) {
   const t = useTranslations("admin.landing");
   const tl = useTranslations("landing");
@@ -184,7 +193,7 @@ export function LandingEditor({
       >
         <style dangerouslySetInnerHTML={{ __html: EDIT_CSS }} />
         <DialogHeader className="border-b px-4 py-3 pr-12">
-          <DialogTitle>{t("editorTitle")}</DialogTitle>
+          <DialogTitle>{t("editorTitle", { page: title })}</DialogTitle>
           <DialogDescription>{t("editHint")}</DialogDescription>
         </DialogHeader>
         <div className="relative min-h-0">
@@ -209,6 +218,8 @@ export function LandingEditor({
               signedIn
               editing
               eventsUrl={eventsUrl}
+              nav={nav}
+              posts={posts}
               labels={{
                 toApp: tl("toApp"),
                 signIn: tl("signIn"),
@@ -217,6 +228,10 @@ export function LandingEditor({
                 eventsUnavailable: tl("eventsUnavailable"),
                 orderStatusHint: tl("orderStatusHint"),
                 teamDetails: tl("teamDetails"),
+                noPosts: tl("noPosts"),
+                olderPosts: tl("olderPosts"),
+                newerPosts: tl("newerPosts"),
+                postsUnavailable: tl("postsUnavailable"),
               }}
             />
           </div>

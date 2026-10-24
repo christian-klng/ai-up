@@ -140,7 +140,12 @@
     "register": "Registrieren",
     "eventsUnavailable": "Veranstaltungen: Für diese Community ist kein Event-Dienst verbunden. Auf der öffentlichen Seite bleibt dieser Bereich unsichtbar.",
     "orderStatusHint": "Kaufbestätigung: Dieser Bereich erscheint nur für Käufer, die nach der Bezahlung auf diese Seite zurückkommen.",
-    "teamDetails": "Werdegang"
+    "teamDetails": "Werdegang",
+    "noPosts": "Hier gibt es noch keine Beiträge.",
+    "olderPosts": "Ältere Beiträge",
+    "newerPosts": "Neuere Beiträge",
+    "postsUnavailable": "Beiträge: Die gewählte Sammlung fehlt oder ist nicht für öffentliche Seiten freigegeben (Verwaltung → Sammlungen). Auf der öffentlichen Seite bleibt dieser Bereich unsichtbar.",
+    "backTo": "Zurück zu {page}"
   },
   "members": {
     "title": "Mitglieder",
@@ -272,7 +277,7 @@
     },
     "landing": {
       "title": "Webseiten",
-      "intro": "Öffentliche Seiten der Community: Landing Page (/), Impressum (/imprint) und Datenschutz (/privacy). Inhalte werden per MCP bearbeitet (z. B. mit Claude Code) oder direkt in der Vorschau; hier steuerst du Aktivierung, Bilder und Versionen.",
+      "intro": "Öffentliche Seiten der Community: Landing Page (/), Impressum (/imprint), Datenschutz (/privacy) und bis zu fünf eigene Seiten wie Blog, Changelog oder Features. Inhalte werden per MCP bearbeitet (z. B. mit Claude Code) oder direkt in der Vorschau; hier steuerst du Seiten, Aktivierung, Bilder und Versionen.",
       "statusTitle": "Status",
       "statusHint": "Aktuelle Version: v{version}. Öffentlich erreichbar unter {url}, sobald aktiviert.",
       "noContentYet": "Noch kein Inhalt vorhanden – erstelle die erste Version per MCP (Resource aiup://docs/pages).",
@@ -299,7 +304,7 @@
       "note": "Änderungsnotiz",
       "restore": "Wiederherstellen",
       "confirmRestore": "Version v{version} als neue aktuelle Version wiederherstellen?",
-      "editorTitle": "Landing Page bearbeiten",
+      "editorTitle": "{page} bearbeiten",
       "editHint": "Text anklicken, um ihn direkt zu bearbeiten. Enter übernimmt, Escape verwirft. Links, Bilder und Icons änderst du per MCP.",
       "saveAndClose": "Speichern und Schließen",
       "discard": "Verwerfen",
@@ -311,7 +316,46 @@
       "tabLanding": "Landing Page",
       "tabImprint": "Impressum",
       "tabPrivacy": "Datenschutz",
-      "enablePage": "Seite aktivieren ({url})"
+      "enablePage": "Seite aktivieren ({url})",
+      "addPage": "Seite hinzufügen",
+      "customCount": "{count} von {max} eigenen Seiten",
+      "limitReached": "Höchstens {max} eigene Seiten",
+      "slugReservedBadge": "Adresse reserviert",
+      "slugReservedHint": "Die Adresse /{slug} gehört inzwischen der App selbst – die Seite ist dort nicht mehr erreichbar. Bitte gib ihr unter Einstellungen eine neue Adresse.",
+      "mcpHintCustom": "Bearbeitung per MCP: API-Schlüssel mit den Scopes landing:read und landing:write, dann update_page mit page \"{slug}\".",
+      "settingsTitle": "Einstellungen",
+      "settingsHint": "Titel erscheint in der Navigation, die Adresse ist der Pfad der Seite.",
+      "fieldTitle": "Titel",
+      "fieldSlug": "Adresse",
+      "slugChangeHint": "Alte Links auf diese Seite funktionieren danach nicht mehr.",
+      "showInNav": "In der Navigation der öffentlichen Seiten zeigen",
+      "moveUp": "Nach vorn",
+      "moveDown": "Nach hinten",
+      "deletePage": "Seite löschen",
+      "confirmDelete": "Seite „{title}“ mit allen Versionen löschen? Eine dazu angelegte Sammlung bleibt erhalten.",
+      "addPageTitle": "Eigene Seite hinzufügen",
+      "addPageHint": "Die Seite entsteht ausgeschaltet. Inhalte bearbeitest du danach in der Vorschau oder per MCP.",
+      "fieldKind": "Art",
+      "kind": {
+        "blank": "Leer",
+        "features": "Features",
+        "blog": "Blog",
+        "changelog": "Changelog"
+      },
+      "kindHint": {
+        "blank": "Eine leere Textseite.",
+        "features": "Kopfbereich, drei Funktionen und ein Aufruf zum Registrieren.",
+        "blog": "Beiträge aus einer neuen Sammlung „Blog“ mit passender Vorlage. Veröffentlichte Einträge erscheinen als Karten.",
+        "changelog": "Änderungen aus einer neuen Sammlung „Changelog“ mit passender Vorlage. Veröffentlichte Einträge erscheinen als Zeitleiste."
+      },
+      "createdOffHint": "Reservierte Adressen der App (z. B. /home, /admin, /login) sind gesperrt.",
+      "createPage": "Seite anlegen",
+      "pageCreated": "Seite angelegt",
+      "errorLimit": "Es gibt bereits fünf eigene Seiten.",
+      "errorSlugInvalid": "Nur Kleinbuchstaben, Ziffern und einzelne Bindestriche.",
+      "errorSlugReserved": "Diese Adresse benutzt die App selbst.",
+      "errorSlugTaken": "Diese Adresse ist schon vergeben.",
+      "errorTitle": "Titel fehlt oder ist länger als {max} Zeichen."
     },
     "members": {
       "title": "Mitglieder",
@@ -395,7 +439,11 @@
       "assignSaved": "Zuweisung gespeichert.",
       "systemBadge": "System",
       "templateCount": "{count, plural, one {# Vorlage} other {# Vorlagen}}",
-      "defaultTemplatesBadge": "Standard-Vorlagen"
+      "defaultTemplatesBadge": "Standard-Vorlagen",
+      "publicBadge": "Öffentlich",
+      "makePublic": "Auf öffentlichen Seiten zeigen",
+      "makePrivate": "Nicht mehr auf öffentlichen Seiten zeigen",
+      "confirmPublic": "Sammlung „{name}“ für öffentliche Seiten freigeben? Sichtbar werden nur Einträge, die ein Admin einzeln veröffentlicht – und zwar ohne Anmeldung, für alle im Internet."
     },
     "templates": {
       "listTitle": "Vorlagen",
@@ -1047,6 +1095,16 @@
       "recheck": "Neu prüfen",
       "noReason": "Keine Begründung geliefert.",
       "checkedAt": "Geprüft am {date}"
+    },
+    "publish": {
+      "publish": "Veröffentlichen",
+      "withdraw": "Zurückziehen",
+      "confirmPublish": "Eintrag veröffentlichen? Er ist dann ohne Anmeldung für alle sichtbar, inklusive seiner Bilder. Spätere Änderungen erscheinen sofort.",
+      "published": "Veröffentlicht",
+      "withdrawn": "Zurückgezogen",
+      "collectionNotPublic": "Die Sammlung ist nicht für öffentliche Seiten freigegeben.",
+      "publicSince": "Öffentlich seit {date}",
+      "publicNoPage": "Öffentlich seit {date} – noch auf keiner Seite eingebunden"
     }
   },
   "agents": {

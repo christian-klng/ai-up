@@ -49,13 +49,26 @@ export function processGraphToOutline(graph: ProcessGraph): string {
   return out.join("\n");
 }
 
-export function renderStructureMarkdown(def: StructureDefinition, answers: StructureAnswers, enrichment?: StructureEnrichment): string {
+export type StructureMarkdownOptions = {
+  /**
+   * Public post page (docs/eigene-seiten.md 7.3): no template intro or info texts (they address the
+   * author), no label headings above single values – the entry reads as an article.
+   */
+  post?: boolean;
+  /** Elements left out, e.g. the cover image a post page shows above the text. */
+  skipKeys?: ReadonlySet<string>;
+};
+
+export function renderStructureMarkdown(def: StructureDefinition, answers: StructureAnswers, enrichment?: StructureEnrichment, opts: StructureMarkdownOptions = {}): string {
   const parts: string[] = [];
-  if (def.intro?.trim()) parts.push(def.intro.trim());
+  if (def.intro?.trim() && !opts.post) parts.push(def.intro.trim());
+  // Single values read as prose on a post page; lists, boards and diagrams keep their label.
+  const heading = (label: string) => (opts.post ? "" : `## ${label}\n\n`);
 
   for (const el of visibleElements(def, answers)) {
+    if (opts.skipKeys?.has(el.key)) continue;
     if (el.type === "info") {
-      parts.push(el.body.trim());
+      if (!opts.post) parts.push(el.body.trim());
       continue;
     }
     const value = answers[el.key];
@@ -66,7 +79,7 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
       case "textarea":
       case "select": {
         if (typeof value !== "string" || !value.trim()) break;
-        parts.push(`## ${el.label}\n\n${value.trim()}`);
+        parts.push(`${heading(el.label)}${value.trim()}`);
         break;
       }
       case "chips": {
@@ -122,7 +135,7 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
         const v = value as ImageAnswer;
         const src = v.mediaId ? `/api/files/${v.mediaId}` : v.url;
         if (!src) break;
-        parts.push(`## ${el.label}\n\n![${v.alt ?? el.label}](${src})`);
+        parts.push(`${heading(el.label)}![${v.alt ?? el.label}](${src})`);
         break;
       }
       case "link": {
@@ -140,7 +153,7 @@ export function renderStructureMarkdown(def: StructureDefinition, answers: Struc
         const v = value as VideoAnswer;
         const href = v.mediaId ? `/api/files/${v.mediaId}` : v.url;
         if (!href) break;
-        parts.push(`## ${el.label}\n\n[${v.url ?? "Video"}](${href})`);
+        parts.push(`${heading(el.label)}[${v.url ?? "Video"}](${href})`);
         break;
       }
     }

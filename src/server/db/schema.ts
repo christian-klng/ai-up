@@ -300,16 +300,38 @@ export const communityDomains = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Landing page (singleton like app_settings; append-only versions, current = max version)
+// Site pages: the fixed landing/imprint/privacy plus up to five custom pages per community
+// (docs/eigene-seiten.md). Append-only versions, current = max version.
 // ---------------------------------------------------------------------------
+
+/** A custom public page at "/<slug>" – its content lives in landing_page_versions. */
+export const sitePages = pgTable(
+  "site_pages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
+    /** Path segment, see src/lib/site-pages.ts (pattern, reserved names) */
+    slug: text("slug").notNull(),
+    /** Name in the admin tabs and the public navigation */
+    title: text("title").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    showInNav: boolean("show_in_nav").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("site_pages_slug_idx").on(t.communityId, t.slug)],
+);
 
 export const landingPageVersions = pgTable(
   "landing_page_versions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     ...communityScope(),
-    /** Which public page this version belongs to: landing | imprint | privacy */
+    /** Which public page this version belongs to: landing | imprint | privacy | custom */
     page: text("page").notNull().default("landing"),
+    /** Set for page "custom" only; the versions go with the page. */
+    sitePageId: uuid("site_page_id").references(() => sitePages.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
     definition: jsonb("definition").$type<LandingDefinition>().notNull(),
     /** ui | mcp */
@@ -318,7 +340,10 @@ export const landingPageVersions = pgTable(
     changedBy: text("changed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("landing_page_versions_page_version_idx").on(t.communityId, t.page, t.version)],
+  (t) => [
+    uniqueIndex("landing_page_versions_page_version_idx").on(t.communityId, t.page, t.version).where(sql`${t.sitePageId} is null`),
+    uniqueIndex("landing_page_versions_site_page_version_idx").on(t.sitePageId, t.version).where(sql`${t.sitePageId} is not null`),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -1133,6 +1158,8 @@ export const knowledgeAreas = pgTable(
     /** member view entry order (pinned always first), see src/lib/collection-layouts.ts */
     sortMode: text("sort_mode").$type<CollectionSort>().notNull().default("updated"),
     sortOrder: integer("sort_order").notNull().default(0),
+    /** Published entries may appear on public pages (posts sections, docs/eigene-seiten.md 7). */
+    publicOnSite: boolean("public_on_site").notNull().default(false),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },
@@ -1245,6 +1272,10 @@ export const contents = pgTable(
     authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
     lastEditedBy: text("last_edited_by").references(() => users.id, { onDelete: "set null" }),
     pinned: boolean("pinned").notNull().default(false),
+    /** Set by an admin: shown on public pages while the collection is public_on_site (current version). */
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    /** Address on public pages; created at the first publish and kept when the title changes. */
+    slug: text("slug"),
     /** Denormalized text for search (title + body/url/preview) */
     searchText: text("search_text").notNull().default(""),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -1252,6 +1283,8 @@ export const contents = pgTable(
   },
   (t) => [
     index("contents_area_idx").on(t.areaId, t.createdAt),
+    uniqueIndex("contents_area_slug_idx").on(t.areaId, t.slug),
+    index("contents_published_idx").on(t.areaId, t.publishedAt),
     index("contents_type_idx").on(t.type),
     index("contents_author_idx").on(t.authorId),
   ],
@@ -1275,6 +1308,24 @@ export const contentVersions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("content_versions_content_no_idx").on(t.contentId, t.versionNo)],
+);
+
+/**
+ * Uploads the current version of an entry points at (its markdown and its media field). Lets
+ * /api/files decide with one indexed lookup whether a file belongs to a published entry – see
+ * isPublishedEntryMedia(). Rewritten with every version, backfilled when an entry is published.
+ */
+export const contentMedia = pgTable(
+  "content_media",
+  {
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contents.id, { onDelete: "cascade" }),
+    mediaId: uuid("media_id")
+      .notNull()
+      .references(() => mediaFiles.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.contentId, t.mediaId] }), index("content_media_media_idx").on(t.mediaId)],
 );
 
 export const evaluationStatusEnum = pgEnum("evaluation_status", ["pass", "fail", "error"]);
@@ -1456,6 +1507,7 @@ export type MemberStatus = CommunityMember["status"];
 export type CommunityInvite = typeof communityInvites.$inferSelect;
 export type CommunityDomain = typeof communityDomains.$inferSelect;
 export type LandingPageVersion = typeof landingPageVersions.$inferSelect;
+export type CustomSitePage = typeof sitePages.$inferSelect;
 export type MediaFile = typeof mediaFiles.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type ContactRequest = typeof contactRequests.$inferSelect;

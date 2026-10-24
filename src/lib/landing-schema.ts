@@ -284,6 +284,22 @@ const orderStatusSection = z.object({
   type: z.literal("order-status"),
 });
 
+/**
+ * Published entries of one collection (blog, changelog – docs/eigene-seiten.md 7). The collection must be
+ * public_on_site; which entries appear is decided by their publish state, not by the page.
+ */
+export const POSTS_LAYOUTS = ["cards", "list", "timeline"] as const;
+const postsSection = z.object({
+  type: z.literal("posts"),
+  title: z.string().trim().max(120).optional(),
+  intro: z.string().trim().max(400).optional(),
+  collectionId: z.string().uuid(),
+  layout: z.enum(POSTS_LAYOUTS).default("cards"),
+  limit: z.number().int().min(1).max(50).default(10),
+  /** Shown when nothing is published yet. */
+  emptyText: z.string().trim().min(1).max(200).optional(),
+});
+
 export const landingSectionSchema = z.discriminatedUnion("type", [
   heroSection,
   featuresSection,
@@ -296,7 +312,11 @@ export const landingSectionSchema = z.discriminatedUnion("type", [
   eventsSection,
   eventSection,
   orderStatusSection,
+  postsSection,
 ]);
+
+export type PostsSection = z.infer<typeof postsSection>;
+export type PostsLayout = (typeof POSTS_LAYOUTS)[number];
 
 /** Section types rendered by the event widgets. */
 export const EVENT_SECTION_TYPES = ["events", "event", "order-status"] as const;
@@ -369,6 +389,11 @@ export function usesEventSections(definition: LandingDefinition): boolean {
  */
 export function isFragmentHref(href: string): boolean {
   return href.startsWith("/") && href.includes("#");
+}
+
+/** Collections shown by the posts sections of a definition. */
+export function collectPostsCollectionIds(definition: LandingDefinition): string[] {
+  return [...new Set(definition.sections.flatMap((s) => (s.type === "posts" ? [s.collectionId] : [])))];
 }
 
 /** All media ids referenced by a definition (hero images, image sections, team portraits). */

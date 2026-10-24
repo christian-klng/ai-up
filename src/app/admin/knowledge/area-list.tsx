@@ -5,16 +5,16 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
-import { deleteAreaAction, moveAreaAction } from "@/server/actions/admin-knowledge";
+import { ArrowDown, ArrowUp, Globe, Pencil, Trash2 } from "lucide-react";
+import { deleteAreaAction, moveAreaAction, setCollectionPublicAction } from "@/server/actions/admin-knowledge";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { Button } from "@/components/ui/button";
 import { AreaDialog, type AreaFormValues } from "./area-dialog";
 import { AreaTemplatesDialog, type TemplateOption } from "./area-templates-dialog";
 
-type Area = AreaFormValues & { slug: string; contentCount: number; assignedTemplateIds: string[] };
+type Area = AreaFormValues & { slug: string; contentCount: number; assignedTemplateIds: string[]; publicOnSite: boolean };
 
-export function AreaList({ areas, templates }: { areas: Area[]; templates: TemplateOption[] }) {
+export function AreaList({ areas, templates, canPublish }: { areas: Area[]; templates: TemplateOption[]; canPublish: boolean }) {
   const t = useTranslations("admin.knowledge");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -41,11 +41,39 @@ export function AreaList({ areas, templates }: { areas: Area[]; templates: Templ
               ) : (
                 <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">{t("defaultTemplatesBadge")}</span>
               )}
+              {a.publicOnSite && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 text-xs text-amber-800 dark:text-amber-300">
+                  <Globe className="size-3" /> {t("publicBadge")}
+                </span>
+              )}
             </div>
             <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{a.purpose}</p>
           </div>
           <div className="flex items-center gap-1">
             <AreaTemplatesDialog areaId={a.id} areaName={a.name} templates={templates} assignedIds={a.assignedTemplateIds} />
+            {canPublish && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={a.publicOnSite ? t("makePrivate") : t("makePublic")}
+                title={a.publicOnSite ? t("makePrivate") : t("makePublic")}
+                aria-pressed={a.publicOnSite}
+                className={a.publicOnSite ? "text-amber-700 dark:text-amber-300" : undefined}
+                disabled={pending}
+                onClick={() => {
+                  if (!a.publicOnSite && !confirm(t("confirmPublic", { name: a.name }))) return;
+                  start(async () => {
+                    const res = await setCollectionPublicAction(a.id, !a.publicOnSite);
+                    if (res.ok) {
+                      toast.success(tc("saved"));
+                      router.refresh();
+                    } else toast.error(tc("unexpectedError"));
+                  });
+                }}
+              >
+                <Globe className="size-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" aria-label="up" disabled={pending || i === 0} onClick={() => start(async () => { await moveAreaAction(a.id, "up"); router.refresh(); })}>
               <ArrowUp className="size-4" />
             </Button>

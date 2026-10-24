@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { assertAdmin } from "@/server/auth/session";
+import { assertAdmin, assertPagesAdmin } from "@/server/auth/session";
 import { createArea, deleteArea, moveArea, updateArea } from "@/server/domain/knowledge";
+import { setCollectionPublic } from "@/server/domain/posts";
 import { isAreaIconKey } from "@/components/knowledge/area-icon";
 import { COLLECTION_LAYOUTS, COLLECTION_SORTS } from "@/lib/collection-layouts";
 
@@ -52,4 +53,12 @@ export async function moveAreaAction(id: string, direction: "up" | "down"): Prom
   const admin = await assertAdmin();
   await moveArea(admin.communityId, id, direction);
   revalidatePath("/", "layout");
+}
+
+/** Clears a collection for posts sections on public pages (only communities that own public pages). */
+export async function setCollectionPublicAction(id: string, value: boolean): Promise<{ ok: boolean }> {
+  const admin = await assertPagesAdmin();
+  const row = await setCollectionPublic(admin.communityId, z.string().uuid().parse(id), value, admin.id);
+  if (row) revalidatePath("/", "layout");
+  return { ok: Boolean(row) };
 }

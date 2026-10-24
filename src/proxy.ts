@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 import { canonicalHostRedirect } from "@/lib/community";
+import { isCustomPagePath } from "@/lib/site-pages";
 
 /**
  * Lightweight routing gate: redirects visitors without a session cookie to /login.
@@ -25,6 +26,9 @@ export function proxy(request: NextRequest) {
   if (pathname === "/" || PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }
+  // Custom pages ("/blog") and their posts ("/blog/<post>"): every one- or two-segment path whose
+  // first segment is not taken by the app. Whether the page exists decides the route (404 otherwise).
+  if (isCustomPagePath(pathname)) return NextResponse.next();
   const cookie = getSessionCookie(request);
   if (!cookie) {
     const url = new URL("/login", request.url);

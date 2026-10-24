@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { requireAdmin } from "@/server/auth/session";
+import { canManagePublicPages, requireAdmin } from "@/server/auth/session";
 import { listAreas } from "@/server/domain/knowledge";
 import { listAllAssignments, listTemplates } from "@/server/domain/templates";
 import { PageHeader } from "@/components/common/page-header";
@@ -8,7 +8,13 @@ import { AreaList } from "./area-list";
 
 export default async function AdminKnowledgePage() {
   const user = await requireAdmin();
-  const [t, areas, assignments, templates] = await Promise.all([getTranslations("admin.knowledge"), listAreas(user.communityId), listAllAssignments(user.communityId), listTemplates(user.communityId)]);
+  const [t, areas, assignments, templates, canPublish] = await Promise.all([
+    getTranslations("admin.knowledge"),
+    listAreas(user.communityId),
+    listAllAssignments(user.communityId),
+    listTemplates(user.communityId),
+    canManagePublicPages(user.communityId),
+  ]);
   return (
     <div className="max-w-4xl">
       <PageHeader title={t("title")} description={t("intro")} actions={<AreaDialog mode="create" />} />
@@ -23,8 +29,10 @@ export default async function AdminKnowledgePage() {
           layout: a.layout,
           sortMode: a.sortMode,
           contentCount: a.contentCount,
+          publicOnSite: a.publicOnSite,
           assignedTemplateIds: (assignments.get(a.id) ?? []).map((tpl) => tpl.id),
         }))}
+        canPublish={canPublish}
         templates={templates.map((tpl) => ({ id: tpl.id, name: tpl.name, icon: tpl.icon, isSystem: tpl.isSystem }))}
       />
     </div>

@@ -2,10 +2,12 @@ import Link from "next/link";
 import { ArrowUpRight, ChevronDown, MapPin } from "lucide-react";
 import { EventWidget, OrderReturnOnly, type EventWidgetSource } from "./event-widgets";
 import { FeaturePreview } from "./feature-previews";
+import { PostsSectionView, type PostsLabels } from "./posts-section";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
 import type { Community } from "@/server/db/schema";
 import { isFragmentHref, type LandingSection } from "@/lib/landing-schema";
+import type { PostFeed } from "@/server/domain/posts";
 import { Markdown } from "@/components/content/markdown";
 import { BrandLogo } from "@/components/shell/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -43,7 +45,7 @@ function WidgetNote({ text }: { text: string }) {
   );
 }
 
-export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string; teamDetails: string };
+export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string; teamDetails: string } & PostsLabels;
 
 /** Chevron of a `<details className="group">`; turns over while open. */
 function DisclosureChevron() {
@@ -60,6 +62,7 @@ export function LandingSectionView({
   path,
   settings,
   events,
+  posts,
   labels,
   editing,
 }: {
@@ -68,6 +71,8 @@ export function LandingSectionView({
   settings: Community;
   /** Source of the event widgets; null when this community has no event service */
   events: EventWidgetSource | null;
+  /** Server-resolved posts per collection id (resolvePostFeeds) */
+  posts?: Record<string, PostFeed>;
   labels: SectionLabels;
   /** Inline editor: FAQ answers render expanded (they must be clickable), widgets explain themselves */
   editing?: boolean;
@@ -357,6 +362,8 @@ export function LandingSectionView({
           <EventWidget source={events} tag="event-detail" attributes={{ slug: section.slug }} inert={editing} />
         </section>
       );
+    case "posts":
+      return <PostsSectionView section={section} path={path} feed={posts?.[section.collectionId]} labels={labels} editing={editing} />;
     case "order-status":
       // The editor has no purchase to show, and outside of it the section exists for buyers only.
       if (editing) return <WidgetNote text={events ? labels.orderStatusHint : labels.eventsUnavailable} />;

@@ -7,6 +7,7 @@ import { BrandLogo } from "@/components/shell/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { LandingSectionView, type SectionLabels } from "./sections";
+import type { PostFeed } from "@/server/domain/posts";
 
 export type LandingLabels = { toApp: string; signIn: string; register: string; menu: string } & SectionLabels;
 
@@ -21,7 +22,10 @@ export function LandingShell({
   signedIn,
   labels,
   eventsUrl,
+  nav = [],
+  posts,
   editing,
+  children,
 }: {
   definition: LandingDefinition;
   settings: Community;
@@ -29,8 +33,14 @@ export function LandingShell({
   labels: LandingLabels;
   /** Origin of the event service for this community (`getEventsWidgetUrl`); null = no event widgets */
   eventsUrl: string | null;
+  /** Custom pages marked for the navigation (listNavPages) */
+  nav?: { title: string; href: string }[];
+  /** Server-resolved posts per collection id for the posts sections (resolvePostFeeds) */
+  posts?: Record<string, PostFeed>;
   /** Inline-editor mode: FAQ items render expanded so their answers are clickable */
   editing?: boolean;
+  /** Replaces the sections, e.g. a single post – header, navigation and footer stay the page's */
+  children?: React.ReactNode;
 }) {
   const events = eventsUrl ? { url: eventsUrl, locale: eventWidgetLocale(settings.defaultLocale), texts: definition.eventTexts ?? {} } : null;
   return (
@@ -41,8 +51,17 @@ export function LandingShell({
             <BrandLogo settings={settings} size={28} />
             <span className="truncate font-semibold tracking-tight">{settings.name}</span>
           </Link>
+          {nav.length > 0 && (
+            <nav className="ml-2 hidden min-w-0 flex-1 items-center gap-1 md:flex">
+              {nav.map((item) => (
+                <Link key={item.href} href={item.href} className="truncate rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+                  {item.title}
+                </Link>
+              ))}
+            </nav>
+          )}
           {/* Desktop: inline buttons */}
-          <div className="hidden items-center gap-2 sm:flex">
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
             {signedIn ? (
               <Button asChild size="sm">
                 <Link href="/home">{labels.toApp}</Link>
@@ -61,7 +80,7 @@ export function LandingShell({
           {/* Mobile: burger menu so a long community name keeps the full width */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="sm:hidden" aria-label={labels.menu}>
+              <Button variant="ghost" size="icon" className={nav.length > 0 ? "md:hidden" : "sm:hidden"} aria-label={labels.menu}>
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
@@ -70,6 +89,15 @@ export function LandingShell({
                 <BrandLogo settings={settings} size={24} />
                 <span className="truncate">{settings.name}</span>
               </SheetTitle>
+              {nav.length > 0 && (
+                <nav className="mt-6 grid gap-1">
+                  {nav.map((item) => (
+                    <Link key={item.href} href={item.href} className="rounded-md px-2 py-2 text-sm hover:bg-muted">
+                      {item.title}
+                    </Link>
+                  ))}
+                </nav>
+              )}
               <nav className="mt-6 grid gap-2">
                 {signedIn ? (
                   <Button asChild>
@@ -92,9 +120,10 @@ export function LandingShell({
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6 lg:px-8">
-        {definition.sections.map((section, i) => (
-          <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} labels={labels} editing={editing} />
-        ))}
+        {children ??
+          definition.sections.map((section, i) => (
+            <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} posts={posts} labels={labels} editing={editing} />
+          ))}
       </main>
 
       <footer className="border-t py-8">

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { ArrowLeft, History, Pencil } from "lucide-react";
+import { ArrowLeft, Globe, History, Pencil } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
 import { getEvaluationSummary } from "@/server/domain/evaluation";
+import { findPostsPageSlug } from "@/server/domain/posts";
 import { whiteboardAuthorNames } from "@/server/whiteboards/access";
 import { env } from "@/server/env";
 import { ContentBody } from "@/components/content/content-body";
@@ -15,6 +16,7 @@ import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContentActions } from "./content-actions";
+import { PublishControl } from "./publish-control";
 
 export default async function ContentPage({ params }: PageProps<"/knowledge/[slug]/[contentId]">) {
   const user = await requireUser();
@@ -25,6 +27,9 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
   const v = content.version;
   const editable = canEditContent(user, content);
   const evaluation = await getEvaluationSummary(user.communityId, content.id, content.currentVersionId, v?.meta.structure?.structureId ?? null);
+  // Public collections: where a published entry can be read without an account.
+  const postsPage = area.publicOnSite && content.publishedAt ? await findPostsPageSlug(user.communityId, area.id) : null;
+  const publicHref = postsPage && content.slug ? `/${postsPage}/${content.slug}` : null;
 
   return (
     <article className="mx-auto max-w-3xl">
@@ -48,6 +53,7 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
                 </Link>
               </Button>
             )}
+            {area.publicOnSite && user.role === "admin" && <PublishControl contentId={content.id} published={Boolean(content.publishedAt)} />}
             {evaluation && (
               <EvaluationPopover
                 contentId={content.id}
@@ -62,6 +68,18 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
           <Badge variant="secondary">{t(`types.${content.type}`)}</Badge>
+          {area.publicOnSite && content.publishedAt && (
+            <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-800 dark:text-amber-300">
+              <Globe className="size-3" />
+              {publicHref ? (
+                <Link href={publicHref} target="_blank" className="hover:underline">
+                  {t("publish.publicSince", { date: format.dateTime(content.publishedAt, { dateStyle: "medium" }) })}
+                </Link>
+              ) : (
+                t("publish.publicNoPage", { date: format.dateTime(content.publishedAt, { dateStyle: "medium" }) })
+              )}
+            </Badge>
+          )}
           {content.author && (
             <span className="inline-flex items-center gap-1.5">
               <UserAvatar user={content.author} size={20} variant="thumb" />

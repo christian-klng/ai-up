@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import {
   auditLog,
+  contentMedia,
   contentVersions,
   contents,
   knowledgeAreas,
@@ -19,6 +20,7 @@ import { enqueueEvaluation } from "@/server/workflows/queue";
 import { syncLiveBoards } from "@/server/whiteboards/state";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
 import { flattenAnswersText } from "@/lib/structures/markdown";
+import { collectEntryMediaIds } from "@/lib/posts";
 import { slugify } from "@/lib/slug";
 
 // ---------------------------------------------------------------------------
@@ -199,6 +201,25 @@ async function contentEventPayload(content: Content, input: ContentVersionInput,
   };
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Rewrites the uploads an entry's current version points at (content_media) – the lookup
+ * /api/files uses to serve images of published posts without a session. Ids that are not an
+ * upload are dropped by the join instead of failing the foreign key.
+ */
+export async function refreshContentMedia(tx: Tx | typeof db, contentId: string, version: { bodyMarkdown: string | null; mediaId: string | null }): Promise<void> {
+  await tx.delete(contentMedia).where(eq(contentMedia.contentId, contentId));
+  const ids = collectEntryMediaIds(version.bodyMarkdown, version.mediaId);
+  if (ids.length === 0) return;
+  await tx.execute(
+    sql`insert into ${contentMedia} (content_id, media_id) select ${contentId}::uuid, ${mediaFiles.id} from ${mediaFiles} where ${mediaFiles.id} in (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}) on conflict do nothing`,
+  );
+}
+
 export async function createContent(
   communityId: string,
   areaId: string,
@@ -229,6 +250,7 @@ export async function createContent(
       })
       .returning();
     const [updated] = await tx.update(contents).set({ currentVersionId: version.id }).where(eq(contents.id, content.id)).returning();
+    await refreshContentMedia(tx, content.id, version);
     return updated;
   });
   emitDomainEvent("content.created", communityId, await contentEventPayload(result, input, 1, authorId, origin));
@@ -289,6 +311,7 @@ export async function addContentVersion(
       .set({ title: input.title.trim(), currentVersionId: version.id, versionCount: nextNo, lastEditedBy: editorId, searchText: buildSearchText(existing.type, input) })
       .where(eq(contents.id, contentId))
       .returning();
+    await refreshContentMedia(tx, contentId, version);
     return updated;
   });
   emitDomainEvent("content.updated", communityId, await contentEventPayload(result, input, nextNo, editorId, origin));

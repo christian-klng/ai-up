@@ -1,14 +1,38 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { landingPageVersions, mediaFiles, users, type Community, type LandingPageVersion, type MediaFile } from "@/server/db/schema";
-import { validateLandingDefinition, collectLandingMediaIds, usesEventSections, type LandingDefinition, type LandingValidationIssue, type SitePage } from "@/lib/landing-schema";
+import { knowledgeAreas, landingPageVersions, mediaFiles, sitePages, users, type Community, type LandingPageVersion, type MediaFile } from "@/server/db/schema";
+import {
+  validateLandingDefinition,
+  collectLandingMediaIds,
+  collectPostsCollectionIds,
+  usesEventSections,
+  type LandingDefinition,
+  type LandingValidationIssue,
+  type SitePage,
+} from "@/lib/landing-schema";
+import { RESERVED_PAGE_SLUGS } from "@/lib/site-pages";
 import { getEventsWidgetUrl } from "./integrations";
 
 /**
- * Public site pages domain (landing, imprint, privacy): one definition per page stored as
- * append-only versions (current = highest version, restore = copy-forward – same principle
- * as content/workflow versions). All pages share the schema and the "landing" image pool.
+ * Public site pages domain (landing, imprint, privacy and the custom pages of site-pages.ts): one
+ * definition per page stored as append-only versions (current = highest version, restore =
+ * copy-forward – same principle as content/workflow versions). All pages share the schema and the
+ * "landing" image pool.
  */
+
+/** Which page a version belongs to: one of the three fixed pages or a custom page (by id). */
+export type PageRef = SitePage | { sitePageId: string };
+
+function pageWhere(communityId: string, ref: PageRef): SQL | undefined {
+  return typeof ref === "string"
+    ? and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, ref), isNull(landingPageVersions.sitePageId))
+    : and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.sitePageId, ref.sitePageId));
+}
+
+/** Short form for logs and audit details. */
+export function pageLabel(ref: PageRef): string {
+  return typeof ref === "string" ? ref : `custom:${ref.sitePageId}`;
+}
 
 export type LandingVersionListItem = Pick<LandingPageVersion, "id" | "version" | "source" | "changeNote" | "createdAt"> & {
   changedByName: string | null;
@@ -24,20 +48,15 @@ export function pageEnabledColumn(page: SitePage): "landingEnabled" | "imprintEn
   return page === "landing" ? "landingEnabled" : page === "imprint" ? "imprintEnabled" : "privacyEnabled";
 }
 
-export async function getCurrentLandingVersion(communityId: string, page: SitePage): Promise<LandingPageVersion | undefined> {
-  return db.query.landingPageVersions.findFirst({
-    where: and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, page)),
-    orderBy: desc(landingPageVersions.version),
-  });
+export async function getCurrentLandingVersion(communityId: string, page: PageRef): Promise<LandingPageVersion | undefined> {
+  return db.query.landingPageVersions.findFirst({ where: pageWhere(communityId, page), orderBy: desc(landingPageVersions.version) });
 }
 
-export async function getLandingVersion(communityId: string, page: SitePage, version: number): Promise<LandingPageVersion | undefined> {
-  return db.query.landingPageVersions.findFirst({
-    where: and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, page), eq(landingPageVersions.version, version)),
-  });
+export async function getLandingVersion(communityId: string, page: PageRef, version: number): Promise<LandingPageVersion | undefined> {
+  return db.query.landingPageVersions.findFirst({ where: and(pageWhere(communityId, page), eq(landingPageVersions.version, version)) });
 }
 
-export async function listLandingVersions(communityId: string, page: SitePage, limit = 50): Promise<LandingVersionListItem[]> {
+export async function listLandingVersions(communityId: string, page: PageRef, limit = 50): Promise<LandingVersionListItem[]> {
   const rows = await db
     .select({
       id: landingPageVersions.id,
@@ -49,7 +68,7 @@ export async function listLandingVersions(communityId: string, page: SitePage, l
     })
     .from(landingPageVersions)
     .leftJoin(users, eq(users.id, landingPageVersions.changedBy))
-    .where(and(eq(landingPageVersions.communityId, communityId), eq(landingPageVersions.page, page)))
+    .where(pageWhere(communityId, page))
     .orderBy(desc(landingPageVersions.version))
     .limit(limit);
   return rows;
@@ -82,7 +101,7 @@ export type SaveLandingResult =
 /** Validates and appends a new version for one page (hard gate for UI and MCP alike). */
 export async function saveLandingVersion(
   communityId: string,
-  page: SitePage,
+  page: PageRef,
   definition: unknown,
   actorId: string,
   source: "ui" | "mcp",
@@ -98,7 +117,7 @@ export async function saveLandingVersion(
 /** Restores an older version by copying it forward as a new version (history stays intact). */
 export async function restoreLandingVersion(
   communityId: string,
-  page: SitePage,
+  page: PageRef,
   version: number,
   actorId: string,
   source: "ui" | "mcp",
@@ -109,14 +128,16 @@ export async function restoreLandingVersion(
   return insertNextVersion(communityId, page, v.definition, actorId, source, note ?? `restored version ${version}`);
 }
 
-async function insertNextVersion(communityId: string, page: SitePage, definition: LandingDefinition, actorId: string, source: "ui" | "mcp", changeNote: string | null) {
-  // The unique index on (community, page, version) catches concurrent writers; one retry is enough here.
+async function insertNextVersion(communityId: string, page: PageRef, definition: LandingDefinition, actorId: string, source: "ui" | "mcp", changeNote: string | null) {
+  const target = typeof page === "string" ? { page, sitePageId: null } : { page: "custom", sitePageId: page.sitePageId };
+  // The unique indexes on (community, page, version) resp. (site page, version) catch concurrent
+  // writers; one retry is enough here.
   for (let attempt = 0; ; attempt++) {
     const current = await getCurrentLandingVersion(communityId, page);
     try {
       const [row] = await db
         .insert(landingPageVersions)
-        .values({ communityId, page, version: (current?.version ?? 0) + 1, definition, source, changeNote, changedBy: actorId })
+        .values({ communityId, ...target, version: (current?.version ?? 0) + 1, definition, source, changeNote, changedBy: actorId })
         .returning();
       return row;
     } catch (err) {
@@ -127,8 +148,13 @@ async function insertNextVersion(communityId: string, page: SitePage, definition
 
 /** Everything that is valid but would not show on the public page. */
 export async function landingWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
-  const [media, events] = await Promise.all([mediaWarnings(definition), eventWarnings(communityId, definition)]);
-  return [...media, ...events];
+  const [media, events, posts, links] = await Promise.all([
+    mediaWarnings(definition),
+    eventWarnings(communityId, definition),
+    postsWarnings(communityId, definition),
+    linkWarnings(communityId, definition),
+  ]);
+  return [...media, ...events, ...posts, ...links];
 }
 
 /** Warns about referenced media that will not load on a public page (wrong purpose or missing). */
@@ -156,4 +182,60 @@ async function eventWarnings(communityId: string, definition: LandingDefinition)
   if (!usesEventSections(definition)) return [];
   if (await getEventsWidgetUrl(communityId)) return [];
   return ["the page uses event sections (events, event, order-status), but no event service is connected for this community – these sections stay invisible until the operator connects one under Admin → Integrations"];
+}
+
+/** Posts sections need a collection of this community that is cleared for public pages. */
+async function postsWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
+  const ids = collectPostsCollectionIds(definition);
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ id: knowledgeAreas.id, name: knowledgeAreas.name, publicOnSite: knowledgeAreas.publicOnSite })
+    .from(knowledgeAreas)
+    .where(and(eq(knowledgeAreas.communityId, communityId), inArray(knowledgeAreas.id, ids)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const warnings: string[] = [];
+  for (const id of ids) {
+    const area = byId.get(id);
+    if (!area) warnings.push(`posts section: collection ${id} does not exist in this community – the section stays invisible`);
+    else if (!area.publicOnSite) {
+      warnings.push(`posts section: collection "${area.name}" is not shown on public pages – switch "Show on public pages" on under Admin → Collections (MCP: set_collection_public), otherwise the section stays invisible`);
+    }
+  }
+  return warnings;
+}
+
+/** Internal hrefs of a definition (buttons, footer, team links). */
+function internalHrefs(definition: LandingDefinition): string[] {
+  const hrefs: string[] = definition.footer.links.map((l) => l.href);
+  for (const s of definition.sections) {
+    if (s.type === "hero") hrefs.push(...[s.primaryCta?.href, s.secondaryCta?.href].filter((h): h is string => Boolean(h)));
+    if (s.type === "cta") hrefs.push(s.button.href);
+    if (s.type === "team") for (const m of s.members) hrefs.push(...m.links.map((l) => l.href));
+  }
+  return hrefs.filter((h) => h.startsWith("/") && !h.startsWith("//"));
+}
+
+/**
+ * Links to custom pages ("/blog", "/blog/some-post") whose page is missing or switched off – footer
+ * links are free hrefs and would otherwise break silently when a page is renamed or disabled.
+ */
+async function linkWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
+  const slugs = new Set<string>();
+  for (const href of internalHrefs(definition)) {
+    const first = href.split(/[?#]/)[0].split("/")[1];
+    if (first && !RESERVED_PAGE_SLUGS.has(first)) slugs.add(first);
+  }
+  if (slugs.size === 0) return [];
+  const rows = await db
+    .select({ slug: sitePages.slug, enabled: sitePages.enabled })
+    .from(sitePages)
+    .where(and(eq(sitePages.communityId, communityId), inArray(sitePages.slug, [...slugs])));
+  const bySlug = new Map(rows.map((r) => [r.slug, r.enabled]));
+  const warnings: string[] = [];
+  for (const slug of slugs) {
+    const enabled = bySlug.get(slug);
+    if (enabled === undefined) warnings.push(`link to "/${slug}": there is no page with this address – the link leads to "not found"`);
+    else if (!enabled) warnings.push(`link to "/${slug}": the page is switched off – the link leads to "not found" until it is published`);
+  }
+  return warnings;
 }

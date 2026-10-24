@@ -14,6 +14,7 @@ import {
   type ContentVersionInput,
 } from "@/server/domain/knowledge";
 import { getMedia } from "@/server/media/storage";
+import { setContentPublished } from "@/server/domain/posts";
 import { fetchLinkPreview } from "@/server/webreader/link-preview";
 import { assertPublicUrl } from "@/server/webreader/safe-fetch";
 import type { ContentVersionMeta } from "@/server/db/schema";
@@ -168,4 +169,14 @@ export async function togglePinAction(contentId: string, pinned: boolean): Promi
   if (user.role !== "admin") return;
   await setContentPinned(user.communityId, contentId, pinned);
   revalidatePath("/", "layout");
+}
+
+/** Publishes or withdraws an entry of a public collection (admins only, docs/eigene-seiten.md 7.2). */
+export async function setPublishedAction(contentId: string, published: boolean): Promise<{ ok: true } | { ok: false; error?: "collection_not_public" }> {
+  const user = await assertUser();
+  if (user.role !== "admin") return { ok: false };
+  const res = await setContentPublished(user.communityId, z.string().uuid().parse(contentId), published, user.id);
+  if (!res.ok) return { ok: false, error: res.error === "collection_not_public" ? "collection_not_public" : undefined };
+  revalidatePath("/", "layout");
+  return { ok: true };
 }

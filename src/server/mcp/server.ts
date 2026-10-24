@@ -16,8 +16,12 @@ import { getMeetingInvite, setInviteEnabled } from "@/server/domain/invites";
 import { db } from "@/server/db/client";
 import { auditLog } from "@/server/db/schema";
 import { ROOT_COMMUNITY_ID, loadCommunity, updateCommunity } from "@/server/domain/communities";
-import { getCurrentLandingVersion, isPageEnabled, landingWarnings, listLandingMedia, listLandingVersions, pageEnabledColumn, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
-import { EVENT_TEXT_KEYS, LANDING_ICONS, LANDING_PREVIEWS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
+import { getCurrentLandingVersion, isPageEnabled, landingWarnings, listLandingMedia, listLandingVersions, pageEnabledColumn, pageLabel, restoreLandingVersion, saveLandingVersion } from "@/server/domain/landing";
+import { createSitePageWithSetup, fixedPageUrl, listSitePages, resolvePage, setSitePageEnabled, updateSitePageSettings, type ResolvedPage, type SitePageError } from "@/server/domain/site-pages";
+import { findPostsPageSlug, setCollectionPublic, setContentPublished } from "@/server/domain/posts";
+import { canManagePublicPages } from "@/server/auth/session";
+import { MAX_CUSTOM_PAGES, RESERVED_PAGE_SLUGS, SITE_PAGE_KINDS } from "@/lib/site-pages";
+import { EVENT_TEXT_KEYS, LANDING_ICONS, LANDING_PREVIEWS, POSTS_LAYOUTS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { importImageFromUrl } from "@/server/media/import-image";
@@ -152,7 +156,8 @@ come from the app theme automatically: write copy, don't style.
     { "type": "events", "title": "optional", "intro": "optional", "when": "upcoming | past | all",
       "format": "optional: online | onsite", "limit": 6, "emptyText": "optional, shown when there is nothing to list" },
     { "type": "event", "slug": "slug of one event" },
-    { "type": "order-status" }
+    { "type": "order-status" },
+    { "type": "posts", "title": "optional", "intro": "optional", "collectionId": "uuid", "layout": "cards | list | timeline", "limit": 10, "emptyText": "optional" }
   ],
   "eventTexts": { "buy": "optional – replaces single texts of the event sections, see below" },
   "footer": { "text": "optional", "links": [ { "label": "Impressum", "href": "https://…" } ] }
@@ -202,6 +207,31 @@ Events (seminars and workshops with ticket sales)
   ${EVENT_TEXT_KEYS.join(", ")}. "priceFrom" must keep the placeholder "{price}". Everything else keeps the
   wording of the event service. Use the same texts on every page that shows event sections.
 - Do not describe events by hand in markdown or features sections – dates and prices would go stale.
+Custom pages (up to ${MAX_CUSTOM_PAGES} per community, on top of landing, imprint and privacy)
+- Each custom page lives at "/<slug>" and uses the same format, versioning and image pool. list_pages shows
+  all pages; create_page makes a new one (switched off, kind blank | features | blog | changelog),
+  update_page_settings changes title, slug, navigation flag and order. Deleting is only possible in the
+  admin UI. Every tool taking "page" accepts "landing", "imprint", "privacy" or a custom page's slug.
+- Slugs: lowercase letters, digits and single hyphens; addresses the app uses itself are reserved:
+  ${[...RESERVED_PAGE_SLUGS].join(", ")}.
+- Pages with showInNav appear as links in the header of all public pages (in admin order). Footer links
+  are part of each definition – link custom pages there as "/<slug>". Warnings report links to pages that
+  are missing or switched off.
+
+Posts (blog, changelog)
+- A "posts" section lists the published entries of one collection, newest first: layout "cards" (title,
+  date, teaser, cover image – a blog), "list" (title and date), "timeline" (date beside the full text – a
+  changelog). "limit" is the page size; older posts follow on "?page=2". Each post has its own page at
+  "/<page slug>/<post slug>", and every page with posts has an RSS feed at "/<page slug>/feed.xml".
+- Two keys must turn before anything is public: the collection is cleared for public pages
+  (set_collection_public, or the globe button under Admin → Collections) and an admin published the entry
+  (set_entry_published, or "Publish" on the entry). Write posts as entries with create_entry/update_entry
+  (resource aiup://docs/collections); published entries show their current version immediately.
+- A post page reads the entry as an article: the first image element becomes the cover, text elements
+  appear without their label, lists and boards keep it. Template intros and info texts are left out.
+- create_page with kind "blog" or "changelog" sets all of this up: a public collection, a template
+  (cover, teaser, text resp. summary and changes) and the posts section.
+- posts layouts: ${POSTS_LAYOUTS.join(", ")}.
 - Pages are monolingual – write them in the community's language (see current app context below).
 - Every update creates a new version per page (traceable, restorable). Validate first with validate_page.
 - A page only goes public when the admin (or set_page_enabled) turns it on; each page has its own flag.
@@ -335,6 +365,18 @@ A template can carry qualitative criteria that an LLM checks against every entry
 - save_template carries the evaluation for custom templates; set_template_evaluation also works for the
   system templates (their definition is seed-managed, their criteria are not).
 - get_entry returns the stored verdicts of the entry's current version.
+
+## Public posts (blog, changelog)
+
+A collection with publicOnSite (list_collections) feeds the posts sections of public pages – see resource
+aiup://docs/pages. Its entries stay members-only until published one by one:
+
+- set_collection_public (scope landing:write) clears or withdraws the whole collection.
+- set_entry_published (scope knowledge:write) publishes or withdraws one entry. Published entries are
+  readable without sign-in, including the uploads they show; edits appear immediately. The address slug
+  is made from the title at the first publish and kept afterwards.
+- list_entries/get_entry report publishedAt; get_entry also the public address (publicUrl).
+- Members may write into a public collection – nothing of theirs is public until an admin publishes it.
 `;
 
 /** Current templates and collections appended to the doc so the calling LLM knows ids, slugs and versions. */
@@ -402,12 +444,17 @@ async function collectionsContext(cid: string): Promise<string> {
 async function pagesContext(cid: string): Promise<string> {
   const [settings, eventsUrl] = await Promise.all([loadCommunity(cid), getEventsWidgetUrl(cid)]);
   if (!settings) return "## Current app context\n- community not found";
-  const perPage = await Promise.all(
-    SITE_PAGES.map(async (page) => {
+  const custom = await listSitePages(cid);
+  const perPage = await Promise.all([
+    ...SITE_PAGES.map(async (page) => {
       const current = await getCurrentLandingVersion(cid, page);
-      return `- page "${page}": enabled ${isPageEnabled(settings, page)}, current version ${current?.version ?? "none (no content yet)"}`;
+      return `- page "${page}" (${fixedPageUrl(page)}): enabled ${isPageEnabled(settings, page)}, current version ${current?.version ?? "none (no content yet)"}`;
     }),
-  );
+    ...custom.map(async (p) => {
+      const current = await getCurrentLandingVersion(cid, { sitePageId: p.id });
+      return `- custom page "${p.slug}" (/${p.slug}, title "${p.title}"): enabled ${p.enabled}, in navigation ${p.showInNav}, current version ${current?.version ?? "none"}`;
+    }),
+  ]);
   return [
     "## Current app context",
     `- name: ${settings.name}`,
@@ -417,6 +464,7 @@ async function pagesContext(cid: string): Promise<string> {
     `- logo uploaded: ${settings.logoMediaId ? "yes" : "no"}`,
     `- default locale: ${settings.defaultLocale}`,
     `- event service: ${eventsUrl ? `connected (${eventsUrl}) – event sections are available` : "not connected – event sections stay invisible (the operator connects one under Admin → Integrations)"}`,
+    `- custom pages: ${custom.length} of ${MAX_CUSTOM_PAGES} used`,
     ...perPage,
   ].join("\n");
 }
@@ -693,15 +741,39 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text(await workflowStats(cid, id ?? null, days ?? 14));
   });
 
-  // ---- site pages (landing, imprint, privacy) -------------------------------
-  const pageParam = z.enum(SITE_PAGES).describe("landing | imprint | privacy");
-  server.registerTool("get_page", { title: "Pages - Get content", description: "Current definition, enabled state and version of one public page (landing at \"/\", imprint at /imprint, privacy at /privacy). Read resource aiup://docs/pages for the format and design rules.", inputSchema: { page: pageParam } }, async ({ page }) => {
+  // ---- site pages (landing, imprint, privacy + custom pages) -----------------
+  const pageParam = z.string().min(1).max(60).describe('"landing" | "imprint" | "privacy", or the slug of a custom page (list_pages)');
+  const SITE_PAGE_ERRORS: Record<SitePageError, string> = {
+    page_limit: `there are already ${MAX_CUSTOM_PAGES} custom pages – the limit per community`,
+    slug_invalid: "slug must be lowercase letters, digits and single hyphens (max 60)",
+    slug_reserved: "the app uses this address itself – pick another slug",
+    slug_taken: "another page already has this slug",
+    title_invalid: "title is missing or longer than 40 characters",
+    definition_invalid: "definition is invalid",
+  };
+  const findPage = async (name: string): Promise<ResolvedPage | undefined> => {
+    const community = await loadCommunity(cid);
+    return community ? resolvePage(community, name) : undefined;
+  };
+  server.registerTool("list_pages", { title: "Pages - List pages", description: "All public pages: the fixed landing, imprint and privacy pages plus the custom pages (slug, title, address, switches, current version) and how many custom pages are still free.", inputSchema: {} }, async () => {
     require(auth, "landing:read");
-    const [settings, current] = await Promise.all([loadCommunity(cid), getCurrentLandingVersion(cid, page)]);
-    if (!settings) return fail("community not found");
-    return text({ page, enabled: isPageEnabled(settings, page), version: current?.version ?? null, definition: current?.definition ?? null });
+    const community = await loadCommunity(cid);
+    if (!community) return fail("community not found");
+    const custom = await listSitePages(cid);
+    const pages = await Promise.all([
+      ...SITE_PAGES.map(async (p) => ({ page: p, kind: "fixed", url: fixedPageUrl(p), enabled: (await resolvePage(community, p))?.enabled ?? false, version: (await getCurrentLandingVersion(cid, p))?.version ?? null })),
+      ...custom.map(async (p) => ({ page: p.slug, kind: "custom", title: p.title, url: `/${p.slug}`, enabled: p.enabled, showInNav: p.showInNav, sortOrder: p.sortOrder, version: (await getCurrentLandingVersion(cid, { sitePageId: p.id }))?.version ?? null })),
+    ]);
+    return text({ pages, customPagesFree: Math.max(0, MAX_CUSTOM_PAGES - custom.length), maxCustomPages: MAX_CUSTOM_PAGES });
   });
-  server.registerTool("validate_page", { title: "Pages - Validate", description: "Dry-run validation of a page definition against the shared section schema. Returns issues without saving, plus warnings about things that would not show on the public page (missing images, event sections without a connected event service).", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
+  server.registerTool("get_page", { title: "Pages - Get content", description: "Current definition, enabled state and version of one public page: landing at \"/\", imprint at /imprint, privacy at /privacy, custom pages at /<slug>. Read resource aiup://docs/pages for the format and design rules.", inputSchema: { page: pageParam } }, async ({ page }) => {
+    require(auth, "landing:read");
+    const found = await findPage(page);
+    if (!found) return fail(`page "${page}" not found – list_pages shows all pages`);
+    const current = await getCurrentLandingVersion(cid, found.ref);
+    return text({ page: found.name, url: found.url, title: found.sitePage?.title, showInNav: found.sitePage?.showInNav, enabled: found.enabled, version: current?.version ?? null, definition: current?.definition ?? null });
+  });
+  server.registerTool("validate_page", { title: "Pages - Validate", description: "Dry-run validation of a page definition against the shared section schema. Returns issues without saving, plus warnings about things that would not show on the public page (missing images, event sections without a connected event service, posts sections without a public collection, links to missing or disabled pages).", inputSchema: { definition: z.record(z.string(), z.unknown()) } }, async ({ definition }) => {
     const res = validateLandingDefinition(definition);
     return text(res.ok ? { ...res, warnings: await landingWarnings(cid, res.definition) } : res);
   });
@@ -710,31 +782,88 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     { title: "Pages - Update", description: "Validates and saves the full definition of one page as a new version (append-only history per page; restore is always possible). Does not change the enabled flag.", inputSchema: { page: pageParam, definition: z.record(z.string(), z.unknown()), changeNote: z.string().max(300).optional() } },
     async ({ page, definition, changeNote }) => {
       require(auth, "landing:write");
-      const res = await saveLandingVersion(cid, page, definition, auth.user.id, "mcp", changeNote);
+      const found = await findPage(page);
+      if (!found) return fail(`page "${page}" not found – create custom pages with create_page`);
+      const res = await saveLandingVersion(cid, found.ref, definition, auth.user.id, "mcp", changeNote);
       if (!res.ok) return fail(JSON.stringify({ issues: res.issues }, null, 2));
-      await audit(auth, "landing.updated", res.row.id, { page, version: res.row.version }, "landing");
-      return text({ page, version: res.row.version, warnings: res.warnings });
+      await audit(auth, "landing.updated", res.row.id, { page: pageLabel(found.ref), version: res.row.version }, "landing");
+      return text({ page: found.name, version: res.row.version, warnings: res.warnings });
     },
   );
   server.registerTool("list_page_versions", { title: "Pages - List versions", description: "Version history of one page (source ui/mcp, change notes).", inputSchema: { page: pageParam } }, async ({ page }) => {
     require(auth, "landing:read");
-    const versions = await listLandingVersions(cid, page);
+    const found = await findPage(page);
+    if (!found) return fail(`page "${page}" not found`);
+    const versions = await listLandingVersions(cid, found.ref);
     return text(versions.map((v) => ({ version: v.version, source: v.source, changeNote: v.changeNote, changedBy: v.changedByName, createdAt: v.createdAt })));
   });
   server.registerTool("restore_page_version", { title: "Pages - Restore version", description: "Copies an older version of one page forward as its new current version (history stays intact).", inputSchema: { page: pageParam, version: z.number().int().min(1) } }, async ({ page, version }) => {
     require(auth, "landing:write");
-    const row = await restoreLandingVersion(cid, page, version, auth.user.id, "mcp");
+    const found = await findPage(page);
+    if (!found) return fail(`page "${page}" not found`);
+    const row = await restoreLandingVersion(cid, found.ref, version, auth.user.id, "mcp");
     if (!row) return fail("version not found");
-    await audit(auth, "landing.restored", row.id, { page, restored: version, newVersion: row.version }, "landing");
-    return text({ page, version: row.version });
+    await audit(auth, "landing.restored", row.id, { page: pageLabel(found.ref), restored: version, newVersion: row.version }, "landing");
+    return text({ page: found.name, version: row.version });
   });
-  server.registerTool("set_page_enabled", { title: "Pages - Enable or disable", description: "Turns one public page on or off. Landing off: \"/\" redirects to login resp. the app home; imprint/privacy off: 404.", inputSchema: { page: pageParam, enabled: z.boolean() } }, async ({ page, enabled }) => {
+  server.registerTool("set_page_enabled", { title: "Pages - Enable or disable", description: "Turns one public page on or off. Landing off: \"/\" redirects to login resp. the app home; every other page answers 404 while off.", inputSchema: { page: pageParam, enabled: z.boolean() } }, async ({ page, enabled }) => {
     require(auth, "landing:write");
-    if (enabled && !(await getCurrentLandingVersion(cid, page))) return fail(`no content for page "${page}" yet – create a version with update_page first`);
-    await updateCommunity(cid, { [pageEnabledColumn(page)]: enabled });
-    await audit(auth, "settings.page.toggled", cid, { page, enabled }, "settings");
-    return text({ page, enabled });
+    const found = await findPage(page);
+    if (!found) return fail(`page "${page}" not found`);
+    if (enabled && !(await getCurrentLandingVersion(cid, found.ref))) return fail(`no content for page "${page}" yet – create a version with update_page first`);
+    if (typeof found.ref === "string") await updateCommunity(cid, { [pageEnabledColumn(found.ref)]: enabled });
+    else await setSitePageEnabled(cid, found.ref.sitePageId, enabled);
+    await audit(auth, "settings.page.toggled", cid, { page: pageLabel(found.ref), enabled }, "settings");
+    return text({ page: found.name, enabled });
   });
+  server.registerTool(
+    "create_page",
+    {
+      title: "Pages - Create custom page",
+      description: `Creates a custom public page at "/<slug>" (switched off; at most ${MAX_CUSTOM_PAGES} per community). kind "blog"/"changelog" also creates a collection cleared for public pages with a matching template and a posts section; "blank"/"features" start with simple sections. Pass a definition to start with your own content instead of the starter.`,
+      inputSchema: {
+        slug: z.string().describe("path segment, lowercase letters, digits and single hyphens; addresses the app uses itself are reserved"),
+        title: z.string().describe("name in the navigation and admin tabs, max 40"),
+        kind: z.enum(SITE_PAGE_KINDS).optional().describe("blank (default) | features | blog | changelog"),
+        showInNav: z.boolean().optional(),
+        definition: z.record(z.string(), z.unknown()).optional().describe("optional first version; replaces the starter content"),
+      },
+    },
+    async ({ slug, title, kind, showInNav, definition }) => {
+      require(auth, "landing:write");
+      const community = await loadCommunity(cid);
+      if (!community) return fail("community not found");
+      if (!(await canManagePublicPages(cid))) return fail("this community has no host of its own and cannot publish pages");
+      const res = await createSitePageWithSetup(community, kind ?? "blank", { slug, title, showInNav }, auth.user.id, "mcp");
+      if (!res.ok) return fail(SITE_PAGE_ERRORS[res.error]);
+      let version = 1;
+      let warnings: string[] = [];
+      if (definition) {
+        const saved = await saveLandingVersion(cid, { sitePageId: res.page.id }, definition, auth.user.id, "mcp", "initial content");
+        if (!saved.ok) return fail(JSON.stringify({ created: res.page.slug, note: "page created with starter content, your definition was rejected", issues: saved.issues }, null, 2));
+        version = saved.row.version;
+        warnings = saved.warnings;
+      }
+      return text({ page: res.page.slug, url: `/${res.page.slug}`, enabled: false, version, collectionId: res.collectionId ?? null, warnings, next: "set_page_enabled to publish it" });
+    },
+  );
+  server.registerTool(
+    "update_page_settings",
+    {
+      title: "Pages - Update custom page settings",
+      description: "Title, slug, navigation flag and order of a custom page. Merge semantics: omitted fields keep their value. Changing the slug breaks old links.",
+      inputSchema: { page: pageParam, title: z.string().optional(), slug: z.string().optional(), showInNav: z.boolean().optional(), sortOrder: z.number().int().min(0).max(100).optional() },
+    },
+    async ({ page, ...patch }) => {
+      require(auth, "landing:write");
+      const found = await findPage(page);
+      if (!found?.sitePage) return fail(`custom page "${page}" not found`);
+      const res = await updateSitePageSettings(cid, found.sitePage.id, patch, auth.user.id);
+      if (!res) return fail(`custom page "${page}" not found`);
+      if (!res.ok) return fail(SITE_PAGE_ERRORS[res.error]);
+      return text({ page: res.page.slug, url: `/${res.page.slug}`, title: res.page.title, showInNav: res.page.showInNav, sortOrder: res.page.sortOrder });
+    },
+  );
   server.registerTool("list_page_media", { title: "Pages - List media", description: "Publicly served images usable on all site pages (reference them as mediaId; one shared pool). Upload new ones under Admin → Web pages.", inputSchema: {} }, async () => {
     require(auth, "landing:read");
     const media = await listLandingMedia(cid);
@@ -790,7 +919,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     return text(
       areas.map((a) => {
         const assigned = assignments.get(a.id);
-        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, layout: a.layout, sortMode: a.sortMode, entryCount: a.contentCount, templates: assigned?.length ? assigned : "system-defaults" };
+        return { id: a.id, slug: a.slug, name: a.name, purpose: a.purpose, description: a.description, layout: a.layout, sortMode: a.sortMode, entryCount: a.contentCount, publicOnSite: a.publicOnSite, templates: assigned?.length ? assigned : "system-defaults" };
       }),
     );
   });
@@ -906,6 +1035,31 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
 
   server.registerTool(
+    "set_collection_public",
+    { title: "Collections - Show on public pages", description: "Clears a collection for posts sections on public pages (blog, changelog) or withdraws that. Only entries published one by one (set_entry_published) become visible; switching it off hides all of them at once.", inputSchema: { collection: collectionInput, public: z.boolean() } },
+    async ({ collection, public: value }) => {
+      require(auth, "landing:write");
+      if (!(await canManagePublicPages(cid))) return fail("this community has no host of its own and cannot publish pages");
+      const area = await resolveArea(collection);
+      if (!area) return fail("collection not found");
+      await setCollectionPublic(cid, area.id, value, auth.user.id);
+      return text({ collectionId: area.id, publicOnSite: value });
+    },
+  );
+  server.registerTool(
+    "set_entry_published",
+    { title: "Collections - Publish entry", description: "Publishes an entry of a public collection (visible without sign-in on every page whose posts section shows the collection, including its images; later edits appear immediately) or withdraws it. The address slug is made at the first publish and kept.", inputSchema: { id: z.string().uuid(), published: z.boolean() } },
+    async ({ id, published }) => {
+      require(auth, "knowledge:write");
+      const res = await setContentPublished(cid, id, published, auth.user.id);
+      if (!res.ok) return fail(res.error === "collection_not_public" ? "the collection is not shown on public pages – set_collection_public first" : "entry not found");
+      const content = await getContent(cid, id);
+      const postsPage = res.publishedAt && content ? await findPostsPageSlug(cid, content.areaId) : null;
+      return text({ id, publishedAt: res.publishedAt, slug: res.slug, publicUrl: postsPage && res.slug ? `/${postsPage}/${res.slug}` : null, note: postsPage || !res.publishedAt ? undefined : "no published page has a posts section for this collection yet" });
+    },
+  );
+
+  server.registerTool(
     "list_entries",
     { title: "Collections - List entries", description: "Entries of a collection (newest first), optionally filtered by type or full-text query.", inputSchema: { collection: collectionInput, type: z.enum(["markdown", "image", "video", "link", "structured"]).optional(), query: z.string().optional(), limit: z.number().int().min(1).max(200).optional(), offset: z.number().int().min(0).optional() } },
     async ({ collection, type, query, limit, offset }) => {
@@ -913,7 +1067,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       const area = await resolveArea(collection);
       if (!area) return fail("collection not found");
       const items = await listContents(cid, { areaId: area.id, type, query, limit: limit ?? 50, offset });
-      return text(items.map((c) => ({ id: c.id, type: c.type, title: c.title, pinned: c.pinned, versionCount: c.versionCount, author: c.author?.name ?? null, structureVersion: c.version?.meta.structure?.structureVersion ?? null, hasImage: c.media?.kind === "image", updatedAt: c.updatedAt })));
+      return text(items.map((c) => ({ id: c.id, type: c.type, title: c.title, pinned: c.pinned, publishedAt: c.publishedAt, versionCount: c.versionCount, author: c.author?.name ?? null, structureVersion: c.version?.meta.structure?.structureVersion ?? null, hasImage: c.media?.kind === "image", updatedAt: c.updatedAt })));
     },
   );
 
@@ -923,6 +1077,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
     if (!c) return fail("entry not found");
     const area = await getAreaById(cid, c.areaId);
     const s = c.version?.meta.structure;
+    const postsPage = area?.publicOnSite && c.publishedAt && c.slug ? await findPostsPageSlug(cid, area.id) : null;
     return text({
       id: c.id,
       collectionId: c.areaId,
@@ -930,6 +1085,8 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       type: c.type,
       title: c.title,
       pinned: c.pinned,
+      publishedAt: c.publishedAt,
+      publicUrl: postsPage ? `/${postsPage}/${c.slug}` : null,
       versionCount: c.versionCount,
       author: c.author?.name ?? null,
       url: c.version?.url ?? null,

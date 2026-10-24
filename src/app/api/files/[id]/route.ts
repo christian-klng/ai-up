@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import { getAccount } from "@/server/auth/session";
 import { getMembership } from "@/server/domain/communities";
 import { absolutePath, getMedia } from "@/server/media/storage";
+import { isPublishedEntryMedia } from "@/server/domain/posts";
 import { PUBLIC_MEDIA_PURPOSES, mediaAccess } from "@/lib/media-access";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +23,17 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">
   const media = await getMedia(id);
   if (!media) return new Response("not found", { status: 404 });
 
+  // Images of published posts are public as long as a post shows them (docs/eigene-seiten.md 7.4);
+  // asked only when the membership rule says no, so members keep their private caching.
+  let publishedPost = false;
   if (!PUBLIC_MEDIA_PURPOSES.has(media.purpose)) {
     const user = await getAccount();
     const membership = user && media.communityId ? await getMembership(media.communityId, user.id) : undefined;
     const access = mediaAccess(media, user ? { signedIn: true, active: user.status === "active", memberOfCommunity: membership?.status === "active" } : { signedIn: false });
-    if (access === "unauthorized") return new Response("unauthorized", { status: 401 });
-    if (access === "notFound") return new Response("not found", { status: 404 });
+    if (access !== "allow") {
+      publishedPost = await isPublishedEntryMedia(media.id);
+      if (!publishedPost) return new Response(access === "unauthorized" ? "unauthorized" : "not found", { status: access === "unauthorized" ? 401 : 404 });
+    }
   }
 
   const variant = req.nextUrl.searchParams.get("v") ?? undefined;
@@ -39,7 +45,8 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">
   const mime = variant && media.variants[variant] ? "image/webp" : media.mime;
   const headers = new Headers({
     "Content-Type": mime,
-    "Cache-Control": PUBLIC_MEDIA_PURPOSES.has(media.purpose) ? "public, max-age=31536000, immutable" : "private, max-age=3600",
+    // Post images stay public only while their post is published: short, revalidated cache.
+    "Cache-Control": PUBLIC_MEDIA_PURPOSES.has(media.purpose) ? "public, max-age=31536000, immutable" : publishedPost ? "public, max-age=300" : "private, max-age=3600",
     "Content-Disposition": `inline; filename="${encodeURIComponent(media.originalName)}"`,
     "X-Content-Type-Options": "nosniff",
     "Accept-Ranges": "bytes",
