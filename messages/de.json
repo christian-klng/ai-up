@@ -1376,28 +1376,7 @@
       },
       "transcribingBadge": "Live-Transkript",
       "captureBoth": "Aufzeichnung + Live-Transkript",
-      "transcribingHint": "Das Gespräch wird live transkribiert und gespeichert.",
-      "noiseFilter": {
-        "title": "Rauschunterdrückung",
-        "close": "Schließen",
-        "hint": "Filtert dein Mikrofon, bevor der Ton gesendet wird – die anderen hören den Unterschied, du selbst nicht. Die Auswahl gilt für dieses Gerät.",
-        "levels": {
-          "standard": {
-            "label": "Standard",
-            "description": "Nur der Filter des Browsers. Schont schwache Geräte."
-          },
-          "medium": {
-            "label": "Mittel",
-            "description": "KI-Filter (DeepFilterNet3) dämpft Tippen, Lüfter und Straßenlärm deutlich."
-          },
-          "strong": {
-            "label": "Stark",
-            "description": "Entfernt Hintergrundgeräusche fast vollständig. Für laute Umgebungen; die Stimme kann etwas glatter klingen."
-          }
-        },
-        "loading": "Filter wird geladen – beim ersten Mal rund 24 MB, danach aus dem Zwischenspeicher.",
-        "failed": "Der Rauschfilter läuft auf diesem Gerät nicht. Es gilt der Filter des Browsers."
-      }
+      "transcribingHint": "Das Gespräch wird live transkribiert und gespeichert."
     },
     "confirmDelete": "Dieses Meeting wirklich löschen?",
     "deleted": "Meeting gelöscht.",
