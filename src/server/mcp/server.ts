@@ -374,7 +374,8 @@ aiup://docs/pages. Its entries stay members-only until published one by one:
 - set_collection_public (scope landing:write) clears or withdraws the whole collection.
 - set_entry_published (scope knowledge:write) publishes or withdraws one entry. Published entries are
   readable without sign-in, including the uploads they show; edits appear immediately. The address slug
-  is made from the title at the first publish and kept afterwards.
+  is made from the title at the first publish and kept afterwards. publishedAt (optional, not in the
+  future) sets the date the post shows and is sorted by – use it for past releases or imported articles.
 - list_entries/get_entry report publishedAt; get_entry also the public address (publicUrl).
 - Members may write into a public collection – nothing of theirs is public until an admin publishes it.
 `;
@@ -1048,10 +1049,21 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
   );
   server.registerTool(
     "set_entry_published",
-    { title: "Collections - Publish entry", description: "Publishes an entry of a public collection (visible without sign-in on every page whose posts section shows the collection, including its images; later edits appear immediately) or withdraws it. The address slug is made at the first publish and kept.", inputSchema: { id: z.string().uuid(), published: z.boolean() } },
-    async ({ id, published }) => {
+    {
+      title: "Collections - Publish entry",
+      description:
+        "Publishes an entry of a public collection (visible without sign-in on every page whose posts section shows the collection, including its images; later edits appear immediately) or withdraws it. The address slug is made at the first publish and kept. publishedAt back-dates the post – e.g. the day of a changelog release; posts are listed by this date.",
+      inputSchema: {
+        id: z.string().uuid(),
+        published: z.boolean(),
+        publishedAt: z.string().datetime({ offset: true }).optional().describe("ISO 8601, not in the future; default: now for a first publish, the stored date for a re-publish"),
+      },
+    },
+    async ({ id, published, publishedAt }) => {
       require(auth, "knowledge:write");
-      const res = await setContentPublished(cid, id, published, auth.user.id);
+      const date = publishedAt ? new Date(publishedAt) : undefined;
+      if (date && date.getTime() > Date.now() + 60_000) return fail("publishedAt must not be in the future");
+      const res = await setContentPublished(cid, id, published, auth.user.id, { publishedAt: date });
       if (!res.ok) return fail(res.error === "collection_not_public" ? "the collection is not shown on public pages – set_collection_public first" : "entry not found");
       const content = await getContent(cid, id);
       const postsPage = res.publishedAt && content ? await findPostsPageSlug(cid, content.areaId) : null;

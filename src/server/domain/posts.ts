@@ -45,12 +45,15 @@ export type PublishError = "not_found" | "collection_not_public";
 /**
  * Publishes or withdraws an entry. Publishing needs a public collection; withdrawing always works.
  * The slug is made once and kept, so a published address survives later title changes.
+ * `publishedAt` back-dates the post (changelog releases, imported articles); without it a first
+ * publish takes the current time and a re-publish keeps the stored date.
  */
 export async function setContentPublished(
   communityId: string,
   contentId: string,
   published: boolean,
   actorId: string,
+  opts: { publishedAt?: Date } = {},
 ): Promise<{ ok: true; publishedAt: Date | null; slug: string | null; areaSlug: string } | { ok: false; error: PublishError }> {
   const content = await getContent(communityId, contentId);
   if (!content) return { ok: false, error: "not_found" };
@@ -58,7 +61,7 @@ export async function setContentPublished(
   if (!area) return { ok: false, error: "not_found" };
   if (published && !area.publicOnSite) return { ok: false, error: "collection_not_public" };
   const slug = published ? (content.slug ?? (await uniquePostSlug(area.id, content.title))) : content.slug;
-  const publishedAt = published ? (content.publishedAt ?? new Date()) : null;
+  const publishedAt = published ? (opts.publishedAt ?? content.publishedAt ?? new Date()) : null;
   await db.transaction(async (tx) => {
     await tx.update(contents).set({ publishedAt, slug }).where(eq(contents.id, contentId));
     // Entries written before content_media existed have no rows yet.
