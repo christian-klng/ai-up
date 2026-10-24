@@ -63,7 +63,7 @@ export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recor
   const connectedHere = room !== null && activeCall?.meetingId === meetingId;
 
   return (
-    <div className="relative -my-6 h-[calc(100svh-3.5rem)] bg-black/95" data-lk-theme="default">
+    <div className="relative -my-6 h-[calc(100svh-3.5rem)]" data-lk-theme="aiup">
       <div className="pointer-events-none absolute left-3 top-3 z-10 [&>*]:pointer-events-auto">
         {connectedHere ? (
           <RoomContext.Provider value={room}>
@@ -84,7 +84,7 @@ export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recor
           )}
         </RoomContext.Provider>
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-white/60">
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-6 animate-spin" />
           {t("connecting")}
         </div>

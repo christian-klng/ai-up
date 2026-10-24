@@ -213,3 +213,78 @@ event-order-status,
 .ev-detail__description :is(h1, h2, h3, h4) {
   font-weight: 600;
 }
+/*
+ * Call UI (LiveKit components, src/components/meetings/meeting-call.tsx): our own theme instead of
+ * LiveKit's dark "default", derived from the app tokens so the call sits on the page background like
+ * every other view. Outside of any @layer for the same reason as the event widgets: LiveKit's styles
+ * are unlayered. Video itself stays on black (LiveKit hard-codes that for letterboxing).
+ */
+[data-lk-theme="aiup"] {
+  --lk-bg: var(--background);
+  --lk-bg2: color-mix(in oklch, var(--foreground) 4%, var(--background));
+  --lk-bg3: color-mix(in oklch, var(--foreground) 8%, var(--background));
+  --lk-bg4: color-mix(in oklch, var(--foreground) 12%, var(--background));
+  --lk-bg5: color-mix(in oklch, var(--foreground) 16%, var(--background));
+  --lk-fg: var(--foreground);
+  --lk-fg2: var(--foreground);
+  --lk-fg3: var(--foreground);
+  --lk-fg4: var(--muted-foreground);
+  --lk-fg5: var(--muted-foreground);
+  --lk-border-color: var(--border);
+  --lk-accent-fg: var(--primary-foreground);
+  --lk-accent-bg: var(--primary);
+  --lk-accent2: color-mix(in oklch, var(--primary) 88%, var(--background));
+  --lk-accent3: color-mix(in oklch, var(--primary) 76%, var(--background));
+  --lk-accent4: color-mix(in oklch, var(--primary) 12%, var(--background));
+  --lk-danger-fg: #fff;
+  --lk-danger: var(--destructive);
+  --lk-danger2: color-mix(in oklch, var(--destructive) 88%, var(--background));
+  --lk-danger3: color-mix(in oklch, var(--destructive) 76%, var(--background));
+  --lk-danger4: color-mix(in oklch, var(--destructive) 64%, var(--background));
+  --lk-success-fg: #fff;
+  --lk-success: oklch(0.627 0.17 149);
+  --lk-success2: oklch(0.6 0.16 149);
+  --lk-success3: oklch(0.56 0.15 149);
+  --lk-success4: oklch(0.52 0.14 149);
+  --lk-control-fg: var(--foreground);
+  --lk-control-bg: var(--lk-bg2);
+  --lk-control-hover-bg: var(--lk-bg3);
+  --lk-control-active-bg: var(--lk-bg4);
+  --lk-control-active-hover-bg: var(--lk-bg5);
+  --lk-connection-excellent: oklch(0.627 0.17 149);
+  --lk-connection-good: oklch(0.769 0.165 70);
+  --lk-connection-poor: var(--destructive);
+  --lk-font-family: var(--font-sans);
+  --lk-font-size: 0.875rem;
+  --lk-line-height: 1.5;
+  --lk-border-radius: var(--radius);
+  --lk-box-shadow: 0 0.5rem 1.5rem oklch(0 0 0 / 0.12);
+  --lk-drop-shadow: oklch(0 0 0 / 0.15) 0px 0px 24px;
+  --lk-grid-gap: 0.5rem;
+  --lk-control-bar-height: 69px;
+  --lk-chat-header-height: 69px;
+}
+/* Speaking ring in the live green of the sidebar dot instead of the (near black) primary. */
+[data-lk-theme="aiup"] .lk-participant-tile::after {
+  border-color: var(--lk-success);
+}
+/* Name, mute icon and focus button sit on a dark scrim over the video – keep them light. */
+[data-lk-theme="aiup"] .lk-participant-metadata-item,
+[data-lk-theme="aiup"] .lk-focus-toggle-button {
+  color: #fff;
+}
+/* The leave button is outlined red; give it the page background instead of the gray control fill. */
+[data-lk-theme="aiup"] .lk-disconnect-button {
+  background-color: var(--background);
+}
+/* LiveKit draws these two SVGs in hard-coded white, made for its dark theme. */
+[data-lk-theme="aiup"] .lk-chat-header .lk-close-button path {
+  fill: currentColor;
+}
+[data-lk-theme="aiup"] .lk-participant-tile .lk-participant-placeholder {
+  background-color: var(--lk-bg3);
+}
+/* Camera off: no black video backdrop peeking out at the rounded corners of the placeholder. */
+[data-lk-theme="aiup"] .lk-participant-tile[data-lk-video-muted="true"] .lk-participant-media-video {
+  background-color: transparent;
+}
