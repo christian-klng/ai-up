@@ -1,8 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { COMMUNITY_COOKIE, COMMUNITY_COOKIE_OPTIONS } from "@/lib/community";
 import { getAccount } from "@/server/auth/session";
 import { getCommunityBySlug, getMembership } from "@/server/domain/communities";
 import { primaryHostOf } from "@/server/domain/community-domains";
+import { redirectHere } from "@/server/redirect-here";
 
 export const dynamic = "force-dynamic";
 
@@ -21,22 +22,20 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest, ctx: RouteContext<"/c/[slug]/[[...rest]]">) {
   const { slug, rest } = await ctx.params;
   const path = `/${(rest ?? []).map(encodeURIComponent).join("/")}`.replace(/^\/$/, "/home");
-  const target = new URL(path + req.nextUrl.search, req.url);
+  const target = path + req.nextUrl.search;
 
   const community = await getCommunityBySlug(slug);
-  if (!community) return NextResponse.redirect(new URL("/home", req.url));
+  if (!community) return redirectHere("/home");
 
   // A community with its own domain is reached there, not through the prefix: the hand-off carries
   // the session across, because a cookie does not cross a registrable domain.
   const own = await primaryHostOf(community.id);
   if (own) {
-    const handoff = new URL("/auth/handoff", req.url);
-    handoff.searchParams.set("to", own);
-    handoff.searchParams.set("next", path + req.nextUrl.search);
-    return NextResponse.redirect(handoff);
+    const handoff = new URLSearchParams({ to: own, next: target });
+    return redirectHere(`/auth/handoff?${handoff}`);
   }
 
-  const res = NextResponse.redirect(target);
+  const res = redirectHere(target);
   const account = await getAccount();
   if (account) {
     const membership = await getMembership(community.id, account.id);

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/server/auth/auth";
 import { env } from "@/server/env";
 import { logger } from "@/server/logger";
+import { redirectHere } from "@/server/redirect-here";
 
 export const dynamic = "force-dynamic";
 
@@ -25,23 +26,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const { token } = await params;
   const raw = req.nextUrl.searchParams.get("next") ?? "/home";
   const next = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/home";
-  if (!env.COMMUNITY_CUSTOM_DOMAINS) return redirectHere("/login");
+  if (!env.COMMUNITY_CUSTOM_DOMAINS) return redirectHere("/login", 303);
 
   let consumed: Response;
   try {
     consumed = await auth.api.handoffConsume({ body: { token }, headers: await headers(), asResponse: true });
   } catch (err) {
     logger.warn({ err }, "handoff: redeeming failed");
-    return redirectHere("/login");
+    return redirectHere("/login", 303);
   }
-  if (!consumed.ok) return redirectHere("/login");
+  if (!consumed.ok) return redirectHere("/login", 303);
 
-  const res = redirectHere(next);
+  const res = redirectHere(next, 303);
   for (const cookie of consumed.headers.getSetCookie()) res.headers.append("set-cookie", cookie);
   return res;
-}
-
-/** A redirect that stays on whatever host the browser asked for. */
-function redirectHere(path: string): Response {
-  return new Response(null, { status: 303, headers: { location: path } });
 }

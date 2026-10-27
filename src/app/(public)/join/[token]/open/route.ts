@@ -1,8 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { COMMUNITY_COOKIE, COMMUNITY_COOKIE_OPTIONS } from "@/lib/community";
 import { getAccount } from "@/server/auth/session";
 import { getMembership } from "@/server/domain/communities";
 import { resolveCommunityInvite } from "@/server/domain/community-invites";
+import { redirectHere } from "@/server/redirect-here";
 
 export const dynamic = "force-dynamic";
 
@@ -12,18 +13,14 @@ export const dynamic = "force-dynamic";
  * cannot write cookies – and landing on the app with the previous community still selected would be
  * exactly the confusing part.
  */
-export async function GET(req: NextRequest, ctx: RouteContext<"/join/[token]/open">) {
+export async function GET(_req: NextRequest, ctx: RouteContext<"/join/[token]/open">) {
   const { token } = await ctx.params;
   const resolved = await resolveCommunityInvite(token);
   const account = await getAccount();
-  if (!resolved || !account || account.status !== "active") {
-    return NextResponse.redirect(new URL(`/join/${encodeURIComponent(token)}`, req.url));
-  }
+  if (!resolved || !account || account.status !== "active") return redirectHere(`/join/${encodeURIComponent(token)}`);
   const membership = await getMembership(resolved.community.id, account.id);
-  if (membership?.status !== "active") {
-    return NextResponse.redirect(new URL(`/join/${encodeURIComponent(token)}`, req.url));
-  }
-  const res = NextResponse.redirect(new URL("/home", req.url));
+  if (membership?.status !== "active") return redirectHere(`/join/${encodeURIComponent(token)}`);
+  const res = redirectHere("/home");
   res.cookies.set(COMMUNITY_COOKIE, resolved.community.id, COMMUNITY_COOKIE_OPTIONS);
   return res;
 }

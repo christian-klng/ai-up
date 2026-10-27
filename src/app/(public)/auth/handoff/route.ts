@@ -7,6 +7,7 @@ import { communityIdForHost } from "@/server/domain/community-domains";
 import { getMembership } from "@/server/domain/communities";
 import { env } from "@/server/env";
 import { logger } from "@/server/logger";
+import { redirectHere } from "@/server/redirect-here";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
  * token must never sit in a page that could be cached or reloaded.
  */
 export async function GET(req: NextRequest) {
-  if (!env.COMMUNITY_CUSTOM_DOMAINS) return redirectHere("/home");
+  if (!env.COMMUNITY_CUSTOM_DOMAINS) return redirectHere("/home", 303);
 
   const to = normalizeHost(req.nextUrl.searchParams.get("to"));
   // Only ever a path inside the app: `//evil.example` would be read as a host by the browser, and
@@ -29,15 +30,15 @@ export async function GET(req: NextRequest) {
   const account = await getAccount();
   if (!account) {
     const back = `/auth/handoff?to=${encodeURIComponent(to)}&next=${encodeURIComponent(next)}`;
-    return redirectHere(`/login?next=${encodeURIComponent(back)}`);
+    return redirectHere(`/login?next=${encodeURIComponent(back)}`, 303);
   }
 
   // The host has to be a verified domain, and the account has to belong to the community behind it.
   // Otherwise this would hand a session to a community someone has no business being signed in to.
   const communityId = await communityIdForHost(to);
-  if (!communityId) return redirectHere("/home");
+  if (!communityId) return redirectHere("/home", 303);
   const membership = await getMembership(communityId, account.id);
-  if (!membership || membership.status !== "active") return redirectHere("/home");
+  if (!membership || membership.status !== "active") return redirectHere("/home", 303);
 
   try {
     const { token } = await auth.api.handoffStart({ body: { host: to }, headers: await headers() });
@@ -47,15 +48,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(target);
   } catch (err) {
     logger.error({ err, host: to }, "handoff: could not mint a token");
-    return redirectHere("/home");
+    return redirectHere("/home", 303);
   }
-}
-
-/**
- * A redirect that stays on whatever host the browser asked for. `NextRequest.url` carries the app's
- * configured origin, not the requested host, so an absolute URL built from it would move the visitor
- * to the main domain whenever this runs on a community's own one.
- */
-function redirectHere(path: string): Response {
-  return new Response(null, { status: 303, headers: { location: path } });
 }
