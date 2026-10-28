@@ -37,6 +37,12 @@ export async function listSpaces(communityId: string): Promise<SpaceWithStats[]>
   return rows.map((r) => ({ ...r.space, meetingCount: r.meetingCount, liveCount: r.liveCount }));
 }
 
+/** How many spaces a community has – the space is only worth showing on a meeting when there is a choice. */
+export async function countSpaces(communityId: string): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(meetingSpaces).where(eq(meetingSpaces.communityId, communityId));
+  return row?.n ?? 0;
+}
+
 export async function getSpaceBySlug(communityId: string, slug: string): Promise<MeetingSpace | undefined> {
   return db.query.meetingSpaces.findFirst({ where: and(eq(meetingSpaces.communityId, communityId), eq(meetingSpaces.slug, slug)) });
 }

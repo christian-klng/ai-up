@@ -102,8 +102,11 @@ export async function MeetingDateRow({ startsAt, status }: { startsAt: Date | nu
   );
 }
 
-/** The fact list of the details card. `spaceHref` links the space for members; the public page passes none. */
-export async function MeetingFacts({ startsAt, startedAt, kind, recordingEnabled, liveTranscription = false, status, endedAt, participantCount, space, spaceHref }: { startsAt: Date | null; /** actual start of a live/ended call, shown when no date was planned */ startedAt?: Date | null; kind: MeetingKind; recordingEnabled: boolean; /** the call is transcribed live (docs/live-ki-agenten.md) – told before joining, like the recording */ liveTranscription?: boolean; status: MeetingStatus; endedAt?: Date | null; participantCount?: number; space: { name: string; icon: string }; spaceHref?: string }) {
+/**
+ * The fact list of the details card. `space` is left out when the community has only one space (it
+ * says nothing then); `spaceHref` links it for members, the public page passes none.
+ */
+export async function MeetingFacts({ startsAt, startedAt, kind, recordingEnabled, liveTranscription = false, status, endedAt, participantCount, space, spaceHref }: { startsAt: Date | null; /** actual start of a live/ended call, shown when no date was planned */ startedAt?: Date | null; kind: MeetingKind; recordingEnabled: boolean; /** the call is transcribed live (docs/live-ki-agenten.md) – told before joining, like the recording */ liveTranscription?: boolean; status: MeetingStatus; endedAt?: Date | null; participantCount?: number; space?: { name: string; icon: string }; spaceHref?: string }) {
   const [t, format] = await Promise.all([getTranslations("meetings"), getFormatter()]);
   return (
     <div className="grid gap-3">
@@ -113,15 +116,17 @@ export async function MeetingFacts({ startsAt, startedAt, kind, recordingEnabled
         {kind !== "protocol" && <div className="text-xs text-muted-foreground">{recordingEnabled ? t("recordingOn") : t("recordingOff")}</div>}
         {kind !== "protocol" && status !== "ended" && liveTranscription && <div className="text-xs text-muted-foreground">{t("liveTranscriptionOn")}</div>}
       </FactRow>
-      <FactRow icon={<AreaIcon icon={space.icon} className="size-4" />}>
-        {spaceHref ? (
-          <Link href={spaceHref} className="font-medium text-primary hover:underline">
-            {space.name}
-          </Link>
-        ) : (
-          <span>{space.name}</span>
-        )}
-      </FactRow>
+      {space && (
+        <FactRow icon={<AreaIcon icon={space.icon} className="size-4" />}>
+          {spaceHref ? (
+            <Link href={spaceHref} className="underline-offset-4 hover:underline">
+              {space.name}
+            </Link>
+          ) : (
+            <span>{space.name}</span>
+          )}
+        </FactRow>
+      )}
       {status === "live" && participantCount !== undefined && (
         <FactRow icon={<Users className="size-4" aria-hidden />}>
           <span className="text-emerald-700 dark:text-emerald-300">{t("participants", { count: participantCount })}</span>

@@ -6,6 +6,7 @@ import { LinkIcon } from "lucide-react";
 import { getAccount, getPublicCommunity } from "@/server/auth/session";
 import { getMembership } from "@/server/domain/communities";
 import { resolveInvite, type ResolvedInvite } from "@/server/domain/invites";
+import { countSpaces } from "@/server/domain/meetings";
 import { getMedia } from "@/server/media/storage";
 import { env } from "@/server/env";
 import { markdownToPlainText } from "@/lib/meetings";
@@ -94,7 +95,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
               <CardDescription>{t("intro")}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <MeetingFacts startsAt={meeting.startsAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} liveTranscription={await isLiveTranscriptionAvailable(resolved.communityId)} status={meeting.status} space={space} />
+              <MeetingFacts startsAt={meeting.startsAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} liveTranscription={await isLiveTranscriptionAvailable(resolved.communityId)} status={meeting.status} space={(await countSpaces(resolved.communityId)) > 1 ? space : undefined} />
               <Separator />
               {account ? <MeetingJoinButton token={token} /> : <InviteForm token={token} loginHref={`/login?next=${encodeURIComponent(resolved.href)}`} />}
             </CardContent>

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { ArrowLeft, ChevronRight, History } from "lucide-react";
 import { requireUser } from "@/server/auth/session";
-import { canEditMeeting, getMeeting, getSpaceBySlug, listParticipants, listRecordings } from "@/server/domain/meetings";
+import { canEditMeeting, countSpaces, getMeeting, getSpaceBySlug, listParticipants, listRecordings } from "@/server/domain/meetings";
 import { getLiveKitConfig } from "@/server/domain/integrations";
 import { getMeetingInvite, markInviteLanded, meetingHref, pendingInviteRedirect } from "@/server/domain/invites";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
   const [space, meeting] = await Promise.all([getSpaceBySlug(user.communityId, slug), getMeeting(user.communityId, id)]);
   if (!space || !meeting || meeting.spaceId !== space.id) notFound();
   const isAdmin = user.role === "admin";
-  const [t, format, participants, recordings, lk, invite, liveTranscription] = await Promise.all([
+  const [t, format, participants, recordings, lk, invite, liveTranscription, spaceCount] = await Promise.all([
     getTranslations("meetings"),
     getFormatter(),
     listParticipants(meeting.id),
@@ -41,6 +41,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
     getLiveKitConfig(),
     isAdmin ? getMeetingInvite(meeting.id) : Promise.resolve(undefined),
     isLiveTranscriptionAvailable(user.communityId),
+    countSpaces(user.communityId),
   ]);
   const editable = canEditMeeting(user, meeting);
   // An invited member arriving at their meeting has reached the target – no redirect from /home later.
@@ -94,7 +95,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/meetings
           <>
             <Card>
               <CardContent className="grid gap-4">
-                <MeetingFacts startsAt={meeting.startsAt} startedAt={meeting.startedAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} liveTranscription={liveTranscription} status={meeting.status} endedAt={meeting.endedAt} participantCount={meeting.participantCount} space={space} spaceHref={`/meetings/${space.slug}`} />
+                <MeetingFacts startsAt={meeting.startsAt} startedAt={meeting.startedAt} kind={meeting.kind} recordingEnabled={meeting.recordingEnabled} liveTranscription={liveTranscription} status={meeting.status} endedAt={meeting.endedAt} participantCount={meeting.participantCount} space={spaceCount > 1 ? space : undefined} spaceHref={`/meetings/${space.slug}`} />
                 {callKind && (
                   <>
                     <Separator />
