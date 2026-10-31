@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
 import { ParticipantKind, RoomEvent, Track } from "livekit-client";
 import {
   CarouselLayout,
-  Chat,
   ConnectionStateToast,
-  ControlBar,
   FocusLayout,
   FocusLayoutContainer,
   GridLayout,
@@ -20,6 +17,7 @@ import {
   type TrackReferenceOrPlaceholder,
   type WidgetState,
 } from "@livekit/components-react";
+import { CallChat, CallControlBar } from "./call-controls";
 
 function sameTrack(a: TrackReferenceOrPlaceholder | undefined, b: TrackReferenceOrPlaceholder | undefined): boolean {
   if (!a || !b) return false;
@@ -30,14 +28,13 @@ function sameTrack(a: TrackReferenceOrPlaceholder | undefined, b: TrackReference
  * LiveKit's `VideoConference` prefab (components-react 2.9), rebuilt for one change: agent participants
  * get no tile. The live listener (docs/live-ki-agenten.md) joins as an agent without camera and would
  * otherwise show up as an empty placeholder tile. Everything else follows the prefab: grid, auto-focus on
- * screen share, pinning, chat, control bar. Leaving through the control bar asks first – one stray click
- * on the red button used to drop people out of the call.
+ * screen share, pinning, chat, control bar – the last two in our own versions with translated texts
+ * (call-controls.tsx).
  *
  * No `RoomAudioRenderer` here: CallProvider already renders one for the shared room, a second one would
  * play every voice twice.
  */
 export function VideoConference() {
-  const t = useTranslations("meetings.call");
   const [widgetState, setWidgetState] = useState<WidgetState>({ showChat: false, unreadMessages: 0, showSettings: false });
   const lastAutoFocused = useRef<TrackReferenceOrPlaceholder | null>(null);
 
@@ -72,17 +69,7 @@ export function VideoConference() {
   }, [screenShareKey, focusTrack?.publication?.trackSid, tracks]);
 
   return (
-    <div
-      className="lk-video-conference"
-      // The prefab's leave button disconnects in its own onClick; stopping the click in the capture
-      // phase keeps it from ever getting there when the confirmation is declined.
-      onClickCapture={(e) => {
-        if ((e.target as HTMLElement).closest(".lk-disconnect-button") && !confirm(t("confirmLeave"))) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-      }}
-    >
+    <div className="lk-video-conference">
       <LayoutContextProvider value={layoutContext} onWidgetChange={setWidgetState}>
         <div className="lk-video-conference-inner">
           {!focusTrack ? (
@@ -101,9 +88,9 @@ export function VideoConference() {
               </FocusLayoutContainer>
             </div>
           )}
-          <ControlBar controls={{ chat: true, settings: false }} />
+          <CallControlBar controls={{ microphone: true, camera: true, screenShare: true, chat: true }} />
         </div>
-        <Chat style={{ display: widgetState.showChat ? "grid" : "none" }} />
+        <CallChat style={{ display: widgetState.showChat ? "grid" : "none" }} />
       </LayoutContextProvider>
       <ConnectionStateToast />
     </div>

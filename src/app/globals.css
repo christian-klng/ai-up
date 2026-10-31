@@ -288,3 +288,50 @@ event-order-status,
 [data-lk-theme="aiup"] .lk-participant-tile[data-lk-video-muted="true"] .lk-participant-media-video {
   background-color: transparent;
 }
+/*
+ * Chat layout in the call. LiveKit's chat is a fixed ~55ch column and below 600px viewport width an
+ * overlay pinned to the top of the window – next to our sidebar that left the video a few hundred
+ * pixels. Here it follows the call area instead (container `call` on the wrapper in meeting-call.tsx,
+ * so the sidebar counts): a slimmer column beside the video from 900px, below the video when the area
+ * is narrower but tall (tablet portrait, phone). Narrow and short (phone landscape) leaves no room for
+ * either – the control bar alone needs ~380px – so there the chat lies over the video, above the
+ * control bar. Toggling stays with the chat button in the control bar.
+ */
+.aiup-call {
+  container: call / size;
+}
+.aiup-call .lk-chat {
+  position: relative;
+  inset: auto;
+  width: 20rem;
+  max-width: none;
+  flex-shrink: 0;
+}
+@container call (width < 900px) and (height >= 480px) {
+  .aiup-call .lk-video-conference {
+    flex-direction: column;
+  }
+  .aiup-call .lk-video-conference-inner {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .aiup-call .lk-chat {
+    --lk-chat-header-height: 2.75rem;
+    width: 100%;
+    height: clamp(12rem, 40%, 24rem);
+    border-left: 0;
+    border-top: 1px solid var(--lk-border-color);
+  }
+}
+@container call (width < 900px) and (height < 480px) {
+  .aiup-call .lk-chat {
+    --lk-chat-header-height: 2.75rem;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: var(--lk-control-bar-height);
+    z-index: 10;
+    width: min(20rem, 100%);
+    box-shadow: var(--lk-box-shadow);
+  }
+}

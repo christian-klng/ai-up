@@ -1434,7 +1434,24 @@
       },
       "transcribingBadge": "Live transcript",
       "captureBoth": "Recording + live transcript",
-      "transcribingHint": "The conversation is transcribed live and stored."
+      "transcribingHint": "The conversation is transcribed live and stored.",
+      "controls": {
+        "microphone": "Microphone",
+        "microphoneDevice": "Choose microphone",
+        "camera": "Camera",
+        "cameraDevice": "Choose camera",
+        "shareScreen": "Share screen",
+        "stopShare": "Stop sharing",
+        "chat": "Chat",
+        "leave": "Leave",
+        "startMedia": "Enable sound and video"
+      },
+      "chat": {
+        "title": "Messages",
+        "close": "Close chat",
+        "placeholder": "Write a message …",
+        "send": "Send"
+      }
     },
     "confirmDelete": "Really delete this meeting?",
     "deleted": "Meeting deleted.",

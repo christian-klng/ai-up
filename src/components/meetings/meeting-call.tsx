@@ -4,12 +4,13 @@ import "@livekit/components-styles";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { AudioConference, RoomContext } from "@livekit/components-react";
+import { RoomContext } from "@livekit/components-react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useCall } from "./call-provider";
 import { CaptureBadge, CaptureMarker } from "./capture-badge";
 import { VideoConference } from "./video-conference";
+import { AudioConference } from "./audio-conference";
 
 type Props = {
   meetingId: string;
@@ -23,7 +24,7 @@ type Props = {
 /**
  * Full-page call UI rendering against the shared room owned by CallProvider – navigating away keeps
  * the call alive (mini player takes over). Video meetings get the full VideoConference layout
- * (tiles, screen share, chat); audio meetings a compact AudioConference.
+ * (tiles, screen share, chat); audio meetings a compact AudioConference with the same chat.
  *
  * No header row: the way back is the sidebar or the leave button, so the call gets the full height. The
  * negative margin cancels the shell's vertical padding – otherwise the page is taller than the viewport
@@ -63,7 +64,7 @@ export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recor
   const connectedHere = room !== null && activeCall?.meetingId === meetingId;
 
   return (
-    <div className="relative -my-6 h-[calc(100svh-3.5rem)]" data-lk-theme="aiup">
+    <div className="aiup-call relative -my-6 h-[calc(100svh-3.5rem)]" data-lk-theme="aiup">
       <div className="pointer-events-none absolute left-3 top-3 z-10 [&>*]:pointer-events-auto">
         {connectedHere ? (
           <RoomContext.Provider value={room}>
@@ -75,13 +76,7 @@ export function MeetingCall({ meetingId, spaceSlug, title, kind, backHref, recor
       </div>
       {connectedHere ? (
         <RoomContext.Provider value={room}>
-          {kind === "video" ? (
-            <VideoConference />
-          ) : (
-            <div className="mx-auto flex h-full max-w-3xl flex-col justify-center p-4">
-              <AudioConference />
-            </div>
-          )}
+          {kind === "video" ? <VideoConference /> : <AudioConference />}
         </RoomContext.Provider>
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">

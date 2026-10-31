@@ -1434,7 +1434,24 @@
       },
       "transcribingBadge": "Live-Transkript",
       "captureBoth": "Aufzeichnung + Live-Transkript",
-      "transcribingHint": "Das Gespräch wird live transkribiert und gespeichert."
+      "transcribingHint": "Das Gespräch wird live transkribiert und gespeichert.",
+      "controls": {
+        "microphone": "Mikrofon",
+        "microphoneDevice": "Mikrofon wählen",
+        "camera": "Kamera",
+        "cameraDevice": "Kamera wählen",
+        "shareScreen": "Bildschirm teilen",
+        "stopShare": "Teilen beenden",
+        "chat": "Chat",
+        "leave": "Verlassen",
+        "startMedia": "Ton und Video aktivieren"
+      },
+      "chat": {
+        "title": "Nachrichten",
+        "close": "Chat schließen",
+        "placeholder": "Nachricht schreiben …",
+        "send": "Senden"
+      }
     },
     "confirmDelete": "Dieses Meeting wirklich löschen?",
     "deleted": "Meeting gelöscht.",
