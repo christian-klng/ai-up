@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { cache } from "react";
 import { checkCommunitySlug, communityHost, communityPath, hostOf } from "@/lib/community";
+import { decideCommunityCreation, type CreationDecision } from "@/lib/community-creation";
 import { env } from "@/server/env";
 import { primaryHostOf } from "./community-domains";
 import { db } from "@/server/db/client";
@@ -15,6 +16,7 @@ import {
   type MemberRole,
   type MemberStatus,
   type ThemeSettings,
+  type User,
 } from "@/server/db/schema";
 
 export { ROOT_COMMUNITY_ID };
@@ -276,6 +278,7 @@ export type UpdateCommunityInput = Partial<
     | "imprintEnabled"
     | "privacyEnabled"
     | "allowMemberSubcommunities"
+    | "allowPublicCommunities"
     | "allowRegistration"
   >
 >;
@@ -289,7 +292,18 @@ export async function updateCommunity(id: string, input: UpdateCommunityInput): 
 // Creating and deleting
 // ---------------------------------------------------------------------------
 
-export type CreateCommunityInput = { name: string; slug: string; purpose: string; defaultLocale?: Community["defaultLocale"] };
+export type CreateCommunityInput = {
+  name: string;
+  slug: string;
+  purpose: string;
+  tagline?: string | null;
+  primaryColor?: string;
+  defaultLocale?: Community["defaultLocale"];
+  /** switches the join link on right away (see `createCommunityWithSetup`) */
+  joinLink?: boolean;
+  /** when the founder accepted the terms; kept in the audit log */
+  termsAcceptedAt?: string;
+};
 export type CreateCommunityResult = { ok: true; community: Community } | { ok: false; reason: "slugTaken" | "slugInvalid" | "notAllowed" };
 
 /**
@@ -319,6 +333,8 @@ export async function createCommunity(input: CreateCommunityInput, founderId: st
       parentId: ROOT_COMMUNITY_ID,
       name: input.name.trim().slice(0, 80),
       purpose: input.purpose.trim().slice(0, 4000) || null,
+      tagline: input.tagline?.trim().slice(0, 160) || null,
+      theme: { ...DEFAULT_THEME, primaryColor: input.primaryColor ?? DEFAULT_THEME.primaryColor },
       defaultLocale: input.defaultLocale ?? "de",
       // A fresh community is closed: people come in through its join link, which its admin controls.
       allowRegistration: false,
@@ -327,8 +343,31 @@ export async function createCommunity(input: CreateCommunityInput, founderId: st
     .returning();
 
   await addMembership({ communityId: id, userId: founderId, role: "admin", status: "active", approvedBy: founderId });
-  await db.insert(auditLog).values({ communityId: id, actorId: founderId, action: "community.created", targetType: "community", targetId: id, details: { name: community.name, slug: community.slug } });
+  await db.insert(auditLog).values({ communityId: id, actorId: founderId, action: "community.created", targetType: "community", targetId: id, details: { name: community.name, slug: community.slug, termsAcceptedAt: input.termsAcceptedAt ?? null } });
   return { ok: true, community };
+}
+
+export async function isCommunitySlugTaken(slug: string): Promise<boolean> {
+  return !!(await db.query.communities.findFirst({ where: eq(communities.slug, slug.trim().toLowerCase()), columns: { id: true } }));
+}
+
+/**
+ * May this address start a community right now? `account` is null for a visitor without one. The
+ * rule itself is `decideCommunityCreation`; this only fetches what it asks about.
+ */
+export async function communityCreationDecision(account: Pick<User, "id" | "status"> | null): Promise<CreationDecision> {
+  const [root, rootMembership, founded] = await Promise.all([
+    loadRootCommunity(),
+    account ? getMembership(ROOT_COMMUNITY_ID, account.id) : undefined,
+    account ? db.$count(communities, eq(communities.createdBy, account.id)) : 0,
+  ]);
+  return decideCommunityCreation({
+    accountStatus: account?.status ?? null,
+    rootMembership: rootMembership ?? null,
+    allowMembers: root.allowMemberSubcommunities,
+    allowPublic: root.allowPublicCommunities,
+    founded,
+  });
 }
 
 /**

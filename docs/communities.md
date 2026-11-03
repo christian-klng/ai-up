@@ -547,10 +547,10 @@ Siehe Entscheidung 6.5.
   `switchCommunity`) und lädt `/home`. Darunter, wenn erlaubt: „Neue Community anlegen“. Root-
   Admins sehen zusätzlich den Link *Verwaltung → Communities*. Bei nur einer Mitgliedschaft und
   ohne Anlege-Recht bleibt der Name ein statischer Schriftzug wie heute.
-- **Anlegen** (Dialog aus dem Modal, Route `/communities/new`): Name (Pflicht), Zweck (Pflicht –
-  wie bei Sammlungen, fließt in den System-Prompt), Slug (aus Name, editierbar), Sprache. Nach dem
-  Anlegen: Cookie auf die neue Community, Redirect nach `/admin/general` mit Hinweis „LLM verbinden,
-  Mitglieder einladen“.
+- **Anlegen** (Sidebar, Modal oder Login-Seite, Route `/communities/new`, Abschnitt 4.1): Name und
+  Zweck (Pflicht – wie bei Sammlungen, fließt in den System-Prompt), Slug (aus Name, editierbar),
+  Kurzbeschreibung, Sprache, Hauptfarbe, Beitrittslink. Nach dem Anlegen: Cookie auf die neue
+  Community, weiter nach `/admin/general`.
 - **Verwaltung** der Unter-Community = die heutige Verwaltung ohne *Integrationen* und *Webseiten*;
   zusätzlich *Allgemein → Community löschen* (Bestätigung mit Namen tippen) und *Mitglieder →
   Beitrittslink*.
@@ -558,6 +558,35 @@ Siehe Entscheidung 6.5.
   Menüpunkt *Communities* (Liste, Wiederherstellen, Löschen).
 - **Registrierung** `/register` bleibt Root; `/c/<slug>/register` nur, wenn die Sub
   `allow_registration` hat. `/pending` zeigt, in welcher Community man wartet.
+
+### 4.1 Community anlegen, auch öffentlich
+
+Zwei Schalter unter *Verwaltung → Communities*: `allowMemberSubcommunities` (aktive Root-Mitglieder)
+und `allowPublicCommunities` (jede Adresse, Standard aus). Getrennt, weil der zweite die Installation
+zum Internet hin öffnet. Root-Admins dürfen immer, Sperren gehen vor, und außer für Root-Admins gilt
+ein Limit von drei gegründeten Communities je Konto; gelöschte zählen mit, sonst setzte Löschen es
+zurück. Die Regel steht in `decideCommunityCreation`.
+
+**Angemeldet** entsteht die Community sofort. **Besucher** durchlaufen:
+
+1. Formular mit Name und Adresse: Es entsteht **nichts** in der Datenbank. Die Anfrage liegt 24 Stunden
+   in Redis, gespeichert unter dem Hash des Tokens. Die Antwort ist immer „Mail ist unterwegs“, auch
+   bei gesperrtem Konto, erreichtem Limit oder ausgelöstem Köderfeld (keine Enumeration).
+2. Grenzen: 10 Versuche je IP pro Stunde, 3 Mails je Adresse pro Tag. Die Mail nennt keine
+   Formulareingaben, sonst ließe sich beliebiger Text von unserer Domain an fremde Adressen schicken.
+3. Der Link führt zu einer Zusammenfassung mit **Knopf**, weil Mail-Scanner Links öffnen. Erst der Klick
+   verbraucht die Anfrage (`GETDEL`), legt Konto und Community an und meldet an. Ist der Kurzname
+   inzwischen vergeben, kommt die Anfrage zurück und der Name lässt sich dort ändern.
+
+Der Weg läuft nur auf dem Haupthost, andere Hosts leiten dorthin: Nur dort entscheidet der Cookie, in
+welcher Community man danach arbeitet. Gründer werden **nicht** Mitglied der Root, sonst öffnete das
+Formular jedem die Haupt-Community.
+
+**Bewusst ohne Freischaltung** (Entscheidung Christian, 03.11.2026): Neue Communities dürfen sofort alles.
+Das heißt: Mit `COMMUNITY_SUBDOMAINS` kann jeder Seiten unter `<slug>.<App-Host>` veröffentlichen, alle
+teilen sich LiveKit und die Festplatte, und ein Gesamtlimit für Speicher gibt es nicht. Als Notbremse
+bleibt das Löschen unter *Verwaltung → Communities*. Vor dem Einschalten müssen die Nutzungsbedingungen
+als eigene Seite unter `/terms` stehen, auf die das Formular verweist.
 - Alle Texte in `messages/de.json` **und** `messages/en.json`.
 
 ---

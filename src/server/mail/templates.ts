@@ -40,6 +40,11 @@ const t = {
     pendingAdminTitle: "Neue Registrierung wartet auf Freigabe",
     pendingAdminBody: (name: string, email: string) => `${name} (${email}) hat sich registriert und wartet auf die Freigabe.`,
     pendingAdminButton: "Mitglieder verwalten",
+    communityRequestSubject: (app: string) => `Bestätige deine neue Community bei ${app}`,
+    communityRequestTitle: "Community bestätigen",
+    communityRequestBody: (app: string) => `Du möchtest bei ${app} eine neue Community anlegen. Klicke auf den Button und bestätige deine Angaben. Der Link ist 24 Stunden gültig.`,
+    communityRequestButton: "Angaben prüfen und anlegen",
+    communityRequestFooter: "Wenn du das nicht warst, kannst du diese E-Mail ignorieren. Ohne Bestätigung wird nichts angelegt.",
     fallback: "Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:",
   },
   en: {
@@ -56,6 +61,11 @@ const t = {
     pendingAdminTitle: "New registration awaiting approval",
     pendingAdminBody: (name: string, email: string) => `${name} (${email}) registered and is waiting for approval.`,
     pendingAdminButton: "Manage members",
+    communityRequestSubject: (app: string) => `Confirm your new community at ${app}`,
+    communityRequestTitle: "Confirm your community",
+    communityRequestBody: (app: string) => `You would like to create a new community at ${app}. Use the button to check your details and confirm them. The link is valid for 24 hours.`,
+    communityRequestButton: "Check details and create",
+    communityRequestFooter: "If this was not you, you can safely ignore this e-mail. Nothing is created without confirmation.",
     fallback: "If the button does not work, copy this link into your browser:",
   },
 } as const;
@@ -75,6 +85,25 @@ export function magicLinkMail(ctx: Ctx, to: string, url: string): MailMessage {
       title: s.magicTitle,
       bodyHtml: `<p>${escapeHtml(s.magicBody(ctx.appName))}</p>${mailButton(url, s.magicButton, ctx.brand.colors)}${linkFallback(ctx.locale, url)}`,
       footer: s.magicFooter,
+    }),
+  };
+}
+
+/**
+ * Deliberately without the community's name or any other form input: the form takes any address, so
+ * whatever it printed here could be used to send someone text of the sender's choosing from our domain.
+ */
+export function communityRequestMail(ctx: Ctx, to: string, url: string): MailMessage {
+  const s = t[ctx.locale];
+  return {
+    to,
+    subject: s.communityRequestSubject(ctx.appName),
+    text: `${s.communityRequestBody(ctx.appName)}\n\n${url}\n\n${s.communityRequestFooter}`,
+    html: mailLayout({
+      brand: ctx.brand,
+      title: s.communityRequestTitle,
+      bodyHtml: `<p>${escapeHtml(s.communityRequestBody(ctx.appName))}</p>${mailButton(url, s.communityRequestButton, ctx.brand.colors)}${linkFallback(ctx.locale, url)}`,
+      footer: s.communityRequestFooter,
     }),
   };
 }

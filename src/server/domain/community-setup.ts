@@ -7,6 +7,7 @@ import { deleteStoredFile } from "@/server/media/storage";
 import { syncSchedules } from "@/server/workflows/queue";
 import { ensureBotUser } from "./bot";
 import { createCommunity, type CreateCommunityInput, type CreateCommunityResult } from "./communities";
+import { setCommunityInviteEnabled } from "./community-invites";
 import { createArea } from "./knowledge";
 import { createSpace } from "./meetings";
 
@@ -58,6 +59,7 @@ export async function createCommunityWithSetup(input: CreateCommunityInput, foun
   await step(community.id, "bot + agent", () => ensureBotUser(community.id));
   await step(community.id, "starter collection", () => createArea(community.id, { name: texts.collection.name, purpose: texts.collection.purpose }, founderId));
   await step(community.id, "starter meeting space", () => createSpace(community.id, { name: texts.space.name, purpose: texts.space.purpose }, founderId));
+  if (input.joinLink) await step(community.id, "join link", () => setCommunityInviteEnabled(community.id, true, founderId));
   return created;
 }
 

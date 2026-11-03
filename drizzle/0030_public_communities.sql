@@ -1,0 +1,1 @@
+ALTER TABLE "communities" ADD COLUMN "allow_public_communities" boolean DEFAULT false NOT NULL;

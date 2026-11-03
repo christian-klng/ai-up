@@ -85,6 +85,31 @@ export type RegisterInput = {
 export type RegisterResult = { ok: true; status: MemberStatus; user: User } | { ok: false; reason: "exists"; user: User };
 
 /**
+ * The account behind an address its owner has just proven, for founding a community: created if
+ * there is none, and unlocked if it was still waiting – approval by a community is about membership
+ * in that community, and that stays as it is. The caller has already turned suspended accounts away.
+ */
+export async function ensureConfirmedAccount(input: { email: string; name: string; locale: Locale }): Promise<User> {
+  const email = input.email.toLowerCase().trim();
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    const [user] = await db.update(users).set({ status: "active", emailVerified: true }).where(eq(users.id, existing.id)).returning();
+    return user;
+  }
+  const id = crypto.randomUUID();
+  const [user] = await db.insert(users).values({ id, email, name: input.name.trim().slice(0, 120), emailVerified: true, status: "active", locale: input.locale }).returning();
+  await db.insert(auditLog).values({ actorId: id, action: "user.registered", targetType: "user", targetId: id, details: { via: "community-request" } });
+  try {
+    const avatar = await generateRandomAvatar({ seed: id, uploadedBy: id });
+    const [withAvatar] = await db.update(users).set({ avatarMediaId: avatar.id }).where(eq(users.id, id)).returning();
+    return withAvatar;
+  } catch (err) {
+    logger.error({ err, userId: id }, "avatar generation failed");
+    return user;
+  }
+}
+
+/**
  * Registration creates the account if it is new and always creates the membership in
  * `input.communityId`. An account that already belongs to this community is reported as `exists`
  * (the UI shows a neutral message so the form cannot be used to probe for members); an account that

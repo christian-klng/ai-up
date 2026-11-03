@@ -61,6 +61,8 @@
     "linkSentTitle": "Check your inbox",
     "linkSentBody": "If an approved account exists for {email}, we've sent you a sign-in link. It's valid for 15 minutes.",
     "noAccount": "No account yet?",
+    "wantCommunity": "Looking for your own community?",
+    "foundCommunity": "Create a community",
     "hasAccount": "Already registered?",
     "registerTitle": "Request an account",
     "registerIntro": "Register with your name and e-mail address. An admin approves your account – afterwards you can sign in with a magic link.",
@@ -123,6 +125,7 @@
     "agents": "AI agents",
     "live": "live now",
     "resizeSidebar": "Sidebar width",
+    "createCommunity": "Create a community",
     "resizeSidebarHint": "Drag to resize, all the way left to collapse. Double-click or ⌘/Ctrl+B to collapse and expand."
   },
   "home": {
@@ -811,7 +814,11 @@
         "title": "Allow sub-communities",
         "label": "Members may create communities",
         "enabledToast": "Members may now create communities.",
-        "disabledToast": "Only admins may create communities now."
+        "disabledToast": "Only admins may create communities now.",
+        "publicLabel": "Public creation",
+        "publicHelp": "Anyone with a confirmed e-mail address can create a community at /communities/new, without being a member here. The terms of use must be published at /terms first.",
+        "publicEnabledToast": "Communities can now be created publicly.",
+        "publicDisabledToast": "Public creation is now off."
       }
     }
   },
@@ -1516,19 +1523,63 @@
     "switchIntroSingle": "So far you only belong to this community. If you like, you can start your own here.",
     "createNew": "Create a community",
     "create": {
-      "title": "New community",
+      "title": "Create a community",
       "intro": "You become the admin of the new community and can set it up completely afterwards.",
       "nameLabel": "Name",
       "namePlaceholder": "Reading group",
       "slugLabel": "Short name for links",
       "slugHelp": "Lowercase letters, digits and hyphens. It appears in shared links later and cannot be changed afterwards.",
+      "taglineLabel": "Tagline (optional)",
+      "taglinePlaceholder": "We read one book together every month.",
       "purposeLabel": "Purpose",
       "purposePlaceholder": "What is this community for? Who belongs to it, what is it about?",
-      "purposeHelp": "The purpose is shown to members and goes into the AI agents' instructions.",
+      "purposeHelp": "The purpose appears on the join page and goes into the AI agents' instructions.",
+      "localeLabel": "Language",
+      "colorLabel": "Main color",
+      "joinLinkLabel": "Switch on the join link right away",
+      "joinLinkHelp": "Anyone with the link becomes a member at once. You will find it under Admin → Members.",
+      "founderNameLabel": "Your name",
+      "founderEmailLabel": "Your e-mail address",
+      "termsBefore": "I accept the",
+      "termsLink": "terms of use",
+      "termsBetween": "and have read the",
+      "privacyLink": "privacy notice",
+      "termsAfter": ".",
       "submit": "Create community",
-      "errorSlugTaken": "That short name is already taken.",
-      "errorSlugInvalid": "That short name does not work: lowercase letters, digits and hyphens only, 3 to 40 characters, and a few names are reserved.",
-      "errorNotAllowed": "You are not allowed to create a community right now."
+      "submitVisitor": "Continue",
+      "sentTitle": "Almost there",
+      "sentBody": "We sent an e-mail to {email}. Confirm your details with the link in it, which is valid for 24 hours. Only then is the community created.",
+      "limitTitle": "Limit reached",
+      "limitBody": "One account can create at most {max} communities, and deleted ones count too.",
+      "backHome": "Back to the home page",
+      "errors": {
+        "slugTaken": "That short name is already taken.",
+        "slugInvalid": "That short name does not work: lowercase letters, digits and hyphens only, 3 to 40 characters, and a few names are reserved.",
+        "notAllowed": "You are not allowed to create a community right now.",
+        "limit": "You have reached the limit for new communities.",
+        "terms": "Please accept the terms of use.",
+        "founderName": "Please enter your name.",
+        "founderEmail": "Please enter a valid e-mail address.",
+        "invalid": "Please check your details: the name needs at least 2 characters, the purpose at least 5.",
+        "tooManyRequests": "Too many attempts. Please try again later."
+      }
+    },
+    "confirm": {
+      "title": "Create “{name}”",
+      "intro": "This also confirms your address {email}, and you will be signed in afterwards.",
+      "tagline": "Tagline",
+      "purpose": "Purpose",
+      "slugLabel": "Short name for links",
+      "submit": "Create community now",
+      "invalidTitle": "This link is no longer valid",
+      "invalidBody": "It has already been used or has expired.",
+      "toLogin": "Go to sign-in",
+      "errors": {
+        "invalid": "This link is no longer valid. It has already been used or has expired.",
+        "limit": "One account can create at most {max} communities, and deleted ones count too.",
+        "slugTaken": "That short name has been taken in the meantime. Please choose another one.",
+        "slugInvalid": "That short name does not work: lowercase letters, digits and hyphens only, 3 to 40 characters, and a few names are reserved."
+      }
     }
   }
 }

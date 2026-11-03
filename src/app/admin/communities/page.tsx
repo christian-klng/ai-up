@@ -9,7 +9,7 @@ import { AllowSubcommunitiesSwitch } from "./allow-switch";
 
 /**
  * The operator's view of every sub-community: who started it, how many members it has, and the
- * switch that decides whether ordinary members may start one at all.
+ * switches that decide who may start one at all.
  */
 export default async function AdminCommunitiesPage() {
   await requireRootAdmin();
@@ -24,7 +24,7 @@ export default async function AdminCommunitiesPage() {
     <div>
       <PageHeader title={t("title")} description={t("intro")} />
 
-      <AllowSubcommunitiesSwitch initial={rootCommunity.allowMemberSubcommunities} />
+      <AllowSubcommunitiesSwitch initial={rootCommunity.allowMemberSubcommunities} initialPublic={rootCommunity.allowPublicCommunities} />
 
       {communities.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("empty")}</p>

@@ -65,6 +65,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
           workflows: tNav("workflows"),
           agents: tNav("agents"),
           admin: tNav("admin"),
+          createCommunity: tNav("createCommunity"),
           noAreasYet: tNav("noAreasYet"),
           noSpacesYet: tNav("noSpacesYet"),
           live: tNav("live"),
@@ -73,6 +74,7 @@ export async function AppShellServer({ user, children }: { user: CurrentUser; ch
         meetingSpaces: spaces.map((s) => ({ id: s.id, name: s.name, slug: s.slug, icon: s.icon, live: s.liveCount > 0 })),
         agents: agents.map((a) => ({ id: a.id, name: a.name, slug: a.slug, avatarMediaId: a.avatarMediaId })),
         isAdmin: user.role === "admin",
+        canCreateCommunity,
       }}
       labels={{
         messages: tNav("messages"),

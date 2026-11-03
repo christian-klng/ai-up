@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-export function LoginForm({ next, error }: { next?: string; error?: string }) {
+export function LoginForm({ next, error, canFound }: { next?: string; error?: string; canFound: boolean }) {
   const t = useTranslations("auth");
   const [state, action, pending] = useActionState<AuthFormState, FormData>(requestMagicLink, { status: "idle" });
 
@@ -61,6 +61,14 @@ export function LoginForm({ next, error }: { next?: string; error?: string }) {
             {t("register")}
           </Link>
         </p>
+        {canFound && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t("wantCommunity")}{" "}
+            <Link href="/communities/new" className="font-medium text-foreground underline-offset-4 hover:underline">
+              {t("foundCommunity")}
+            </Link>
+          </p>
+        )}
       </CardContent>
     </Card>
   );

@@ -8,7 +8,7 @@ import { isCustomPagePath } from "@/lib/site-pages";
  * Real authorization (active status, admin role) happens in layouts, server actions and route handlers
  * via requireUser()/requireAdmin() – never rely on this file alone.
  */
-const PUBLIC_PREFIXES = ["/login", "/register", "/pending", "/invite", "/join", "/c", "/imprint", "/privacy", "/api/auth", "/api/health", "/api/files", "/api/mcp", "/api/livekit", "/api/internal", "/api/domains", "/auth"];
+const PUBLIC_PREFIXES = ["/login", "/register", "/pending", "/invite", "/join", "/communities/new", "/communities/confirm", "/c", "/imprint", "/privacy", "/api/auth", "/api/health", "/api/files", "/api/mcp", "/api/livekit", "/api/internal", "/api/domains", "/auth"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

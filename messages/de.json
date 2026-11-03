@@ -61,6 +61,8 @@
     "linkSentTitle": "Prüfe dein Postfach",
     "linkSentBody": "Falls zu {email} ein freigeschaltetes Konto existiert, haben wir dir einen Anmeldelink geschickt. Er ist 15 Minuten gültig.",
     "noAccount": "Noch kein Konto?",
+    "wantCommunity": "Eigene Community gewünscht?",
+    "foundCommunity": "Community anlegen",
     "hasAccount": "Bereits registriert?",
     "registerTitle": "Konto anfragen",
     "registerIntro": "Registriere dich mit Namen und E-Mail-Adresse. Ein Admin schaltet dein Konto frei – danach kannst du dich per Anmeldelink einloggen.",
@@ -123,6 +125,7 @@
     "agents": "KI-Agenten",
     "live": "läuft gerade",
     "resizeSidebar": "Breite der Seitenleiste",
+    "createCommunity": "Community anlegen",
     "resizeSidebarHint": "Ziehen ändert die Breite, ganz nach links klappt sie ein. Doppelklick oder ⌘/Strg+B klappt ein und aus."
   },
   "home": {
@@ -811,7 +814,11 @@
         "title": "Unter-Communities erlauben",
         "label": "Mitglieder dürfen Communities anlegen",
         "enabledToast": "Mitglieder dürfen jetzt Communities anlegen.",
-        "disabledToast": "Nur Admins dürfen jetzt Communities anlegen."
+        "disabledToast": "Nur Admins dürfen jetzt Communities anlegen.",
+        "publicLabel": "Öffentlich anlegen",
+        "publicHelp": "Jede Person mit bestätigter E-Mail-Adresse kann unter /communities/new eine Community anlegen, auch ohne Mitgliedschaft hier. Vorher müssen die Nutzungsbedingungen unter /terms stehen.",
+        "publicEnabledToast": "Communities können jetzt öffentlich angelegt werden.",
+        "publicDisabledToast": "Öffentliches Anlegen ist jetzt aus."
       }
     }
   },
@@ -1516,19 +1523,63 @@
     "switchIntroSingle": "Du bist bisher nur in dieser Community. Wenn du möchtest, kannst du hier eine eigene anlegen.",
     "createNew": "Neue Community anlegen",
     "create": {
-      "title": "Neue Community",
+      "title": "Community anlegen",
       "intro": "Du wirst Administratorin bzw. Administrator der neuen Community und kannst sie danach vollständig einrichten.",
       "nameLabel": "Name",
       "namePlaceholder": "Lesekreis",
       "slugLabel": "Kurzname für Links",
       "slugHelp": "Kleinbuchstaben, Ziffern und Bindestriche. Er steht später in geteilten Links und kann nicht mehr geändert werden.",
+      "taglineLabel": "Kurzbeschreibung (optional)",
+      "taglinePlaceholder": "Wir lesen einmal im Monat gemeinsam ein Buch.",
       "purposeLabel": "Zweck",
       "purposePlaceholder": "Wofür ist diese Community da? Wer gehört dazu, worum geht es?",
-      "purposeHelp": "Der Zweck steht den Mitgliedern und fließt in die Anweisungen der KI-Agenten ein.",
+      "purposeHelp": "Der Zweck erscheint auf der Beitrittsseite und fließt in die Anweisungen der KI-Agenten ein.",
+      "localeLabel": "Sprache",
+      "colorLabel": "Hauptfarbe",
+      "joinLinkLabel": "Beitrittslink gleich einschalten",
+      "joinLinkHelp": "Wer den Link hat, wird sofort Mitglied. Du findest ihn danach unter Verwaltung → Mitglieder.",
+      "founderNameLabel": "Dein Name",
+      "founderEmailLabel": "Deine E-Mail-Adresse",
+      "termsBefore": "Ich stimme den",
+      "termsLink": "Nutzungsbedingungen",
+      "termsBetween": "zu und habe die",
+      "privacyLink": "Datenschutzhinweise",
+      "termsAfter": " gelesen.",
       "submit": "Community anlegen",
-      "errorSlugTaken": "Dieser Kurzname ist schon vergeben.",
-      "errorSlugInvalid": "Dieser Kurzname geht nicht: nur Kleinbuchstaben, Ziffern und Bindestriche, 3 bis 40 Zeichen, und einige Namen sind reserviert.",
-      "errorNotAllowed": "Du darfst derzeit keine Community anlegen."
+      "submitVisitor": "Weiter",
+      "sentTitle": "Fast geschafft",
+      "sentBody": "Wir haben dir eine E-Mail an {email} geschickt. Bestätige deine Angaben über den Link darin, er ist 24 Stunden gültig. Erst dann wird die Community angelegt.",
+      "limitTitle": "Limit erreicht",
+      "limitBody": "Ein Konto kann höchstens {max} Communities anlegen, gelöschte zählen dabei mit.",
+      "backHome": "Zur Startseite",
+      "errors": {
+        "slugTaken": "Dieser Kurzname ist schon vergeben.",
+        "slugInvalid": "Dieser Kurzname geht nicht: nur Kleinbuchstaben, Ziffern und Bindestriche, 3 bis 40 Zeichen, und einige Namen sind reserviert.",
+        "notAllowed": "Du darfst derzeit keine Community anlegen.",
+        "limit": "Du hast das Limit für neue Communities erreicht.",
+        "terms": "Bitte stimme den Nutzungsbedingungen zu.",
+        "founderName": "Bitte gib deinen Namen ein.",
+        "founderEmail": "Bitte gib eine gültige E-Mail-Adresse ein.",
+        "invalid": "Bitte prüfe deine Angaben: Der Name braucht mindestens 2 Zeichen, der Zweck mindestens 5.",
+        "tooManyRequests": "Zu viele Versuche. Bitte versuche es später noch einmal."
+      }
+    },
+    "confirm": {
+      "title": "„{name}“ anlegen",
+      "intro": "Du bestätigst damit auch deine Adresse {email} und bist danach angemeldet.",
+      "tagline": "Kurzbeschreibung",
+      "purpose": "Zweck",
+      "slugLabel": "Kurzname für Links",
+      "submit": "Community jetzt anlegen",
+      "invalidTitle": "Dieser Link gilt nicht mehr",
+      "invalidBody": "Er wurde schon benutzt oder ist abgelaufen.",
+      "toLogin": "Zur Anmeldung",
+      "errors": {
+        "invalid": "Dieser Link gilt nicht mehr. Er wurde schon benutzt oder ist abgelaufen.",
+        "limit": "Ein Konto kann höchstens {max} Communities anlegen, gelöschte zählen dabei mit.",
+        "slugTaken": "Dieser Kurzname wurde inzwischen vergeben. Bitte wähle einen anderen.",
+        "slugInvalid": "Dieser Kurzname geht nicht: nur Kleinbuchstaben, Ziffern und Bindestriche, 3 bis 40 Zeichen, und einige Namen sind reserviert."
+      }
     }
   }
 }

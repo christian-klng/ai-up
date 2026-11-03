@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Bot, CalendarClock, Home, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
+import { BookOpen, Bot, CalendarClock, Home, Plus, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,6 +19,7 @@ export type SidebarNavProps = {
     workflows: string;
     agents: string;
     admin: string;
+    createCommunity: string;
     noAreasYet: string;
     noSpacesYet: string;
     /** status hint for a meeting space with a meeting running right now */
@@ -28,12 +29,14 @@ export type SidebarNavProps = {
   meetingSpaces: NavArea[];
   agents: NavAgent[];
   isAdmin: boolean;
+  /** may start a community of their own (`communityCreationDecision`) */
+  canCreateCommunity: boolean;
   /** icon rail: no labels or headings, names in tooltips, status hints as dots on the icon */
   collapsed?: boolean;
   onNavigate?: () => void;
 };
 
-const ICONS = { home: Home, knowledge: BookOpen, members: Users, meetings: CalendarClock, workflows: Workflow, agents: Bot, admin: Settings } satisfies Record<string, LucideIcon>;
+const ICONS = { home: Home, knowledge: BookOpen, members: Users, meetings: CalendarClock, workflows: Workflow, agents: Bot, admin: Settings, createCommunity: Plus } satisfies Record<string, LucideIcon>;
 type IconKey = keyof typeof ICONS;
 
 function isActivePath(pathname: string, href: string) {
@@ -143,7 +146,7 @@ function NavSection({ title, collapsed, children }: { title: string; collapsed?:
   );
 }
 
-export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, agents, isAdmin, collapsed, onNavigate }: SidebarNavProps) {
+export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, agents, isAdmin, canCreateCommunity, collapsed, onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const item = (href: string, icon: IconKey | undefined, label: string, live?: boolean, areaIcon?: string) => (
     <NavItem
@@ -198,6 +201,7 @@ export function SidebarNav({ labels, knowledgeAreas, meetingSpaces, agents, isAd
         {item("/members", "members", labels.members)}
         {item("/workflows", "workflows", labels.workflows)}
         {isAdmin && item("/admin", "admin", labels.admin)}
+        {canCreateCommunity && item("/communities/new", "createCommunity", labels.createCommunity)}
       </div>
     </nav>
   );

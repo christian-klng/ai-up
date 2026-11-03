@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { magicLink } from "better-auth/plugins/magic-link";
+import { founderSession } from "./founder-session-plugin";
 import { handoff } from "./handoff-plugin";
 import { handoffOrigins, isHandoffHost } from "./handoff-hosts";
 import { db } from "@/server/db/client";
@@ -97,6 +98,7 @@ export const auth = betterAuth({
     // Stage B (spike): lets a community on its own domain receive the session after signing in on
     // the main host. Off until the proxy can serve such a domain at all.
     ...(env.COMMUNITY_CUSTOM_DOMAINS ? [handoff({ isAllowedHost: isHandoffHost })] : []),
+    founderSession(),
     nextCookies(),
   ],
 });

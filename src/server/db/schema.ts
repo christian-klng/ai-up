@@ -177,6 +177,8 @@ export const communities = pgTable(
     privacyEnabled: boolean("privacy_enabled").notNull().default(false),
     /** Root community only: may members create sub-communities? */
     allowMemberSubcommunities: boolean("allow_member_subcommunities").notNull().default(false),
+    /** Root community only: may anyone with a confirmed address create one, account or not? */
+    allowPublicCommunities: boolean("allow_public_communities").notNull().default(false),
     /** Is the public registration form open for this community? Sub-communities start closed. */
     allowRegistration: boolean("allow_registration").notNull().default(true),
     /** Encrypted JSON blobs for integrations are stored in dedicated tables later; keep generic extras here. */
