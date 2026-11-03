@@ -1513,6 +1513,7 @@
   "communities": {
     "switch": "Switch community",
     "switchIntro": "You belong to several communities. Pick the one you want to work in.",
+    "switchIntroSingle": "So far you only belong to this community. If you like, you can start your own here.",
     "createNew": "Create a community",
     "create": {
       "title": "New community",

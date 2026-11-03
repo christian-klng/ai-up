@@ -104,7 +104,7 @@ export function CommunitySwitcher({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("switch")}</DialogTitle>
-          <DialogDescription>{t("switchIntro")}</DialogDescription>
+          <DialogDescription>{communities.length < 2 ? t("switchIntroSingle") : t("switchIntro")}</DialogDescription>
         </DialogHeader>
         <ul className="grid gap-1">
           {communities.map((c) => (

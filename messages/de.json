@@ -1513,6 +1513,7 @@
   "communities": {
     "switch": "Community wechseln",
     "switchIntro": "Du bist in mehreren Communities. Wähle aus, in welcher du arbeiten möchtest.",
+    "switchIntroSingle": "Du bist bisher nur in dieser Community. Wenn du möchtest, kannst du hier eine eigene anlegen.",
     "createNew": "Neue Community anlegen",
     "create": {
       "title": "Neue Community",
