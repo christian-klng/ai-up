@@ -167,6 +167,7 @@ Rules
 - 1–15 sections; landing typically: hero first, then features/markdown, a cta, faq, footer.
   Imprint/privacy pages are usually just markdown sections (plus a minimal footer).
 - hrefs: internal path ("/register", "/login", "/imprint", "/privacy") or https:// URL. No other protocols.
+  Signed-in visitors do not see hero buttons to /login or /register, nor a cta section with such a button.
 - hub: a central icon with 3–8 satellite nodes (placed clockwise from the top), each connected to the
   center by a spoke, plus a card beside the diagram. A calm tour lights up one node after the other
   (pointing at or tapping a node holds it): its spoke shows a data stream – flow "in" toward the center

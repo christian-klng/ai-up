@@ -6,7 +6,7 @@ import { PostsSectionView, type PostsLabels } from "./posts-section";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
 import type { Community } from "@/server/db/schema";
-import { isFragmentHref, type LandingSection } from "@/lib/landing-schema";
+import { isAuthHref, isFragmentHref, type LandingSection } from "@/lib/landing-schema";
 import type { PostFeed } from "@/server/domain/posts";
 import { Markdown } from "@/components/content/markdown";
 import { BrandLogo } from "@/components/shell/brand-logo";
@@ -65,6 +65,7 @@ export function LandingSectionView({
   posts,
   labels,
   editing,
+  hideAuthLinks,
 }: {
   section: LandingSection;
   path: string;
@@ -76,7 +77,10 @@ export function LandingSectionView({
   labels: SectionLabels;
   /** Inline editor: FAQ answers render expanded (they must be clickable), widgets explain themselves */
   editing?: boolean;
+  /** Signed-in visitor: no buttons to sign-in or registration (the header offers the way into the app) */
+  hideAuthLinks?: boolean;
 }) {
+  const shown = (cta: { href: string } | undefined) => !!cta && !(hideAuthLinks && isAuthHref(cta.href));
   switch (section.type) {
     case "hero":
       return (
@@ -90,10 +94,10 @@ export function LandingSectionView({
               {section.subline}
             </p>
           )}
-          {(section.primaryCta || section.secondaryCta) && (
+          {(shown(section.primaryCta) || shown(section.secondaryCta)) && (
             <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
-              {section.primaryCta && <CtaLink cta={section.primaryCta} path={`${path}.primaryCta`} />}
-              {section.secondaryCta && <CtaLink cta={section.secondaryCta} path={`${path}.secondaryCta`} variant="outline" />}
+              {section.primaryCta && shown(section.primaryCta) && <CtaLink cta={section.primaryCta} path={`${path}.primaryCta`} />}
+              {section.secondaryCta && shown(section.secondaryCta) && <CtaLink cta={section.secondaryCta} path={`${path}.secondaryCta`} variant="outline" />}
             </div>
           )}
           {section.imageMediaId && (
@@ -159,6 +163,8 @@ export function LandingSectionView({
         </section>
       );
     case "cta":
+      // The whole band: its text only leads up to the button.
+      if (!shown(section.button)) return null;
       return (
         <section className="py-10">
           <div className="flex flex-col items-center gap-4 rounded-xl bg-primary px-6 py-12 text-center text-primary-foreground">

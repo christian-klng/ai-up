@@ -391,6 +391,12 @@ export function isFragmentHref(href: string): boolean {
   return href.startsWith("/") && href.includes("#");
 }
 
+/** Buttons to sign-in or registration: pointless for someone who is already signed in, so the page hides them there. */
+export function isAuthHref(href: string): boolean {
+  const path = href.split(/[?#]/, 1)[0];
+  return path === "/login" || path === "/register";
+}
+
 /** Collections shown by the posts sections of a definition. */
 export function collectPostsCollectionIds(definition: LandingDefinition): string[] {
   return [...new Set(definition.sections.flatMap((s) => (s.type === "posts" ? [s.collectionId] : [])))];

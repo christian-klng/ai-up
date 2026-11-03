@@ -122,7 +122,7 @@ export function LandingShell({
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6 lg:px-8">
         {children ??
           definition.sections.map((section, i) => (
-            <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} posts={posts} labels={labels} editing={editing} />
+            <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} posts={posts} labels={labels} editing={editing} hideAuthLinks={signedIn && !editing} />
           ))}
       </main>
 
