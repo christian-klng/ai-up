@@ -4,6 +4,7 @@ import { requireCommunity } from "@/server/auth/session";
 import { getCurrentLandingVersion, isPageEnabled, listLandingMedia, listLandingVersions, type PageRef } from "@/server/domain/landing";
 import { getEventsWidgetUrl } from "@/server/domain/integrations";
 import { resolvePostFeeds } from "@/server/domain/posts";
+import { resolveSectionForms } from "@/server/domain/collection-forms";
 import { fixedPageUrl, listNavPages, listSitePages } from "@/server/domain/site-pages";
 import { SITE_PAGES } from "@/lib/landing-schema";
 import { MAX_CUSTOM_PAGES, pageSlugProblem } from "@/lib/site-pages";
@@ -21,7 +22,7 @@ export default async function AdminPagesPage() {
     listNavPages(user.communityId),
   ]);
 
-  const load = async (ref: PageRef, base: Omit<PageState, "definition" | "currentVersion" | "versions" | "posts">): Promise<PageState> => {
+  const load = async (ref: PageRef, base: Omit<PageState, "definition" | "currentVersion" | "versions" | "posts" | "forms">): Promise<PageState> => {
     const [current, versions] = await Promise.all([getCurrentLandingVersion(user.communityId, ref), listLandingVersions(user.communityId, ref)]);
     const posts = current ? await resolvePostFeeds(user.communityId, current.definition, { locale: settings.defaultLocale, pageSlug: base.custom?.slug }) : {};
     return {
@@ -30,6 +31,7 @@ export default async function AdminPagesPage() {
       currentVersion: current?.version ?? null,
       versions: versions.map((v) => ({ ...v, createdAt: v.createdAt.toISOString() })),
       posts,
+      forms: current ? await resolveSectionForms(user.communityId, current.definition) : {},
     };
   };
 

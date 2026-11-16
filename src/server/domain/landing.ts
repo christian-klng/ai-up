@@ -4,12 +4,13 @@ import { knowledgeAreas, landingPageVersions, mediaFiles, sitePages, users, type
 import {
   validateLandingDefinition,
   collectLandingMediaIds,
-  collectPostsCollectionIds,
+  collectFormCollectionIds, collectPostsCollectionIds,
   usesEventSections,
   type LandingDefinition,
   type LandingValidationIssue,
   type SitePage,
 } from "@/lib/landing-schema";
+import { resolveSectionForms } from "./collection-forms";
 import { RESERVED_PAGE_SLUGS } from "@/lib/site-pages";
 import { getEventsWidgetUrl } from "./integrations";
 
@@ -148,13 +149,14 @@ async function insertNextVersion(communityId: string, page: PageRef, definition:
 
 /** Everything that is valid but would not show on the public page. */
 export async function landingWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
-  const [media, events, posts, links] = await Promise.all([
+  const [media, events, posts, links, forms] = await Promise.all([
     mediaWarnings(definition),
     eventWarnings(communityId, definition),
     postsWarnings(communityId, definition),
     linkWarnings(communityId, definition),
+    formWarnings(communityId, definition),
   ]);
-  return [...media, ...events, ...posts, ...links];
+  return [...media, ...events, ...posts, ...forms, ...links];
 }
 
 /** Warns about referenced media that will not load on a public page (wrong purpose or missing). */
@@ -182,6 +184,24 @@ async function eventWarnings(communityId: string, definition: LandingDefinition)
   if (!usesEventSections(definition)) return [];
   if (await getEventsWidgetUrl(communityId)) return [];
   return ["the page uses event sections (events, event, order-status), but no event service is connected for this community – these sections stay invisible until the operator connects one under Admin → Integrations"];
+}
+
+/** Form sections need a collection of this community whose external channel is open. */
+async function formWarnings(communityId: string, definition: LandingDefinition): Promise<string[]> {
+  const ids = collectFormCollectionIds(definition);
+  if (ids.length === 0) return [];
+  const [areas, open] = await Promise.all([
+    db.select({ id: knowledgeAreas.id, name: knowledgeAreas.name }).from(knowledgeAreas).where(and(eq(knowledgeAreas.communityId, communityId), inArray(knowledgeAreas.id, ids))),
+    resolveSectionForms(communityId, definition),
+  ]);
+  const byId = new Map(areas.map((a) => [a.id, a]));
+  const warnings: string[] = [];
+  for (const id of ids) {
+    const area = byId.get(id);
+    if (!area) warnings.push(`form section: collection ${id} does not exist in this community – the section stays invisible`);
+    else if (!open[id]) warnings.push(`form section: collection "${area.name}" has no open form – set it up and switch it on under Admin → Collections ("External channel"), otherwise the section stays invisible`);
+  }
+  return warnings;
 }
 
 /** Posts sections need a collection of this community that is cleared for public pages. */

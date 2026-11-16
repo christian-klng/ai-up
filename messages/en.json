@@ -150,7 +150,9 @@
     "olderPosts": "Older posts",
     "newerPosts": "Newer posts",
     "postsUnavailable": "Posts: the selected collection is missing or not cleared for public pages (Admin → Collections). This section stays invisible on the public page.",
-    "backTo": "Back to {page}"
+    "backTo": "Back to {page}",
+    "formUnavailable": "Form: The chosen collection is missing or its external channel is not open (Admin → Collections → External channel). This section stays invisible on the public page.",
+    "formOpen": "Open form"
   },
   "members": {
     "title": "Members",
@@ -506,7 +508,13 @@
         "mailReplyHint": "The form then shows a box “I would like to receive an answer by e-mail”. Only those who tick it can get a mail from a workflow – one per submission at most.",
         "waitForWorkflow": "Wait for the workflow’s answer",
         "waitForWorkflowHint": "A workflow with the trigger “Form submitted” can write the message for each submission itself. If nothing arrives in time, the message above is shown.",
-        "waitSeconds": "Wait at most (seconds)"
+        "waitSeconds": "Wait at most (seconds)",
+        "embedTitle": "Embed",
+        "embedHint": "For other websites: include the script once per page, plus one of the three variants. On this community's own pages use the “form” section instead (Admin → Web pages).",
+        "embedInline": "In the text",
+        "embedButton": "Floating button",
+        "embedLink": "Link or button of the page",
+        "embedLabel": "Give feedback"
       }
     },
     "templates": {

@@ -8,8 +8,12 @@ import { apiKeys, auditLog, communities, communityMembers, users, type ApiKey, t
  * A key belongs to one admin *and one community*: it acts only there, so a root admin who also
  * runs a sub-community creates one key per community (see docs/communities.md §1.11).
  */
+/**
+ * `knowledge:forms` is deliberately separate from `knowledge:write`: switching a collection's public
+ * form on lets anyone on the internet write entries into the community (docs/externe-formulare.md).
+ */
 /** `meetings:invite` is deliberately separate from `meetings:write`: switching an invite link on lets strangers create active accounts. */
-export const API_SCOPES = ["workflows:read", "workflows:write", "runs:read", "runs:trigger", "llm:read", "llm:write", "questions:read", "landing:read", "landing:write", "knowledge:read", "knowledge:write", "meetings:read", "meetings:write", "meetings:invite"] as const;
+export const API_SCOPES = ["workflows:read", "workflows:write", "runs:read", "runs:trigger", "llm:read", "llm:write", "questions:read", "landing:read", "landing:write", "knowledge:read", "knowledge:write", "knowledge:forms", "meetings:read", "meetings:write", "meetings:invite"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 
 function hash(secret: string): string {

@@ -3,6 +3,8 @@ import { ArrowUpRight, ChevronDown, MapPin } from "lucide-react";
 import { EventWidget, OrderReturnOnly, type EventWidgetSource } from "./event-widgets";
 import { FeaturePreview } from "./feature-previews";
 import { PostsSectionView, type PostsLabels } from "./posts-section";
+import { FormSectionView, type FormLabels } from "./form-section";
+import type { SectionForm } from "@/lib/collection-forms";
 import { HubDiagram } from "./hub-diagram";
 import { LANDING_ICON_MAP } from "./icon-map";
 import type { Community } from "@/server/db/schema";
@@ -45,7 +47,7 @@ function WidgetNote({ text }: { text: string }) {
   );
 }
 
-export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string; teamDetails: string } & PostsLabels;
+export type SectionLabels = { eventsUnavailable: string; orderStatusHint: string; teamDetails: string } & PostsLabels & FormLabels;
 
 /** Chevron of a `<details className="group">`; turns over while open. */
 function DisclosureChevron() {
@@ -63,6 +65,7 @@ export function LandingSectionView({
   settings,
   events,
   posts,
+  forms,
   labels,
   editing,
   hideAuthLinks,
@@ -74,6 +77,8 @@ export function LandingSectionView({
   events: EventWidgetSource | null;
   /** Server-resolved posts per collection id (resolvePostFeeds) */
   posts?: Record<string, PostFeed>;
+  /** Server-resolved open forms per collection id (resolveSectionForms) */
+  forms?: Record<string, SectionForm>;
   labels: SectionLabels;
   /** Inline editor: FAQ answers render expanded (they must be clickable), widgets explain themselves */
   editing?: boolean;
@@ -370,6 +375,8 @@ export function LandingSectionView({
       );
     case "posts":
       return <PostsSectionView section={section} path={path} feed={posts?.[section.collectionId]} labels={labels} editing={editing} />;
+    case "form":
+      return <FormSectionView section={section} path={path} form={forms?.[section.collectionId]} labels={labels} editing={editing} />;
     case "order-status":
       // The editor has no purchase to show, and outside of it the section exists for buyers only.
       if (editing) return <WidgetNote text={events ? labels.orderStatusHint : labels.eventsUnavailable} />;

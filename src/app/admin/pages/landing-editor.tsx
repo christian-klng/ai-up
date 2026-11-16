@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { Community } from "@/server/db/schema";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import type { PostFeed } from "@/server/domain/posts";
+import type { SectionForm } from "@/lib/collection-forms";
 import { saveLandingInlineAction, type PageKey } from "@/server/actions/admin-landing";
 import { LandingShell } from "@/components/landing/landing-shell";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export function LandingEditor({
   eventsUrl,
   nav,
   posts,
+  forms,
 }: {
   page: PageKey;
   /** Name of the page in the dialog title */
@@ -59,6 +61,8 @@ export function LandingEditor({
   nav: { title: string; href: string }[];
   /** Posts as of opening the editor; a newly added posts section shows them after saving */
   posts: Record<string, PostFeed>;
+  /** Open forms as of opening the editor (form sections) */
+  forms: Record<string, SectionForm>;
 }) {
   const t = useTranslations("admin.landing");
   const tl = useTranslations("landing");
@@ -220,6 +224,7 @@ export function LandingEditor({
               eventsUrl={eventsUrl}
               nav={nav}
               posts={posts}
+              forms={forms}
               labels={{
                 toApp: tl("toApp"),
                 signIn: tl("signIn"),
@@ -232,6 +237,8 @@ export function LandingEditor({
                 olderPosts: tl("olderPosts"),
                 newerPosts: tl("newerPosts"),
                 postsUnavailable: tl("postsUnavailable"),
+                formUnavailable: tl("formUnavailable"),
+                formOpen: tl("formOpen"),
               }}
             />
           </div>

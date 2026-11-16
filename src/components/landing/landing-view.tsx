@@ -3,6 +3,7 @@ import type { Community } from "@/server/db/schema";
 import { collectPostsCollectionIds, usesEventSections, type LandingDefinition } from "@/lib/landing-schema";
 import { getEventsWidgetUrl } from "@/server/domain/integrations";
 import { resolvePostFeeds } from "@/server/domain/posts";
+import { resolveSectionForms } from "@/server/domain/collection-forms";
 import { listNavPages } from "@/server/domain/site-pages";
 import { LandingShell, type LandingLabels } from "./landing-shell";
 
@@ -21,6 +22,8 @@ export async function landingLabels(): Promise<LandingLabels> {
     olderPosts: t("olderPosts"),
     newerPosts: t("newerPosts"),
     postsUnavailable: t("postsUnavailable"),
+    formUnavailable: t("formUnavailable"),
+    formOpen: t("formOpen"),
   };
 }
 
@@ -43,14 +46,15 @@ export async function LandingView({
   /** Replaces the sections (single post) */
   children?: React.ReactNode;
 }) {
-  const [labels, eventsUrl, nav, posts] = await Promise.all([
+  const [labels, eventsUrl, nav, posts, forms] = await Promise.all([
     landingLabels(),
     usesEventSections(definition) ? getEventsWidgetUrl(settings.id) : null,
     listNavPages(settings.id),
     !children && collectPostsCollectionIds(definition).length > 0 ? resolvePostFeeds(settings.id, definition, { locale: settings.defaultLocale, pageSlug, listPage }) : undefined,
+    children ? undefined : resolveSectionForms(settings.id, definition),
   ]);
   return (
-    <LandingShell definition={definition} settings={settings} signedIn={signedIn} eventsUrl={eventsUrl} labels={labels} nav={nav} posts={posts}>
+    <LandingShell definition={definition} settings={settings} signedIn={signedIn} eventsUrl={eventsUrl} labels={labels} nav={nav} posts={posts} forms={forms}>
       {children}
     </LandingShell>
   );

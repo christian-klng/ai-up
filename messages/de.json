@@ -150,7 +150,9 @@
     "olderPosts": "Ältere Beiträge",
     "newerPosts": "Neuere Beiträge",
     "postsUnavailable": "Beiträge: Die gewählte Sammlung fehlt oder ist nicht für öffentliche Seiten freigegeben (Verwaltung → Sammlungen). Auf der öffentlichen Seite bleibt dieser Bereich unsichtbar.",
-    "backTo": "Zurück zu {page}"
+    "backTo": "Zurück zu {page}",
+    "formUnavailable": "Formular: Die gewählte Sammlung fehlt oder ihr externer Kanal ist nicht geöffnet (Verwaltung → Sammlungen → Externer Kanal). Auf der öffentlichen Seite bleibt dieser Bereich unsichtbar.",
+    "formOpen": "Formular öffnen"
   },
   "members": {
     "title": "Mitglieder",
@@ -506,7 +508,13 @@
         "mailReplyHint": "Das Formular zeigt dann ein Kästchen „Ich möchte eine Antwort per E-Mail erhalten“. Nur wer es ankreuzt, kann von einem Workflow eine Mail bekommen – höchstens eine je Einsendung.",
         "waitForWorkflow": "Antwort vom Workflow abwarten",
         "waitForWorkflowHint": "Ein Workflow mit dem Trigger „Formular eingesandt“ kann die Meldung für jede Einsendung selbst schreiben. Kommt in der Wartezeit nichts, erscheint die Meldung von oben.",
-        "waitSeconds": "Höchstens warten (Sekunden)"
+        "waitSeconds": "Höchstens warten (Sekunden)",
+        "embedTitle": "Einbetten",
+        "embedHint": "Für andere Webseiten: Das Skript einmal je Seite einbinden, dazu eine der drei Varianten. Auf den eigenen Webseiten dieser Community nimmst du stattdessen den Abschnitt „form“ (Verwaltung → Webseiten).",
+        "embedInline": "Im Text",
+        "embedButton": "Schwebender Button",
+        "embedLink": "Link oder Button der Seite",
+        "embedLabel": "Feedback geben"
       }
     },
     "templates": {

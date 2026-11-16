@@ -16,6 +16,18 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+/** Copy-and-paste code for other websites, built from the form's address (see src/lib/form-embed-script.ts). */
+function embedSnippets(url: string, label: string): { key: "embedInline" | "embedButton" | "embedLink"; code: string }[] {
+  const { origin, pathname } = new URL(url);
+  const token = pathname.split("/").pop() ?? "";
+  const script = `<script src="${origin}/api/forms/embed.js" async></script>`;
+  return [
+    { key: "embedInline", code: `${script}\n<aiup-form token="${token}"></aiup-form>` },
+    { key: "embedButton", code: `${script}\n<aiup-form token="${token}" mode="button" label="${label}"></aiup-form>` },
+    { key: "embedLink", code: `${script}\n<a href="${url}" data-aiup-form="${token}">${label}</a>` },
+  ];
+}
+
 /**
  * "External channel" of one collection (docs/externe-formulare.md): switch, template, the fields
  * outsiders may fill in, texts and the message afterwards. Loaded when the dialog opens – the list
@@ -115,6 +127,26 @@ export function AreaFormDialog({ areaId, areaName, open: isOpen }: { areaId: str
                 </div>
                 <p className="text-xs text-muted-foreground">{t("submissionCount", { count: data.submissionCount })}</p>
               </div>
+            )}
+
+            {url && settings.enabled && (
+              <details className="rounded-lg border p-3">
+                <summary className="cursor-pointer text-sm font-medium">{t("embedTitle")}</summary>
+                <p className="mt-2 text-xs text-muted-foreground">{t("embedHint")}</p>
+                <div className="mt-3 grid gap-3">
+                  {embedSnippets(url, t("embedLabel")).map((s) => (
+                    <div key={s.key} className="grid gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label>{t(s.key)}</Label>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(s.code).then(() => toast.success(tc("copied")))}>
+                          <Copy className="size-3.5" /> {tc("copy")}
+                        </Button>
+                      </div>
+                      <pre className="overflow-x-auto rounded-md bg-muted p-2.5 font-mono text-xs whitespace-pre-wrap break-all">{s.code}</pre>
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
 
             <section className="grid gap-3">

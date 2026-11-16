@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { LandingSectionView, type SectionLabels } from "./sections";
 import type { PostFeed } from "@/server/domain/posts";
+import type { SectionForm } from "@/lib/collection-forms";
 
 export type LandingLabels = { toApp: string; signIn: string; register: string; menu: string } & SectionLabels;
 
@@ -24,6 +25,7 @@ export function LandingShell({
   eventsUrl,
   nav = [],
   posts,
+  forms,
   editing,
   children,
 }: {
@@ -37,6 +39,8 @@ export function LandingShell({
   nav?: { title: string; href: string }[];
   /** Server-resolved posts per collection id for the posts sections (resolvePostFeeds) */
   posts?: Record<string, PostFeed>;
+  /** Server-resolved open forms per collection id for the form sections (resolveSectionForms) */
+  forms?: Record<string, SectionForm>;
   /** Inline-editor mode: FAQ items render expanded so their answers are clickable */
   editing?: boolean;
   /** Replaces the sections, e.g. a single post – header, navigation and footer stay the page's */
@@ -122,7 +126,7 @@ export function LandingShell({
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6 lg:px-8">
         {children ??
           definition.sections.map((section, i) => (
-            <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} posts={posts} labels={labels} editing={editing} hideAuthLinks={signedIn && !editing} />
+            <LandingSectionView key={i} section={section} path={`sections.${i}`} settings={settings} events={events} posts={posts} forms={forms} labels={labels} editing={editing} hideAuthLinks={signedIn && !editing} />
           ))}
       </main>
 

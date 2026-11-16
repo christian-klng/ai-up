@@ -1,33 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CheckCircle2, ImagePlus, Loader2, PartyPopper, X } from "lucide-react";
-import type { FormContactMode, FormResponse, FormSubmitError, FormSuccess } from "@/lib/collection-forms";
-import type { ImageAnswer, LinkAnswer, StructureAnswers, StructureDefinition, StructureElement } from "@/lib/structures/types";
+import type { FormResponse, FormSubmitError, FormSuccess, SectionForm } from "@/lib/collection-forms";
+import type { ImageAnswer, LinkAnswer, StructureAnswers, StructureElement } from "@/lib/structures/types";
 import { validateStructureAnswers, type AnswerIssue } from "@/lib/structures/validate";
 import { visibleElements } from "@/lib/structures/visibility";
 import { Markdown } from "@/components/content/markdown";
+import { isEmbedded, postToEmbedder } from "./embed-bridge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-type Props = {
-  token: string;
-  /** the public part of the template (src/lib/collection-forms.ts) */
-  definition: StructureDefinition;
-  titleLabel: string;
-  submitLabel: string;
-  contact: FormContactMode;
-  /** offer "answer me by e-mail" (the form allows workflows to mail senders) */
-  mailReply: boolean;
-  /** signed render time; the server measures the time to fill in with it */
-  stamp: string;
-  privacyUrl: string | null;
-  maxUploadMb: number;
-};
+type Props = { form: SectionForm };
 
 type Upload = { ticket: string; preview: string; name: string };
 type Issue = { key: string; code: AnswerIssue["code"]; count?: number };
@@ -41,8 +29,11 @@ const selectClass =
  * its own rather than the members' fill form: no boards, no server actions, no session – it talks
  * to /api/forms and /api/upload only, so it also works inside an iframe on somebody else's site.
  */
-export function PublicForm({ token, definition, titleLabel, submitLabel, contact, mailReply, stamp, privacyUrl, maxUploadMb }: Props) {
+export function PublicForm({ form }: Props) {
+  const { token, definition, titleLabel, submitLabel, contact, mailReply, stamp, privacyUrl, maxUploadMb } = form;
   const t = useTranslations("forms");
+  // A page may show the same form twice (in the page and behind a button): ids must not collide.
+  const uid = useId();
   const [title, setTitle] = useState("");
   const [answers, setAnswers] = useState<StructureAnswers>({});
   const [name, setName] = useState("");
@@ -209,8 +200,8 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
         void submit();
       }}
     >
-      <Field label={titleLabel || t("titleLabel")} required htmlFor="form-title">
-        <Input id="form-title" value={title} maxLength={200} aria-invalid={Boolean(issueFor(TITLE_KEY))} onChange={(e) => { setTitle(e.target.value); setIssues((prev) => prev.filter((i) => i.key !== TITLE_KEY)); }} />
+      <Field label={titleLabel || t("titleLabel")} required htmlFor={`${uid}-title`}>
+        <Input id={`${uid}-title`} value={title} maxLength={200} aria-invalid={Boolean(issueFor(TITLE_KEY))} onChange={(e) => { setTitle(e.target.value); setIssues((prev) => prev.filter((i) => i.key !== TITLE_KEY)); }} />
         {issueText(issueFor(TITLE_KEY))}
       </Field>
 
@@ -224,7 +215,7 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
           );
         }
         const issue = issueFor(el.key);
-        const id = `form-${el.key}`;
+        const id = `${uid}-${el.key}`;
         if (el.type === "checkbox") {
           return (
             <div key={el.key} className="grid gap-1.5">
@@ -250,11 +241,11 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
 
       {contact !== "off" && (
         <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
-          <Field label={t("contactName")} required={contact === "required"} htmlFor="form-contact-name">
-            <Input id="form-contact-name" autoComplete="name" maxLength={120} value={name} aria-invalid={contact === "required" && Boolean(error) && !name.trim()} onChange={(e) => setName(e.target.value)} />
+          <Field label={t("contactName")} required={contact === "required"} htmlFor={`${uid}-contact-name`}>
+            <Input id={`${uid}-contact-name`} autoComplete="name" maxLength={120} value={name} aria-invalid={contact === "required" && Boolean(error) && !name.trim()} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label={t("contactEmail")} required={contact === "required"} htmlFor="form-contact-email">
-            <Input id="form-contact-email" type="email" autoComplete="email" maxLength={200} value={email} aria-invalid={contact === "required" && Boolean(error) && !email.trim()} onChange={(e) => setEmail(e.target.value)} />
+          <Field label={t("contactEmail")} required={contact === "required"} htmlFor={`${uid}-contact-email`}>
+            <Input id={`${uid}-contact-email`} type="email" autoComplete="email" maxLength={200} value={email} aria-invalid={contact === "required" && Boolean(error) && !email.trim()} onChange={(e) => setEmail(e.target.value)} />
           </Field>
           {mailReply && (
             <label className="flex items-start gap-2.5 text-sm sm:col-span-2">
@@ -431,8 +422,13 @@ function SuccessMessage({ success, onAnother }: { success: FormSuccess; onAnothe
   const redirect = success.redirectUrl;
 
   useEffect(() => {
+    postToEmbedder({ type: "aiup-form:submitted" });
+  }, []);
+
+  useEffect(() => {
     if (!redirect) return;
-    const timer = window.setTimeout(() => window.location.assign(redirect), 2500);
+    // Embedded, the page to leave is the one around the iframe – only it can do that.
+    const timer = window.setTimeout(() => (isEmbedded() ? postToEmbedder({ type: "aiup-form:redirect", url: redirect }) : window.location.assign(redirect)), 2500);
     return () => window.clearTimeout(timer);
   }, [redirect]);
 

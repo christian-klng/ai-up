@@ -1,6 +1,6 @@
 # Externer Kanal für Sammlungen („Formular")
 
-Stand: 16.11.2026 – Phasen 1 und 2 umgesetzt, Phasen 3–4 offen.
+Stand: 16.11.2026 – alle vier Phasen umgesetzt.
 
 Eine Sammlung kann per Schalter einen Kanal nach außen öffnen: Nicht-Mitglieder senden über ein
 Formular Einträge ein („erstellt von Extern"). Gedacht für Ideen, Feature Requests und
@@ -52,11 +52,26 @@ Support-Anfragen von Kunden.
 | Im Text, extern | `<aiup-form token="…">` lädt ein iframe auf `/f/<token>?embed=1`, Höhe per `postMessage` |
 | Schwebender Button, extern | dasselbe Skript mit `mode="button"`: fixer Button plus Overlay mit iframe |
 | Link/Button auf beliebigem Element | Attribut `data-aiup-form="<token>"` öffnet dasselbe Overlay |
-| Eigene Webseite | Sektion `form` in `landing-schema.ts` (Sammlungs-Slug, `display: inline \| button \| floating`), nativ gerendert |
+| Eigene Webseite | Sektion `form` in `landing-schema.ts` (`collectionId`, `display: inline \| button \| floating`), nativ gerendert |
 
-- **Sektion `form`:** Die Seiten-Definition nennt nur die Sammlung, nie Token oder URL. Ist das
-  Formular aus, bleibt die Sektion unsichtbar und `landingWarnings()` meldet es. Im Editor `inert`.
-- **Skript:** `/api/forms/embed.js`.
+- **Sektion `form`:** Die Seiten-Definition nennt nur die Sammlung (`collectionId`, wie bei
+  `posts`), nie Token oder URL. Aufgelöst wird auf dem Server (`resolveSectionForms`, in
+  `LandingView` und im Admin-Editor); ist das Formular aus, bleibt die Sektion unsichtbar und
+  `landingWarnings()` meldet es. Im Editor `inert`; `floating` erscheint dort an Ort und Stelle
+  statt fixiert. Angelegt wird die Sektion wie alle anderen über die Seiten-Definition (MCP,
+  Regeln in `aiup://docs/pages`).
+- **Skript:** `/api/forms/embed.js` (Quelle `src/lib/form-embed-script.ts`, schlichtes ES2017 ohne
+  Abhängigkeiten). Es setzt nur das iframe, öffnet das Overlay und hört auf drei Nachrichten der
+  Formularseite (`src/components/forms/embed-bridge.tsx`): `aiup-form:height` (iframe so hoch wie
+  der Inhalt – gemessen wird `<main>`, weil `<body>` sich auf die Rahmenhöhe streckt),
+  `aiup-form:submitted` (wird als gleichnamiges DOM-Event am einbettenden Element ausgelöst) und
+  `aiup-form:redirect` (die Weiterleitung nach dem Absenden kann nur die äußere Seite ausführen;
+  nur https). Nachrichten zählen nur vom Origin des Skripts und von einem iframe, das es selbst
+  gesetzt hat. Attribute von `<aiup-form>`: `token`, `mode` (`inline | button | link`), `label`,
+  `color`, `position="left"`.
+- **Im iframe** behält die Formularseite ihren deckenden Hintergrund: ein durchsichtiges Formular
+  wäre auf einer dunklen Fremdseite unlesbar, sobald App-Theme und Seite nicht zusammenpassen.
+- **Snippets** zum Kopieren stehen im Dialog „Externer Kanal" unter „Einbetten".
 - **API:** `POST /api/forms/<token>/submissions`, `GET /api/forms/<token>/submissions/<id>?key=…`.
 - **Proxy:** `/f` und `/api/forms` in `PUBLIC_PREFIXES`, `f` in `RESERVED_PAGE_SLUGS`.
 - **Hosts:** Das Token löst die Community auf; die Seite funktioniert auf Haupthost, Subdomain und
@@ -142,8 +157,13 @@ Workflow kann also sofort antworten.
 
 - **Admin:** *Verwaltung → Sammlungen → Sammlung*, Abschnitt „Externer Kanal": Schalter, Vorlage,
   Feldauswahl, Texte, Erfolgsmeldung, Zähler, kopierbarer Link (Snippets ab Phase 3).
-- **MCP (Phase 4):** `get_collection_form`/`update_collection_form` unter `knowledge:read|write`;
-  der Schalter `set_collection_form_enabled` mit eigenem Scope `knowledge:forms`.
+- **MCP:** `get_collection_form` (`knowledge:read`: Einstellungen, Adresse, Zähler, Vorlagen mit
+  Feldern, Einbett-Code) und `update_collection_form` (`knowledge:write`, Merge-Semantik:
+  weggelassene Felder behalten ihren Wert; schaltet nie ein oder aus). Der Schalter
+  `set_collection_form_enabled` hat den **eigenen Scope `knowledge:forms`** – analog zu
+  `meetings:invite`, weil ein geöffnetes Formular jede Person im Internet in die Community
+  schreiben lässt. Regeln für Clients stehen in `aiup://docs/collections` (Abschnitt „External
+  channel"). Der Schlüssel-Dialog wählt beim Anlegen weiterhin alle Scopes vor, auch diesen.
 
 ## 8. Reihenfolge
 

@@ -29,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Community } from "@/server/db/schema";
 import type { PostFeed } from "@/server/domain/posts";
+import type { SectionForm } from "@/lib/collection-forms";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import { PAGE_SLUG_MAX, PAGE_TITLE_MAX, SITE_PAGE_KINDS, pageSlugProblem, type SitePageKind } from "@/lib/site-pages";
 import { slugify } from "@/lib/slug";
@@ -47,6 +48,7 @@ export type PageState = {
   currentVersion: number | null;
   versions: VersionRow[];
   posts: Record<string, PostFeed>;
+  forms: Record<string, SectionForm>;
 };
 
 function tabValue(page: PageState): string {
@@ -163,6 +165,7 @@ export function LandingAdmin({
           eventsUrl={eventsUrl}
           nav={nav}
           posts={editorPage.posts}
+          forms={editorPage.forms}
         />
       )}
       {adding && (

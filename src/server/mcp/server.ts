@@ -22,6 +22,9 @@ import { findPostsPageSlug, setCollectionPublic, setContentPublished } from "@/s
 import { canManagePublicPages } from "@/server/auth/session";
 import { MAX_CUSTOM_PAGES, RESERVED_PAGE_SLUGS, SITE_PAGE_KINDS } from "@/lib/site-pages";
 import { EVENT_TEXT_KEYS, LANDING_ICONS, LANDING_PREVIEWS, POSTS_LAYOUTS, SITE_PAGES, validateLandingDefinition } from "@/lib/landing-schema";
+import { getCollectionForm, saveCollectionForm } from "@/server/domain/collection-forms";
+import { FORM_CONTACT_MODES, FORM_DAILY_LIMIT_MAX, FORM_SUCCESS_STYLES, FORM_WAIT_SECONDS_MAX, formSettingsSchema, isFormFieldAllowed, type FormSettings } from "@/lib/collection-forms";
+import { isAnswerable } from "@/lib/structures/types";
 import { addContentVersion, createContent, getAreaById, getAreaBySlug, getContent, listAreas, listContents, type ContentVersionInput } from "@/server/domain/knowledge";
 import { buildStructuredVersionInput } from "@/server/domain/structured-entries";
 import { importImageFromUrl } from "@/server/media/import-image";
@@ -157,7 +160,8 @@ come from the app theme automatically: write copy, don't style.
       "format": "optional: online | onsite", "limit": 6, "emptyText": "optional, shown when there is nothing to list" },
     { "type": "event", "slug": "slug of one event" },
     { "type": "order-status" },
-    { "type": "posts", "title": "optional", "intro": "optional", "collectionId": "uuid", "layout": "cards | list | timeline", "limit": 10, "emptyText": "optional" }
+    { "type": "posts", "title": "optional", "intro": "optional", "collectionId": "uuid", "layout": "cards | list | timeline", "limit": 10, "emptyText": "optional" },
+    { "type": "form", "collectionId": "uuid", "display": "inline | button | floating", "title": "optional", "intro": "optional", "buttonLabel": "optional, max 40" }
   ],
   "eventTexts": { "buy": "optional – replaces single texts of the event sections, see below" },
   "footer": { "text": "optional", "links": [ { "label": "Impressum", "href": "https://…" } ] }
@@ -233,6 +237,18 @@ Posts (blog, changelog)
 - create_page with kind "blog" or "changelog" sets all of this up: a public collection, a template
   (cover, teaser, text resp. summary and changes) and the posts section.
 - posts layouts: ${POSTS_LAYOUTS.join(", ")}.
+
+Forms (ideas, feature requests, support questions from outside)
+- A "form" section shows the public form of one collection – its "external channel", through which
+  people without an account send in entries. The section only names the collection (collectionId from
+  list_collections); which fields the form asks, its texts and its success message are set up by an admin
+  under Admin → Collections → "External channel", and the form must be switched on there. Without an
+  open form the section stays invisible (validate_page and update_page warn about it).
+- display: "inline" puts the form into the page, "button" shows heading, text and a button that opens it
+  in a dialog, "floating" pins a button to the bottom right corner of the page (title/intro then only
+  appear in the dialog). title and intro replace the form's own heading and introduction; buttonLabel is
+  for "button" and "floating" and falls back to the title.
+- One floating form per page is enough – several would sit on top of each other.
 - Pages are monolingual – write them in the community's language (see current app context below).
 - Every update creates a new version per page (traceable, restorable). Validate first with validate_page.
 - A page only goes public when the admin (or set_page_enabled) turns it on; each page has its own flag.
@@ -379,6 +395,48 @@ aiup://docs/pages. Its entries stay members-only until published one by one:
   future) sets the date the post shows and is sorted by – use it for past releases or imported articles.
 - list_entries/get_entry report publishedAt; get_entry also the public address (publicUrl).
 - Members may write into a public collection – nothing of theirs is public until an admin publishes it.
+
+## External channel (public form of a collection)
+
+A collection can open a channel to the outside: **one** public form through which people without an
+account send in entries – ideas, feature requests, support questions. This is the opposite direction of
+publishing: nothing becomes readable from outside, but anyone with the link can write.
+
+- get_collection_form (scope knowledge:read) returns the settings, the public address, the submission
+  count, the templates the collection offers with their fields, and ready-made embed code.
+- update_collection_form (scope knowledge:write) sets what the form asks and says. Merge semantics:
+  a field you leave out keeps its value. It never switches the form on or off.
+- set_collection_form_enabled (scope **knowledge:forms**, deliberately its own) opens or closes the
+  form. The address stays the same across toggles. Opening needs a template and at least one field a
+  person can fill in.
+
+Settings:
+- templateId: one of the collection's templates (get_collection_form lists them). fieldKeys: the element
+  keys shown to outsiders – only types text, textarea, select, chips, checkbox, link, markdown (not
+  multiple), image and info are possible; boards, process graphs, qa and video never appear. Everything
+  not listed stays internal: the team or a workflow fills it in later, and an internal field may be
+  required for members without blocking outsiders. A field whose showIf depends on an internal field
+  never shows. Changing templateId without fieldKeys selects every possible field.
+- Every submission also asks for a title (label: texts.titleLabel) – entries need one.
+- contact: "off" | "optional" | "required" – built-in name and e-mail fields. Contact details are stored
+  apart from the entry (never in its text, the search or an agent's context); only admins see them, on
+  the entry page. Do not add name/e-mail elements to the template instead.
+- mailReply: lets workflows mail the sender (action reply_to_submitter); the form then shows a consent
+  box. Needs contact other than "off".
+- texts: { title, intro (Markdown), submitLabel, titleLabel } – empty strings fall back to the
+  collection name resp. the translated defaults.
+- success: { style: "plain" | "card" | "celebrate", title, body (Markdown), allowAnother, redirectUrl
+  (https or null), waitForWorkflow, waitSeconds (5–${FORM_WAIT_SECONDS_MAX}) }. With waitForWorkflow the form waits for a
+  workflow's respond_to_submission and falls back to this static message when nothing arrives in time.
+- dailyLimit (1–${FORM_DAILY_LIMIT_MAX}): submissions accepted per day, the cap on what a flood can cost.
+
+Entries from outside have no author, are marked "external", get no LLM evaluation and no link
+previews. Content triggers ignore them unless includeExternalOrigin is set; build automation on the
+trigger form.submitted instead (list_triggers), with the actions respond_to_submission, update_entry
+and reply_to_submitter (list_actions).
+
+To show the form: link to its address, embed it on other websites with the code from
+get_collection_form, or put a "form" section on one of the community's own pages (aiup://docs/pages).
 `;
 
 /** Current templates and collections appended to the doc so the calling LLM knows ids, slugs and versions. */
@@ -493,7 +551,7 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
         (cid === ROOT_COMMUNITY_ID
           ? ""
           : "Two things belong to the operator rather than to this community and are read-only here: the integrations (call server, recording storage) and the platform-wide model capability table. ") +
-        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry / update_board. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_cover / set_meeting_invite.",
+        "AI-Up workflow engine room. Use list_triggers/list_actions first, then create_workflow/update_workflow. Read resource aiup://docs/workflow-schema for the definition format. Also manages the public site pages (landing, imprint, privacy): read resource aiup://docs/pages first, then get_page / validate_page / update_page. Model capabilities (what each LLM model can do): read resource aiup://docs/model-capabilities first, then list_model_capabilities / set_model_capabilities. Content collections (templates + entries): read resource aiup://docs/collections first, then list_collections / list_templates / get_template / save_template / set_template_evaluation / set_collection_templates / create_entry / update_entry / update_board. A collection's public form for people outside (ideas, feature requests, support): get_collection_form / update_collection_form / set_collection_form_enabled. Meetings: read resource aiup://docs/meetings first, then list_meeting_spaces / list_meetings / create_meeting / update_meeting / set_meeting_cover / set_meeting_invite.",
     },
   );
 
@@ -1033,6 +1091,138 @@ export async function buildMcpServer(auth: ApiAuth): Promise<McpServer> {
       }
       await setAreaTemplates(cid, area.id, unique, auth.user.id);
       return text({ collectionId: area.id, templateIds: unique.length ? unique : "system-defaults" });
+    },
+  );
+
+  // --- External channel: the public form of a collection (docs/externe-formulare.md) ---
+
+  /** Copy-and-paste code for other websites, see src/lib/form-embed-script.ts. */
+  const embedCode = (url: string) => {
+    const { origin, pathname } = new URL(url);
+    const token = pathname.split("/").pop() ?? "";
+    const script = `<script src="${origin}/api/forms/embed.js" async></script>`;
+    return {
+      inline: `${script}\n<aiup-form token="${token}"></aiup-form>`,
+      floatingButton: `${script}\n<aiup-form token="${token}" mode="button" label="Feedback"></aiup-form>`,
+      link: `${script}\n<a href="${url}" data-aiup-form="${token}">Feedback</a>`,
+    };
+  };
+
+  const describeForm = async (area: KnowledgeArea) => {
+    const view = await getCollectionForm(cid, area.id);
+    if (!view) return undefined;
+    return {
+      collectionId: area.id,
+      collection: area.slug,
+      configured: Boolean(view.form),
+      enabled: view.settings.enabled,
+      url: view.url,
+      submissionCount: view.form?.submissionCount ?? 0,
+      settings: { templateId: view.settings.templateId, fieldKeys: view.settings.fieldKeys, texts: view.settings.texts, contact: view.settings.contact, mailReply: view.settings.mailReply, success: view.settings.success, dailyLimit: view.settings.dailyLimit },
+      embed: view.url && view.settings.enabled ? embedCode(view.url) : null,
+      templates: view.templates.map((tpl) => ({
+        id: tpl.id,
+        name: tpl.name,
+        fields: tpl.definition.elements.map((el) => ({ key: el.key, label: el.label, type: el.type, required: Boolean(el.required), possible: isFormFieldAllowed(el), answerable: isAnswerable(el) })),
+      })),
+    };
+  };
+
+  const formSaveError = (reason: string) =>
+    reason === "noTemplate"
+      ? "the form has no template – set templateId with update_collection_form first"
+      : reason === "noFields"
+        ? "the form has no field a person could fill in – set fieldKeys with update_collection_form (get_collection_form lists the possible fields)"
+        : reason === "template"
+          ? "this template is not offered in the collection (get_collection_form lists the ones that are)"
+          : "collection not found";
+
+  server.registerTool(
+    "get_collection_form",
+    { title: "Collections - Get public form", description: "The external channel of a collection: settings of its public form, whether it is open, its address, the number of submissions, the templates and fields it can be made of, and embed code for other websites. See resource aiup://docs/collections.", inputSchema: { collection: collectionInput } },
+    async ({ collection }) => {
+      require(auth, "knowledge:read");
+      const area = await resolveArea(collection);
+      const form = area && (await describeForm(area));
+      return form ? text(form) : fail("collection not found");
+    },
+  );
+
+  server.registerTool(
+    "update_collection_form",
+    {
+      title: "Collections - Set up public form",
+      description: "Sets what a collection's public form asks and says: template, the fields shown to outsiders, built-in contact fields, texts, success message, daily limit. Fields left out keep their value. Does not open or close the form – that is set_collection_form_enabled. See resource aiup://docs/collections.",
+      inputSchema: {
+        collection: collectionInput,
+        templateId: z.string().optional().describe("template id (uuid) or systemKey; must be offered in the collection"),
+        fieldKeys: z.array(z.string().max(40)).max(100).optional().describe("element keys shown to outsiders; everything else stays internal"),
+        contact: z.enum(FORM_CONTACT_MODES).optional().describe("built-in name and e-mail fields"),
+        mailReply: z.boolean().optional().describe("allow workflows to mail senders who ask for it (needs contact other than off)"),
+        texts: z.object({ title: z.string().max(120), intro: z.string().max(2000), submitLabel: z.string().max(40), titleLabel: z.string().max(80) }).partial().optional(),
+        success: z
+          .object({ style: z.enum(FORM_SUCCESS_STYLES), title: z.string().max(120), body: z.string().max(2000), allowAnother: z.boolean(), redirectUrl: z.string().max(500).nullable(), waitForWorkflow: z.boolean(), waitSeconds: z.number().int() })
+          .partial()
+          .optional(),
+        dailyLimit: z.number().int().optional(),
+      },
+    },
+    async ({ collection, templateId, fieldKeys, contact, mailReply, texts, success, dailyLimit }) => {
+      require(auth, "knowledge:write");
+      const area = await resolveArea(collection);
+      const view = area && (await getCollectionForm(cid, area.id));
+      if (!area || !view) return fail("collection not found");
+
+      let template = view.templates.find((tpl) => tpl.id === view.settings.templateId);
+      if (templateId !== undefined) {
+        const wanted = await resolveTemplate(templateId);
+        template = wanted && view.templates.find((tpl) => tpl.id === wanted.id);
+        if (!template) return fail(formSaveError("template"));
+      }
+      // A new template without a field list starts with everything the form can show, as the dialog does.
+      const keys = fieldKeys ?? (templateId !== undefined && template ? template.definition.elements.filter(isFormFieldAllowed).map((el) => el.key) : view.settings.fieldKeys);
+      if (fieldKeys && template) {
+        const possible = new Map(template.definition.elements.map((el) => [el.key, isFormFieldAllowed(el)]));
+        const unknown = fieldKeys.filter((k) => !possible.has(k));
+        const impossible = fieldKeys.filter((k) => possible.get(k) === false);
+        if (unknown.length) return fail(`unknown field keys: ${unknown.join(", ")} – the template has: ${[...possible.keys()].join(", ")}`);
+        if (impossible.length) return fail(`these fields cannot be part of a public form (boards, graphs, qa, video, accordion lists): ${impossible.join(", ")}`);
+      }
+      const next: FormSettings = {
+        ...view.settings,
+        templateId: template?.id ?? null,
+        fieldKeys: keys,
+        contact: contact ?? view.settings.contact,
+        mailReply: mailReply ?? view.settings.mailReply,
+        texts: { ...view.settings.texts, ...texts },
+        success: { ...view.settings.success, ...success },
+        dailyLimit: dailyLimit ?? view.settings.dailyLimit,
+      };
+      const parsed = formSettingsSchema.safeParse(next);
+      if (!parsed.success) return fail(`invalid settings: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+      if (parsed.data.mailReply && parsed.data.contact === "off") return fail('mailReply needs the contact fields – set contact to "optional" or "required"');
+      const res = await saveCollectionForm(cid, area.id, parsed.data, auth.user.id);
+      if (!res.ok) return fail(formSaveError(res.reason));
+      await audit(auth, "collection.form.updated", res.form.id, { areaId: area.id }, "collection_form");
+      return text(await describeForm(area));
+    },
+  );
+
+  server.registerTool(
+    "set_collection_form_enabled",
+    {
+      title: "Collections - Open or close public form",
+      description: "Opens or closes a collection's public form and returns its address. While open, anyone on the internet with the address can send entries into the collection – see resource aiup://docs/collections. The address stays the same across toggles. Requires scope knowledge:forms.",
+      inputSchema: { collection: collectionInput, enabled: z.boolean() },
+    },
+    async ({ collection, enabled }) => {
+      require(auth, "knowledge:forms");
+      const area = await resolveArea(collection);
+      const view = area && (await getCollectionForm(cid, area.id));
+      if (!area || !view) return fail("collection not found");
+      const res = await saveCollectionForm(cid, area.id, { ...view.settings, enabled }, auth.user.id);
+      if (!res.ok) return fail(formSaveError(res.reason));
+      return text({ collectionId: area.id, enabled: res.form.enabled, url: res.url, embed: res.form.enabled ? embedCode(res.url) : null });
     },
   );
 

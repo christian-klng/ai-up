@@ -146,3 +146,19 @@ export const formSubmissionSchema = z.object({
 export type FormSubmissionInput = z.infer<typeof formSubmissionSchema>;
 
 export type FormSubmitError = "invalid" | "closed" | "tooFast" | "expired" | "rateLimited" | "contact" | "unexpected";
+
+/** Everything the form component needs, resolved on the server (public page and `form` sections of site pages). */
+export type SectionForm = {
+  token: string;
+  /** the form's own heading, or the collection name */
+  heading: string;
+  intro: string;
+  definition: StructureDefinition;
+  titleLabel: string;
+  submitLabel: string;
+  contact: FormContactMode;
+  mailReply: boolean;
+  stamp: string;
+  privacyUrl: string | null;
+  maxUploadMb: number;
+};

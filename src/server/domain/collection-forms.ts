@@ -29,7 +29,11 @@ import {
   type FormSubmissionInput,
   type FormSubmitError,
   type FormSuccess,
+  type SectionForm,
+  DEFAULT_FORM_TEXTS as FORM_TEXT_DEFAULTS,
+  FORM_UPLOAD_MAX_MB,
 } from "@/lib/collection-forms";
+import { collectFormCollectionIds, type LandingDefinition } from "@/lib/landing-schema";
 import type { StructureAnswers, StructureDefinition } from "@/lib/structures/types";
 import { isMediaLikeAnswer } from "@/lib/structures/types";
 import type { AnswerIssue } from "@/lib/structures/validate";
@@ -169,6 +173,41 @@ export async function resolveForm(token: string): Promise<ResolvedForm | null> {
   if (!(await isTemplateAvailableForArea(row.area.id, row.template.id))) return null;
   if (formProblems(row.template.definition, row.form.fieldKeys).length) return null;
   return { ...row, definition: publicDefinition(row.template.definition, row.form.fieldKeys) };
+}
+
+/** What the form component is given – also the moment the fill-in clock starts (stamp). */
+export async function sectionFormOf(resolved: ResolvedForm): Promise<SectionForm> {
+  const { form, area, community, definition } = resolved;
+  const texts = { ...FORM_TEXT_DEFAULTS, ...form.texts };
+  return {
+    token: form.token,
+    heading: texts.title || area.name,
+    intro: texts.intro,
+    definition,
+    titleLabel: texts.titleLabel,
+    submitLabel: texts.submitLabel,
+    contact: form.contact,
+    mailReply: form.mailReply && form.contact !== "off",
+    stamp: issueFormStamp(form.id),
+    privacyUrl: community.privacyEnabled ? await communityUrl(community, "/privacy") : null,
+    maxUploadMb: FORM_UPLOAD_MAX_MB,
+  };
+}
+
+/** Open forms for the `form` sections of a site page, by collection id. A collection without one is simply missing. */
+export async function resolveSectionForms(communityId: string, definition: LandingDefinition): Promise<Record<string, SectionForm>> {
+  const ids = collectFormCollectionIds(definition);
+  if (ids.length === 0) return {};
+  const rows = await db
+    .select({ areaId: collectionForms.areaId, token: collectionForms.token })
+    .from(collectionForms)
+    .where(and(eq(collectionForms.communityId, communityId), eq(collectionForms.enabled, true), inArray(collectionForms.areaId, ids)));
+  const out: Record<string, SectionForm> = {};
+  for (const row of rows) {
+    const resolved = await resolveForm(row.token);
+    if (resolved) out[row.areaId] = await sectionFormOf(resolved);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

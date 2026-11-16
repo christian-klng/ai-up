@@ -300,6 +300,23 @@ const postsSection = z.object({
   emptyText: z.string().trim().min(1).max(200).optional(),
 });
 
+/**
+ * The public form of one collection (its "external channel", docs/externe-formulare.md). The
+ * definition names the collection only – whether there is a form, and what it asks, is decided
+ * under Admin → Collections. `title`/`intro` replace the form's own heading and introduction.
+ */
+export const FORM_SECTION_DISPLAYS = ["inline", "button", "floating"] as const;
+const formSection = z.object({
+  type: z.literal("form"),
+  collectionId: z.string().uuid(),
+  /** inline: in the page · button: a button that opens it · floating: a button fixed to the corner of the page */
+  display: z.enum(FORM_SECTION_DISPLAYS).default("inline"),
+  title: z.string().trim().max(120).optional(),
+  intro: z.string().trim().max(400).optional(),
+  /** button and floating; falls back to the title */
+  buttonLabel: z.string().trim().min(1).max(40).optional(),
+});
+
 export const landingSectionSchema = z.discriminatedUnion("type", [
   heroSection,
   featuresSection,
@@ -313,8 +330,10 @@ export const landingSectionSchema = z.discriminatedUnion("type", [
   eventSection,
   orderStatusSection,
   postsSection,
+  formSection,
 ]);
 
+export type FormSection = z.infer<typeof formSection>;
 export type PostsSection = z.infer<typeof postsSection>;
 export type PostsLayout = (typeof POSTS_LAYOUTS)[number];
 
@@ -400,6 +419,11 @@ export function isAuthHref(href: string): boolean {
 /** Collections shown by the posts sections of a definition. */
 export function collectPostsCollectionIds(definition: LandingDefinition): string[] {
   return [...new Set(definition.sections.flatMap((s) => (s.type === "posts" ? [s.collectionId] : [])))];
+}
+
+/** Collections whose public form a definition shows. */
+export function collectFormCollectionIds(definition: LandingDefinition): string[] {
+  return [...new Set(definition.sections.flatMap((s) => (s.type === "form" ? [s.collectionId] : [])))];
 }
 
 /** All media ids referenced by a definition (hero images, image sections, team portraits). */

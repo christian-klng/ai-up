@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { FileQuestion } from "lucide-react";
-import { issueFormStamp, resolveForm } from "@/server/domain/collection-forms";
-import { communityUrl } from "@/server/domain/communities";
-import { DEFAULT_FORM_TEXTS, FORM_UPLOAD_MAX_MB } from "@/lib/collection-forms";
+import { resolveForm, sectionFormOf } from "@/server/domain/collection-forms";
 import { BrandLogo } from "@/components/shell/brand-logo";
 import { Markdown } from "@/components/content/markdown";
 import { PublicForm } from "@/components/forms/public-form";
+import { EmbedBridge } from "@/components/forms/embed-bridge";
 
 export const dynamic = "force-dynamic";
 
@@ -38,12 +37,12 @@ export default async function CollectionFormPage({ params, searchParams }: PageP
     );
   }
 
-  const { form, area, community, definition } = resolved;
-  const texts = { ...DEFAULT_FORM_TEXTS, ...form.texts };
-  const privacyUrl = community.privacyEnabled ? await communityUrl(community, "/privacy") : null;
+  const { community } = resolved;
+  const form = await sectionFormOf(resolved);
 
   return (
-    <main className={embed ? "w-full p-1" : "mx-auto min-h-svh w-full max-w-xl px-4 py-8 sm:py-12"}>
+    <main className={embed ? "w-full p-4" : "mx-auto min-h-svh w-full max-w-xl px-4 py-8 sm:py-12"}>
+      {embed && <EmbedBridge />}
       {!embed && (
         <div className="mb-6 flex items-center gap-2.5">
           <BrandLogo settings={community} size={28} />
@@ -51,20 +50,10 @@ export default async function CollectionFormPage({ params, searchParams }: PageP
         </div>
       )}
       <div className={embed ? "" : "rounded-xl border bg-card p-5 shadow-sm sm:p-7"}>
-        <h1 className="text-xl font-semibold tracking-tight">{texts.title || area.name}</h1>
-        {texts.intro && <Markdown className="mt-2 text-sm text-muted-foreground">{texts.intro}</Markdown>}
+        <h1 className="text-xl font-semibold tracking-tight">{form.heading}</h1>
+        {form.intro && <Markdown className="mt-2 text-sm text-muted-foreground">{form.intro}</Markdown>}
         <div className="mt-6">
-          <PublicForm
-            token={token}
-            definition={definition}
-            titleLabel={texts.titleLabel}
-            submitLabel={texts.submitLabel}
-            contact={form.contact}
-            mailReply={form.mailReply && form.contact !== "off"}
-            stamp={issueFormStamp(form.id)}
-            privacyUrl={privacyUrl}
-            maxUploadMb={FORM_UPLOAD_MAX_MB}
-          />
+          <PublicForm form={form} />
         </div>
       </div>
     </main>
