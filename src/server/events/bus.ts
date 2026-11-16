@@ -11,6 +11,8 @@ export type EventOrigin =
   | { kind: "workflow"; runId: string; workflowId: string; depth: number }
   /** A tool call of an AI agent, acting for `userId` (see docs/ki-agenten.md 1.5) */
   | { kind: "agent"; threadId: string; agentId: string; userId: string }
+  /** Someone outside the community, through a collection's public form (docs/externe-formulare.md) */
+  | { kind: "external"; formId: string; submissionId: string }
   | { kind: "system" };
 
 export type ContentEventPayload = {

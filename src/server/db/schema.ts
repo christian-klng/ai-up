@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
+import type { FormContactMode, FormSuccess, FormTexts } from "@/lib/collection-forms";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import type { TemplateEvaluation } from "@/lib/structures/evaluation";
 import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
@@ -1274,6 +1275,8 @@ export const contents = pgTable(
     authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
     lastEditedBy: text("last_edited_by").references(() => users.id, { onDelete: "set null" }),
     pinned: boolean("pinned").notNull().default(false),
+    /** Sent in through the collection's public form by someone outside the community (no author). */
+    external: boolean("external").notNull().default(false),
     /** Set by an admin: shown on public pages while the collection is public_on_site (current version). */
     publishedAt: timestamp("published_at", { withTimezone: true }),
     /** Address on public pages; created at the first publish and kept when the title changes. */
@@ -1328,6 +1331,71 @@ export const contentMedia = pgTable(
       .references(() => mediaFiles.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.contentId, t.mediaId] }), index("content_media_media_idx").on(t.mediaId)],
+);
+
+/**
+ * External channel of a collection (docs/externe-formulare.md): one template published as a form
+ * at /f/<token> that people outside the community fill in. One per collection, off by default;
+ * the token stays stable across toggles, like the invite links.
+ */
+export const collectionForms = pgTable(
+  "collection_forms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => knowledgeAreas.id, { onDelete: "cascade" }),
+    /** URL-safe random secret; the public URL is /f/<token> */
+    token: text("token").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    /** The template the form is made of; submissions snapshot its current version. */
+    templateId: uuid("template_id").references(() => contentTemplates.id, { onDelete: "set null" }),
+    /** Element keys shown to outsiders; everything else stays internal (src/lib/collection-forms.ts). */
+    fieldKeys: jsonb("field_keys").$type<string[]>().notNull().default([]),
+    texts: jsonb("texts").$type<FormTexts>().notNull(),
+    /** Built-in name/e-mail fields: off | optional | required */
+    contact: text("contact").$type<FormContactMode>().notNull().default("off"),
+    success: jsonb("success").$type<FormSuccess>().notNull(),
+    /** Submissions accepted per day – the cap on what a flood can cost. */
+    dailyLimit: integer("daily_limit").notNull().default(200),
+    submissionCount: integer("submission_count").notNull().default(0),
+    /** The admin who last switched the form on. */
+    enabledBy: text("enabled_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("collection_forms_token_idx").on(t.token), uniqueIndex("collection_forms_area_idx").on(t.areaId)],
+);
+
+/**
+ * One submission through a collection form. Holds what must not sit in the entry itself: the
+ * sender's contact details (admins only – never in the entry text, the search or an agent's
+ * context) and, later, the answer a workflow writes for the sender.
+ */
+export const formSubmissions = pgTable(
+  "form_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...communityScope(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => collectionForms.id, { onDelete: "cascade" }),
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contents.id, { onDelete: "cascade" }),
+    /** sha256 of the key the sender got back; lets them fetch a workflow's answer later */
+    accessKeyHash: text("access_key_hash").notNull(),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email"),
+    /** The sender agreed to be answered by e-mail. */
+    mailConsent: boolean("mail_consent").notNull().default(false),
+    /** Page the form was embedded in, as reported by the browser */
+    pageUrl: text("page_url"),
+    /** Answer for the sender written by a workflow; null = the form's static message applies. */
+    response: jsonb("response").$type<{ style: string; title: string; body: string }>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("form_submissions_content_idx").on(t.contentId), index("form_submissions_form_idx").on(t.formId, t.createdAt)],
 );
 
 export const evaluationStatusEnum = pgEnum("evaluation_status", ["pass", "fail", "error"]);
@@ -1547,6 +1615,8 @@ export type ContentTemplate = typeof contentTemplates.$inferSelect;
 export type ContentTemplateVersion = typeof contentTemplateVersions.$inferSelect;
 export type KnowledgeAreaTemplate = typeof knowledgeAreaTemplates.$inferSelect;
 export type Content = typeof contents.$inferSelect;
+export type CollectionForm = typeof collectionForms.$inferSelect;
+export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type ContentType = Content["type"];
 export type ContentVersion = typeof contentVersions.$inferSelect;
 export type ContentEvaluation = typeof contentEvaluations.$inferSelect;

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Pin } from "lucide-react";
+import { Pin, Send } from "lucide-react";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { FileIcon } from "@/components/knowledge/file-icon";
 import { Markdown } from "@/components/content/markdown";
@@ -22,6 +22,8 @@ export type EntryViewItem = {
   excerpt?: string;
   bodyMarkdown?: string;
   author: { id: string; name: string; avatarMediaId: string | null } | null;
+  /** set for entries sent in through the collection's public form: the label shown instead of an author */
+  externalLabel?: string;
   dateLabel: string;
   pinned: boolean;
 };
@@ -43,11 +45,20 @@ function PinnedBadge({ label }: { label: string }) {
   );
 }
 
+/** Marks an entry that came from outside the community (docs/externe-formulare.md). */
+export function ExternalBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-300">
+      <Send className="size-3" /> {label}
+    </span>
+  );
+}
+
 function MetaRow({ item, className }: { item: EntryViewItem; className?: string }) {
   return (
     <span className={cn("flex items-center gap-2 text-xs text-muted-foreground", className)}>
       {item.author && <UserAvatar user={item.author} size={20} variant="thumb" />}
-      <span className="truncate">{item.author?.name}</span>
+      {item.externalLabel ? <ExternalBadge label={item.externalLabel} /> : <span className="truncate">{item.author?.name}</span>}
       <span className="ml-auto shrink-0">{item.dateLabel}</span>
     </span>
   );
@@ -145,7 +156,7 @@ export function EntryBlogPost({ item, pinnedLabel, readMoreLabel }: { item: Entr
  * ride along in the tooltip.
  */
 export function EntryFolderItem({ item, format, icon, formatName, pinnedLabel }: { item: EntryViewItem; format: FileFormat; icon: string; formatName?: string; pinnedLabel: string }) {
-  const tooltip = [item.title, formatName, item.author?.name, item.dateLabel].filter(Boolean).join(" · ");
+  const tooltip = [item.title, formatName, item.externalLabel ?? item.author?.name, item.dateLabel].filter(Boolean).join(" · ");
   return (
     <Link
       href={item.href}

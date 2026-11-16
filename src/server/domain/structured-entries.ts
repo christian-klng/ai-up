@@ -31,18 +31,39 @@ export async function buildStructuredVersionInput(
   snapshot: Pick<StructureEntryMeta, "structureId" | "structureVersion" | "definition">,
   title: string,
   rawAnswers: unknown,
-  opts: { changeNote?: string | null; prevEnrichment?: StructureEnrichment; imageMediaId?: string | null; prevAnswers?: StructureAnswers; actorId?: string; trustedWhiteboardKeys?: string[] } = {},
+  opts: {
+    changeNote?: string | null;
+    prevEnrichment?: StructureEnrichment;
+    imageMediaId?: string | null;
+    prevAnswers?: StructureAnswers;
+    actorId?: string;
+    trustedWhiteboardKeys?: string[];
+    /**
+     * Public forms: validate against this part of the definition only (src/lib/collection-forms.ts).
+     * Answers for anything else are dropped; the snapshot still stores the whole definition.
+     */
+    validateAs?: StructureEntryMeta["definition"];
+    /** Public forms: check link answers, but do not fetch their previews for someone anonymous. */
+    skipLinkPreviews?: boolean;
+  } = {},
 ): Promise<BuildStructuredVersionResult> {
   if (opts.imageMediaId) {
     const media = await getMedia(opts.imageMediaId);
     if (!media || media.kind !== "image") return { ok: false, issues: [{ key: "__image", code: "mediaInvalid" }] };
   }
-  const seeded = typeof rawAnswers === "object" && rawAnswers !== null ? fillSeeds(snapshot.definition, rawAnswers as StructureAnswers) : rawAnswers;
-  const res = validateStructureAnswers(snapshot.definition, seeded);
+  let res: ReturnType<typeof validateStructureAnswers>;
+  if (opts.validateAs) {
+    res = validateStructureAnswers(opts.validateAs, rawAnswers);
+    // Boards the form does not show still start from the template's seed, as for members.
+    if (res.ok) res = { ok: true, answers: fillSeeds(snapshot.definition, res.answers) };
+  } else {
+    const seeded = typeof rawAnswers === "object" && rawAnswers !== null ? fillSeeds(snapshot.definition, rawAnswers as StructureAnswers) : rawAnswers;
+    res = validateStructureAnswers(snapshot.definition, seeded);
+  }
   if (!res.ok) return { ok: false, issues: res.issues };
 
   const answers = stampWhiteboardAuthors(snapshot.definition, res.answers, opts.prevAnswers, opts.actorId, opts.trustedWhiteboardKeys);
-  const enrichResult = await enrichStructureAnswers(snapshot.definition, answers, opts.prevEnrichment);
+  const enrichResult = await enrichStructureAnswers(snapshot.definition, answers, opts.prevEnrichment, opts.skipLinkPreviews);
   if (!enrichResult.ok) return { ok: false, issues: enrichResult.issues };
 
   const meta: StructureEntryMeta = {
@@ -70,6 +91,7 @@ async function enrichStructureAnswers(
   def: StructureEntryMeta["definition"],
   answers: StructureAnswers,
   prevEnrichment?: StructureEnrichment,
+  skipLinkPreviews = false,
 ): Promise<EnrichResult> {
   const enrichment: StructureEnrichment = {};
   const issues: AnswerIssue[] = [];
@@ -136,6 +158,10 @@ async function enrichStructureAnswers(
         await assertPublicUrl(v.url);
       } catch {
         issues.push({ key: el.key, code: "urlInvalid" });
+        continue;
+      }
+      if (skipLinkPreviews) {
+        enrichment[el.key] = { url: v.url };
         continue;
       }
       try {

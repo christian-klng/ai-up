@@ -6,12 +6,14 @@ import { requireUser } from "@/server/auth/session";
 import { canEditContent, getAreaBySlug, getContent } from "@/server/domain/knowledge";
 import { getEvaluationSummary } from "@/server/domain/evaluation";
 import { findPostsPageSlug } from "@/server/domain/posts";
+import { getSubmissionForContent } from "@/server/domain/collection-forms";
 import { whiteboardAuthorNames } from "@/server/whiteboards/access";
 import { env } from "@/server/env";
 import { ContentBody } from "@/components/content/content-body";
 import { ImageLightbox } from "@/components/content/image-lightbox";
 import { StructuredContentView } from "@/components/structures/structured-content-view";
 import { EvaluationPopover } from "@/components/knowledge/evaluation-popover";
+import { ExternalBadge } from "@/components/knowledge/entry-views";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,8 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
   // Public collections: where a published entry can be read without an account.
   const postsPage = area.publicOnSite && content.publishedAt ? await findPostsPageSlug(user.communityId, area.id) : null;
   const publicHref = postsPage && content.slug ? `/${postsPage}/${content.slug}` : null;
+  // Sent in through the public form: who it came from is for admins only (docs/externe-formulare.md 2).
+  const submission = content.external && user.role === "admin" ? await getSubmissionForContent(user.communityId, content.id) : undefined;
 
   return (
     <article className="mx-auto max-w-3xl">
@@ -86,12 +90,39 @@ export default async function ContentPage({ params }: PageProps<"/knowledge/[slu
               {t("view.createdBy", { name: content.author.name, date: format.dateTime(content.createdAt, { dateStyle: "medium" }) })}
             </span>
           )}
+          {content.external && (
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <ExternalBadge label={t("view.external")} />
+              {t("view.externalAt", { date: format.dateTime(content.createdAt, { dateStyle: "medium" }) })}
+            </span>
+          )}
           {content.versionCount > 1 && (
             <span>
               · {t("view.versions", { count: content.versionCount })} · {t("view.lastEdited", { date: format.dateTime(content.updatedAt, { dateStyle: "medium", timeStyle: "short" }) })}
             </span>
           )}
         </div>
+        {submission && (
+          <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">{t("view.externalFrom")}</span>{" "}
+            {submission.contactName || submission.contactEmail ? (
+              <>
+                {submission.contactName}
+                {submission.contactEmail && (
+                  <>
+                    {submission.contactName ? " · " : ""}
+                    <a href={`mailto:${submission.contactEmail}`} className="underline underline-offset-2">
+                      {submission.contactEmail}
+                    </a>
+                  </>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{t("view.externalNoContact")}</span>
+            )}
+            {submission.pageUrl && <span className="text-muted-foreground"> · {t("view.externalPage", { url: submission.pageUrl })}</span>}
+          </p>
+        )}
       </header>
 
       {content.type === "structured" && content.media?.kind === "image" && (

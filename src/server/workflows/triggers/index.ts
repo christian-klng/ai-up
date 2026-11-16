@@ -10,6 +10,8 @@ const contentConfig = z.object({
   includeWorkflowOrigin: z.boolean().default(false),
   /** Also fire for content an AI agent wrote (default false: one chat sentence can touch many entries) */
   includeAgentOrigin: z.boolean().default(false),
+  /** Also fire for entries sent in through a collection's public form (default false: anyone can send) */
+  includeExternalOrigin: z.boolean().default(false),
 });
 type ContentConfig = z.infer<typeof contentConfig>;
 
@@ -18,6 +20,7 @@ const contentFields = [
   { key: "areaIds", type: "area" as const, label: { de: "Sammlungen", en: "Collections" }, help: { de: "Leer = alle Sammlungen.", en: "Empty = all collections." } },
   { key: "includeWorkflowOrigin", type: "boolean" as const, label: { de: "Auch von Workflows erzeugte Inhalte", en: "Also content created by workflows" }, help: { de: "Vorsicht: kann Schleifen erzeugen.", en: "Careful: can create loops." } },
   { key: "includeAgentOrigin", type: "boolean" as const, label: { de: "Auch von KI-Agenten erzeugte Inhalte", en: "Also content created by AI agents" }, help: { de: "Vorsicht: Ein Agent kann in einem Zug viele Einträge ändern.", en: "Careful: one agent turn can touch many entries." } },
+  { key: "includeExternalOrigin", type: "boolean" as const, label: { de: "Auch extern eingesandte Einträge", en: "Also entries sent in from outside" }, help: { de: "Einsendungen über das öffentliche Formular einer Sammlung. Vorsicht: Jede Person im Internet kann sie auslösen.", en: "Submissions through a collection's public form. Careful: anyone on the internet can trigger them." } },
 ];
 
 const contentPayloadDoc = {
@@ -46,6 +49,7 @@ function matchesContent(config: ContentConfig, payload: Record<string, unknown>)
   if (!c) return false;
   if (origin?.kind === "workflow" && !config.includeWorkflowOrigin) return false;
   if (origin?.kind === "agent" && !config.includeAgentOrigin) return false;
+  if (origin?.kind === "external" && !config.includeExternalOrigin) return false;
   if (config.contentTypes.length && !config.contentTypes.includes(c.type as never)) return false;
   if (config.areaIds.length && !config.areaIds.includes(c.areaId ?? "")) return false;
   return true;
@@ -54,7 +58,7 @@ function matchesContent(config: ContentConfig, payload: Record<string, unknown>)
 registerTrigger<ContentConfig>({
   type: "content.created",
   labels: { name: { de: "Inhalt erstellt", en: "Content created" }, description: { de: "Startet, wenn ein neuer Inhalt (Text, Bild, Video oder Link) gespeichert wird.", en: "Fires when a new content item (text, image, video or link) is saved." } },
-  doc: "Fires when a member creates a content item in a collection (knowledge area). Filter by content type and/or collection.",
+  doc: "Fires when a member creates a content item in a collection (knowledge area). Filter by content type and/or collection. Entries sent in through a collection's public form (origin.kind=external, no author) fire only with includeExternalOrigin.",
   configSchema: contentConfig,
   fields: contentFields,
   payloadDoc: contentPayloadDoc,

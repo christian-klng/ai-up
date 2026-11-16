@@ -65,6 +65,7 @@ export default async function AreaPage({ params, searchParams }: PageProps<"/kno
         excerpt: excerpt || undefined,
         bodyMarkdown: v?.bodyMarkdown ?? undefined,
         author: c.author,
+        externalLabel: c.external ? t("view.external") : undefined,
         dateLabel: format.dateTime(c.updatedAt, { dateStyle: "medium" }),
         pinned: c.pinned,
       },

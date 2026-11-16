@@ -5,14 +5,15 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Globe, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Globe, Pencil, Send, Trash2 } from "lucide-react";
 import { deleteAreaAction, moveAreaAction, setCollectionPublicAction } from "@/server/actions/admin-knowledge";
 import { AreaIcon } from "@/components/knowledge/area-icon";
 import { Button } from "@/components/ui/button";
 import { AreaDialog, type AreaFormValues } from "./area-dialog";
+import { AreaFormDialog } from "./area-form-dialog";
 import { AreaTemplatesDialog, type TemplateOption } from "./area-templates-dialog";
 
-type Area = AreaFormValues & { slug: string; contentCount: number; assignedTemplateIds: string[]; publicOnSite: boolean };
+type Area = AreaFormValues & { slug: string; contentCount: number; assignedTemplateIds: string[]; publicOnSite: boolean; formOpen: boolean };
 
 export function AreaList({ areas, templates, canPublish }: { areas: Area[]; templates: TemplateOption[]; canPublish: boolean }) {
   const t = useTranslations("admin.knowledge");
@@ -46,11 +47,17 @@ export function AreaList({ areas, templates, canPublish }: { areas: Area[]; temp
                   <Globe className="size-3" /> {t("publicBadge")}
                 </span>
               )}
+              {a.formOpen && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 text-xs text-emerald-800 dark:text-emerald-300">
+                  <Send className="size-3" /> {t("form.badge")}
+                </span>
+              )}
             </div>
             <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{a.purpose}</p>
           </div>
           <div className="flex items-center gap-1">
             <AreaTemplatesDialog areaId={a.id} areaName={a.name} templates={templates} assignedIds={a.assignedTemplateIds} />
+            <AreaFormDialog areaId={a.id} areaName={a.name} open={a.formOpen} />
             {canPublish && (
               <Button
                 variant="ghost"

@@ -13,6 +13,9 @@ import { env } from "@/server/env";
 import { processAndStoreImage, IMAGE_MIMES } from "@/server/media/images";
 import { absolutePath, extensionForMime, kindForMime, newStoragePath, uploadRoot, type MediaPurpose } from "@/server/media/storage";
 import { logger } from "@/server/logger";
+import { clientIp } from "@/lib/community-creation";
+import { FORM_UPLOAD_MAX_MB, formImageKeys } from "@/lib/collection-forms";
+import { issueUploadTicket, resolveForm, withinFormUploadLimit } from "@/server/domain/collection-forms";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -26,6 +29,29 @@ const ALLOWED: Record<string, Set<string>> = {
   meeting: new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]),
 };
 
+/** Images sent in through a collection's public form – the only upload without a session. */
+const FORM_ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+type Uploader = { communityId: string; userId: string | null; purpose: MediaPurpose; allowed: Set<string>; maxBytes: number; ticketFor?: string };
+
+/** Who is uploading: a signed-in member, or – with `?form=<token>` – a visitor of an open form that has an image field. */
+async function resolveUploader(req: NextRequest): Promise<Uploader | Response> {
+  const formToken = req.nextUrl.searchParams.get("form");
+  if (formToken) {
+    const resolved = await resolveForm(formToken);
+    if (!resolved || formImageKeys(resolved.definition).length === 0) return Response.json({ error: "not_found" }, { status: 404 });
+    if (!(await withinFormUploadLimit(resolved.form.id, clientIp(req.headers.get("x-forwarded-for"))))) return Response.json({ error: "rate_limited" }, { status: 429 });
+    return { communityId: resolved.community.id, userId: null, purpose: "form", allowed: FORM_ALLOWED, maxBytes: Math.min(FORM_UPLOAD_MAX_MB, env.MAX_UPLOAD_MB) * 1024 * 1024, ticketFor: resolved.form.id };
+  }
+  const user = await getCurrentUser();
+  if (!user || user.status !== "active") return Response.json({ error: "unauthorized" }, { status: 401 });
+  const purpose = (req.nextUrl.searchParams.get("purpose") ?? "content") as MediaPurpose;
+  const allowed = ALLOWED[purpose];
+  if (!allowed) return Response.json({ error: "invalid purpose" }, { status: 400 });
+  if ((purpose === "landing" || purpose === "meeting") && user.role !== "admin") return Response.json({ error: "forbidden" }, { status: 403 });
+  return { communityId: user.communityId, userId: user.id, purpose, allowed, maxBytes: env.MAX_UPLOAD_MB * 1024 * 1024 };
+}
+
 /**
  * Raw-body upload (no multipart): the browser sends the file as request body with
  *   PUT /api/upload?purpose=content&name=<filename>
@@ -34,17 +60,19 @@ const ALLOWED: Record<string, Set<string>> = {
  * Every file belongs to the community the uploader is acting in – without it the file is invisible to
  * community-scoped lists (site images) and, for non-public purposes, readable by any signed-in account.
  * Returns the media_files row summary.
+ *
+ * With `?form=<token>` the upload needs no session: a visitor of a collection's public form sends
+ * an image for one of its image fields (docs/externe-formulare.md). Smaller limit, images only,
+ * rate-limited per address; the file is not readable from outside and is swept away if it never
+ * becomes part of a submission.
  */
 export async function PUT(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user || user.status !== "active") return Response.json({ error: "unauthorized" }, { status: 401 });
-
-  const purpose = (req.nextUrl.searchParams.get("purpose") ?? "content") as MediaPurpose;
-  const allowed = ALLOWED[purpose];
-  if (!allowed) return Response.json({ error: "invalid purpose" }, { status: 400 });
-  if ((purpose === "landing" || purpose === "meeting") && user.role !== "admin") return Response.json({ error: "forbidden" }, { status: 403 });
+  const uploader = await resolveUploader(req);
+  if (uploader instanceof Response) return uploader;
+  const { purpose, allowed, maxBytes } = uploader;
+  // Form uploads come back with a ticket: only whoever uploaded the file can attach it to a submission.
+  const done = (m: Parameters<typeof summary>[0]) => Response.json(uploader.ticketFor ? { ...summary(m), ticket: issueUploadTicket(uploader.ticketFor, m.id) } : summary(m));
   const originalName = (req.nextUrl.searchParams.get("name") ?? "upload").slice(0, 200);
-  const maxBytes = env.MAX_UPLOAD_MB * 1024 * 1024;
   const declared = Number(req.headers.get("content-length") ?? 0);
   if (declared > maxBytes) return Response.json({ error: "too_large", maxBytes }, { status: 413 });
   if (!req.body) return Response.json({ error: "empty body" }, { status: 400 });
@@ -84,8 +112,8 @@ export async function PUT(req: NextRequest) {
       const buf = await fh.readFile();
       await fh.close();
       await unlink(tmpPath).catch(() => {});
-      const media = await processAndStoreImage({ buffer: buf, originalName, purpose, communityId: user.communityId, uploadedBy: user.id, maxEdge: 2048, thumbEdge: 320 });
-      return Response.json(summary(media));
+      const media = await processAndStoreImage({ buffer: buf, originalName, purpose, communityId: uploader.communityId, uploadedBy: uploader.userId, maxEdge: 2048, thumbEdge: 320 });
+      return done(media);
     }
 
     // Other media: move into place, record row.
@@ -97,9 +125,9 @@ export async function PUT(req: NextRequest) {
     const size = (await stat(abs)).size;
     const [row] = await db
       .insert(mediaFiles)
-      .values({ id, communityId: user.communityId, kind: kindForMime(mime), storagePath, originalName, mime, size, sha256: hash.digest("hex"), purpose, uploadedBy: user.id })
+      .values({ id, communityId: uploader.communityId, kind: kindForMime(mime), storagePath, originalName, mime, size, sha256: hash.digest("hex"), purpose, uploadedBy: uploader.userId })
       .returning();
-    return Response.json(summary(row));
+    return done(row);
   } catch (err) {
     await unlink(tmpPath).catch(() => {});
     const msg = err instanceof Error ? err.message : "upload failed";

@@ -48,7 +48,9 @@
       "defaultModel": "Default model ({model})",
       "noToolModels": "No model of this provider supports tools. Pick another provider or enable a suitable model under Admin → LLM.",
       "toolSupportUnknown": "This provider reports no capabilities for the model – whether tools work shows on the first call."
-    }
+    },
+    "copy": "Copy",
+    "copied": "Copied."
   },
   "auth": {
     "signIn": "Sign in",
@@ -446,7 +448,61 @@
       "publicBadge": "Public",
       "makePublic": "Show on public pages",
       "makePrivate": "Stop showing on public pages",
-      "confirmPublic": "Clear the collection “{name}” for public pages? Only entries an admin publishes one by one become visible – without sign-in, to everyone on the internet."
+      "confirmPublic": "Clear the collection “{name}” for public pages? Only entries an admin publishes one by one become visible – without sign-in, to everyone on the internet.",
+      "form": {
+        "badge": "External channel",
+        "open": "External channel",
+        "title": "External channel",
+        "intro": "Opens “{name}” to the outside: through a form, people without an account can send in entries – ideas, feature requests or support questions, for example.",
+        "enabled": "Form is open",
+        "enabledHint": "While the switch is on, anyone with the link can send something in. The link stays the same when you switch it off and on again.",
+        "link": "Link to the form",
+        "openLink": "Open form",
+        "submissionCount": "{count, plural, =0 {No submissions yet} one {# submission} other {# submissions}}",
+        "fieldsTitle": "Fields",
+        "template": "Template",
+        "templatePlaceholder": "Choose a template",
+        "fieldsHint": "Ticked fields appear in the form. All others stay internal and can be filled in later by the team or a workflow.",
+        "required": "required",
+        "internalOnly": "internal only",
+        "contact": "Ask for name and e-mail",
+        "contactModes": {
+          "off": "Do not ask",
+          "optional": "Optional",
+          "required": "Required"
+        },
+        "contactHint": "Contact details are not part of the entry itself – only admins see them.",
+        "textsTitle": "Texts",
+        "heading": "Heading",
+        "titleLabel": "Label of the title field",
+        "titleLabelPlaceholder": "Subject",
+        "introText": "Introduction (Markdown)",
+        "submitLabel": "Label of the button",
+        "submitLabelPlaceholder": "Send",
+        "successTitle": "Success message",
+        "successStyle": "Design",
+        "successStyles": {
+          "plain": "Plain",
+          "card": "Card with icon",
+          "celebrate": "Full width"
+        },
+        "successHeading": "Heading",
+        "successHeadingPlaceholder": "Thank you!",
+        "successBody": "Text (Markdown)",
+        "successBodyPlaceholder": "We have received your submission.",
+        "allowAnother": "Offer a “Send another one” button",
+        "redirectUrl": "Then redirect to",
+        "redirectHint": "Optional, https only. The message shows briefly, then the redirect follows.",
+        "dailyLimit": "Submissions per day",
+        "dailyLimitHint": "Upper limit as protection against spam. Once reached, the form accepts nothing more until the next day.",
+        "saved": "Saved.",
+        "savedOpen": "Saved – the form is open.",
+        "errors": {
+          "noFields": "Choose a template and at least one field to fill in before opening the form.",
+          "noTemplate": "Choose a template first.",
+          "template": "This template is no longer available in the collection."
+        }
+      }
     },
     "templates": {
       "listTitle": "Templates",
@@ -1078,7 +1134,12 @@
       "downloadVideo": "Download video",
       "videoUnsupported": "Your browser cannot play this video.",
       "readMore": "Read more",
-      "enlargeImage": "Enlarge image"
+      "enlargeImage": "Enlarge image",
+      "external": "External",
+      "externalAt": "sent in from outside on {date}",
+      "externalFrom": "Sent in by",
+      "externalNoContact": "no contact details",
+      "externalPage": "via {url}"
     },
     "history": {
       "title": "History: {title}",
@@ -1580,6 +1641,48 @@
         "slugTaken": "That short name has been taken in the meantime. Please choose another one.",
         "slugInvalid": "That short name does not work: lowercase letters, digits and hyphens only, 3 to 40 characters, and a few names are reserved."
       }
+    }
+  },
+  "forms": {
+    "closedTitle": "This form is not available",
+    "closedBody": "The link is no longer valid or the form has been closed.",
+    "titleLabel": "Subject",
+    "submit": "Send",
+    "choose": "Please choose",
+    "chooseImage": "Choose an image",
+    "uploading": "Uploading …",
+    "removeImage": "Remove image",
+    "contactName": "Name",
+    "contactEmail": "E-mail",
+    "privacyHint": "We process what you enter to handle your request.",
+    "privacyLink": "Privacy",
+    "issues": {
+      "required": "Please fill this in.",
+      "invalid": "This value is not valid.",
+      "minSelected": "Please choose at least {count}.",
+      "maxSelected": "Please choose at most {count}.",
+      "minPairs": "This is incomplete.",
+      "maxPairs": "This is too long.",
+      "incompletePair": "This is incomplete.",
+      "incompleteSection": "This is incomplete.",
+      "urlInvalid": "Please enter a valid address (https://…).",
+      "mediaInvalid": "The image could not be used. Please upload it again."
+    },
+    "errors": {
+      "missing": "Please check the marked fields.",
+      "contact": "Please enter your name and a valid e-mail address.",
+      "closed": "This form has been closed.",
+      "tooFast": "That was very quick – please try again in a few seconds.",
+      "expired": "The page was open for too long. Please reload it and send again.",
+      "rateLimited": "Too many submissions are coming in right now. Please try again later.",
+      "unexpected": "Sorry, that did not work. Please try again.",
+      "imageTooLarge": "The image is too large ({mb} MB at most).",
+      "imageType": "Please choose an image (JPG, PNG, WebP or GIF)."
+    },
+    "success": {
+      "title": "Thank you!",
+      "body": "We have received your submission.",
+      "another": "Send another one"
     }
   }
 }

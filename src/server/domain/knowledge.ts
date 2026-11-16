@@ -233,7 +233,7 @@ export async function createContent(
   const result = await db.transaction(async (tx) => {
     const [content] = await tx
       .insert(contents)
-      .values({ areaId, type, title: input.title.trim(), authorId, lastEditedBy: authorId, searchText: buildSearchText(type, input), versionCount: 1 })
+      .values({ areaId, type, title: input.title.trim(), authorId, lastEditedBy: authorId, external: origin.kind === "external", searchText: buildSearchText(type, input), versionCount: 1 })
       .returning();
     const [version] = await tx
       .insert(contentVersions)
@@ -266,6 +266,8 @@ export async function createContent(
 async function queueEvaluation(content: Content, input: ContentVersionInput, origin: EventOrigin): Promise<void> {
   if (content.type !== "structured" || !input.meta?.structure || !content.currentVersionId) return;
   if (origin.kind === "agent") return;
+  // Anyone can send in through a public form – an LLM call per submission would hand the bill to a spammer.
+  if (origin.kind === "external") return;
   await enqueueEvaluation(content.id, content.currentVersionId);
 }
 

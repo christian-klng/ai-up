@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { env } from "@/server/env";
 import { listCommunitiesToPurge } from "@/server/domain/communities";
 import { purgeCommunity } from "@/server/domain/community-setup";
+import { cleanupOrphanFormUploads } from "@/server/domain/collection-forms";
 import { logger } from "@/server/logger";
 import { db, pool } from "@/server/db/client";
 import { workflows } from "@/server/db/schema";
@@ -56,6 +57,11 @@ async function processJob(job: Job<WorkflowJob>, token?: string): Promise<void> 
       logger.info({ communityId: c.id, name: c.name, files }, "community purged after grace period");
     }
     if (due.length) logger.info({ count: due.length }, "purge sweep finished");
+    return;
+  }
+  if (data.kind === "cleanup-form-uploads") {
+    const removed = await cleanupOrphanFormUploads();
+    if (removed) logger.info({ removed }, "form uploads without a submission removed");
     return;
   }
   if (data.kind === "schedule") {

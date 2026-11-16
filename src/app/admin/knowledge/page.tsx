@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { canManagePublicPages, requireAdmin } from "@/server/auth/session";
 import { listAreas } from "@/server/domain/knowledge";
+import { listOpenFormAreaIds } from "@/server/domain/collection-forms";
 import { listAllAssignments, listTemplates } from "@/server/domain/templates";
 import { PageHeader } from "@/components/common/page-header";
 import { AreaDialog } from "./area-dialog";
@@ -8,12 +9,13 @@ import { AreaList } from "./area-list";
 
 export default async function AdminKnowledgePage() {
   const user = await requireAdmin();
-  const [t, areas, assignments, templates, canPublish] = await Promise.all([
+  const [t, areas, assignments, templates, canPublish, openForms] = await Promise.all([
     getTranslations("admin.knowledge"),
     listAreas(user.communityId),
     listAllAssignments(user.communityId),
     listTemplates(user.communityId),
     canManagePublicPages(user.communityId),
+    listOpenFormAreaIds(user.communityId),
   ]);
   return (
     <div className="max-w-4xl">
@@ -30,6 +32,7 @@ export default async function AdminKnowledgePage() {
           sortMode: a.sortMode,
           contentCount: a.contentCount,
           publicOnSite: a.publicOnSite,
+          formOpen: openForms.has(a.id),
           assignedTemplateIds: (assignments.get(a.id) ?? []).map((tpl) => tpl.id),
         }))}
         canPublish={canPublish}

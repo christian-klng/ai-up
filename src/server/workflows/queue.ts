@@ -14,6 +14,7 @@ import { scheduleToRepeat, type ScheduleConfig } from "./triggers";
  *  - { kind: "evaluate", contentId, versionId } → LLM check of an entry against its template criteria
  *  - { kind: "agent-turn", threadId }        → one turn of an AI agent chat (tool loop, streams to the UI)
  *  - { kind: "purge-communities" }           → daily sweep: deletes communities whose grace period ran out
+ *  - { kind: "cleanup-form-uploads" }        → daily sweep: removes public-form uploads nobody submitted
  *  - { kind: "whiteboard-flush", contentId, key } → saves a live whiteboard session as an entry version
  * Web enqueues; the worker consumes (see worker/index.ts).
  */
@@ -24,6 +25,7 @@ export type WorkflowJob =
   | { kind: "evaluate"; contentId: string; versionId: string }
   | { kind: "agent-turn"; threadId: string }
   | { kind: "purge-communities" }
+  | { kind: "cleanup-form-uploads" }
   | { kind: "whiteboard-flush"; contentId: string; key: string };
 
 const g = globalThis as unknown as { __aiupQueue?: Queue<WorkflowJob>; __aiupQueueConn?: IORedis };
@@ -140,6 +142,11 @@ export async function ensureSystemSchedules(): Promise<void> {
     PURGE_SCHEDULER_ID,
     { pattern: "17 3 * * *", tz: env.APP_TIMEZONE },
     { name: "purge-communities", data: { kind: "purge-communities" }, opts: { removeOnComplete: 20, removeOnFail: 20 } },
+  );
+  await getQueue().upsertJobScheduler(
+    "sys-cleanup-form-uploads",
+    { pattern: "47 3 * * *", tz: env.APP_TIMEZONE },
+    { name: "cleanup-form-uploads", data: { kind: "cleanup-form-uploads" }, opts: { removeOnComplete: 20, removeOnFail: 20 } },
   );
 }
 

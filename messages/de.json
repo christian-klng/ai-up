@@ -48,7 +48,9 @@
       "defaultModel": "Standardmodell ({model})",
       "noToolModels": "Kein Modell dieses Providers unterstützt Werkzeuge. Wähle einen anderen Provider oder aktiviere unter Verwaltung → LLM ein passendes Modell.",
       "toolSupportUnknown": "Für dieses Modell meldet der Provider keine Fähigkeiten – ob Werkzeuge funktionieren, zeigt erst der erste Aufruf."
-    }
+    },
+    "copy": "Kopieren",
+    "copied": "Kopiert."
   },
   "auth": {
     "signIn": "Anmelden",
@@ -446,7 +448,61 @@
       "publicBadge": "Öffentlich",
       "makePublic": "Auf öffentlichen Seiten zeigen",
       "makePrivate": "Nicht mehr auf öffentlichen Seiten zeigen",
-      "confirmPublic": "Sammlung „{name}“ für öffentliche Seiten freigeben? Sichtbar werden nur Einträge, die ein Admin einzeln veröffentlicht – und zwar ohne Anmeldung, für alle im Internet."
+      "confirmPublic": "Sammlung „{name}“ für öffentliche Seiten freigeben? Sichtbar werden nur Einträge, die ein Admin einzeln veröffentlicht – und zwar ohne Anmeldung, für alle im Internet.",
+      "form": {
+        "badge": "Externer Kanal",
+        "open": "Externer Kanal",
+        "title": "Externer Kanal",
+        "intro": "Öffnet „{name}“ nach außen: Über ein Formular können auch Personen ohne Konto Einträge einsenden – etwa Ideen, Feature-Wünsche oder Support-Anfragen.",
+        "enabled": "Formular ist geöffnet",
+        "enabledHint": "Solange der Schalter an ist, kann jede Person mit dem Link einsenden. Der Link bleibt beim Aus- und Einschalten derselbe.",
+        "link": "Link zum Formular",
+        "openLink": "Formular öffnen",
+        "submissionCount": "{count, plural, =0 {Noch keine Einsendungen} one {# Einsendung} other {# Einsendungen}}",
+        "fieldsTitle": "Felder",
+        "template": "Vorlage",
+        "templatePlaceholder": "Vorlage wählen",
+        "fieldsHint": "Angehakte Felder erscheinen im Formular. Alle anderen bleiben intern und können später vom Team oder einem Workflow gefüllt werden.",
+        "required": "Pflicht",
+        "internalOnly": "nur intern",
+        "contact": "Name und E-Mail abfragen",
+        "contactModes": {
+          "off": "Nicht abfragen",
+          "optional": "Freiwillig",
+          "required": "Pflicht"
+        },
+        "contactHint": "Kontaktdaten stehen nicht im Eintrag selbst – nur Admins sehen sie.",
+        "textsTitle": "Texte",
+        "heading": "Überschrift",
+        "titleLabel": "Beschriftung des Titelfelds",
+        "titleLabelPlaceholder": "Betreff",
+        "introText": "Einleitung (Markdown)",
+        "submitLabel": "Beschriftung des Buttons",
+        "submitLabelPlaceholder": "Absenden",
+        "successTitle": "Erfolgsmeldung",
+        "successStyle": "Design",
+        "successStyles": {
+          "plain": "Schlicht",
+          "card": "Karte mit Symbol",
+          "celebrate": "Vollflächig"
+        },
+        "successHeading": "Überschrift",
+        "successHeadingPlaceholder": "Vielen Dank!",
+        "successBody": "Text (Markdown)",
+        "successBodyPlaceholder": "Deine Einsendung ist bei uns angekommen.",
+        "allowAnother": "Button „Weitere Einsendung“ anbieten",
+        "redirectUrl": "Danach weiterleiten zu",
+        "redirectHint": "Optional, nur https. Die Meldung ist kurz zu sehen, dann folgt die Weiterleitung.",
+        "dailyLimit": "Einsendungen pro Tag",
+        "dailyLimitHint": "Obergrenze als Schutz vor Spam. Ist sie erreicht, nimmt das Formular bis zum nächsten Tag nichts mehr an.",
+        "saved": "Gespeichert.",
+        "savedOpen": "Gespeichert – das Formular ist geöffnet.",
+        "errors": {
+          "noFields": "Wähle eine Vorlage und mindestens ein Feld zum Ausfüllen, bevor du das Formular öffnest.",
+          "noTemplate": "Wähle zuerst eine Vorlage.",
+          "template": "Diese Vorlage steht in der Sammlung nicht mehr zur Verfügung."
+        }
+      }
     },
     "templates": {
       "listTitle": "Vorlagen",
@@ -1078,7 +1134,12 @@
       "downloadVideo": "Video herunterladen",
       "videoUnsupported": "Dein Browser kann dieses Video nicht abspielen.",
       "readMore": "Weiterlesen",
-      "enlargeImage": "Bild vergrößern"
+      "enlargeImage": "Bild vergrößern",
+      "external": "Extern",
+      "externalAt": "extern eingesandt am {date}",
+      "externalFrom": "Eingesandt von",
+      "externalNoContact": "ohne Kontaktangabe",
+      "externalPage": "über {url}"
     },
     "history": {
       "title": "Verlauf: {title}",
@@ -1580,6 +1641,48 @@
         "slugTaken": "Dieser Kurzname wurde inzwischen vergeben. Bitte wähle einen anderen.",
         "slugInvalid": "Dieser Kurzname geht nicht: nur Kleinbuchstaben, Ziffern und Bindestriche, 3 bis 40 Zeichen, und einige Namen sind reserviert."
       }
+    }
+  },
+  "forms": {
+    "closedTitle": "Dieses Formular ist nicht verfügbar",
+    "closedBody": "Der Link ist nicht mehr gültig oder das Formular wurde geschlossen.",
+    "titleLabel": "Betreff",
+    "submit": "Absenden",
+    "choose": "Bitte wählen",
+    "chooseImage": "Bild auswählen",
+    "uploading": "Wird hochgeladen …",
+    "removeImage": "Bild entfernen",
+    "contactName": "Name",
+    "contactEmail": "E-Mail",
+    "privacyHint": "Wir verarbeiten deine Angaben, um dein Anliegen zu bearbeiten.",
+    "privacyLink": "Datenschutz",
+    "issues": {
+      "required": "Bitte ausfüllen.",
+      "invalid": "Diese Angabe ist ungültig.",
+      "minSelected": "Bitte wähle mindestens {count}.",
+      "maxSelected": "Bitte wähle höchstens {count}.",
+      "minPairs": "Diese Angabe ist unvollständig.",
+      "maxPairs": "Diese Angabe ist zu lang.",
+      "incompletePair": "Diese Angabe ist unvollständig.",
+      "incompleteSection": "Diese Angabe ist unvollständig.",
+      "urlInvalid": "Bitte gib eine gültige Adresse an (https://…).",
+      "mediaInvalid": "Das Bild konnte nicht übernommen werden. Bitte lade es erneut hoch."
+    },
+    "errors": {
+      "missing": "Bitte prüfe die markierten Felder.",
+      "contact": "Bitte gib deinen Namen und eine gültige E-Mail-Adresse an.",
+      "closed": "Dieses Formular wurde geschlossen.",
+      "tooFast": "Das ging sehr schnell – bitte versuche es in ein paar Sekunden noch einmal.",
+      "expired": "Die Seite war zu lange geöffnet. Bitte lade sie neu und sende noch einmal.",
+      "rateLimited": "Gerade gehen zu viele Einsendungen ein. Bitte versuche es später noch einmal.",
+      "unexpected": "Das hat leider nicht geklappt. Bitte versuche es noch einmal.",
+      "imageTooLarge": "Das Bild ist zu groß (höchstens {mb} MB).",
+      "imageType": "Bitte wähle ein Bild (JPG, PNG, WebP oder GIF)."
+    },
+    "success": {
+      "title": "Vielen Dank!",
+      "body": "Deine Einsendung ist bei uns angekommen.",
+      "another": "Weitere Einsendung"
     }
   }
 }

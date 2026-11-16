@@ -37,6 +37,7 @@ export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
   "pending",
   "invite",
   "join",
+  "f",
   "auth",
   "c",
   "imprint",
