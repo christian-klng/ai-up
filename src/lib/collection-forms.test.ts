@@ -47,7 +47,7 @@ describe("formProblems", () => {
 });
 
 describe("formSettingsSchema", () => {
-  const base = { enabled: false, templateId: null, fieldKeys: [], texts: DEFAULT_FORM_TEXTS, contact: "off", success: DEFAULT_FORM_SUCCESS, dailyLimit: 200 };
+  const base = { enabled: false, templateId: null, fieldKeys: [], texts: DEFAULT_FORM_TEXTS, contact: "off", success: DEFAULT_FORM_SUCCESS, mailReply: false, dailyLimit: 200 };
 
   it("accepts the defaults", () => {
     expect(formSettingsSchema.safeParse(base).success).toBe(true);

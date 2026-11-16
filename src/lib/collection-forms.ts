@@ -33,9 +33,23 @@ export type FormSuccess = {
   allowAnother: boolean;
   /** https only; the form leaves for it a moment after the message appeared */
   redirectUrl: string | null;
+  /** Hold the message back until a workflow answered the submission (respond_to_submission) … */
+  waitForWorkflow: boolean;
+  /** … but no longer than this; then the static message above is shown. */
+  waitSeconds: number;
 };
 
-export const DEFAULT_FORM_SUCCESS: FormSuccess = { style: "card", title: "", body: "", allowAnother: true, redirectUrl: null };
+export const FORM_WAIT_SECONDS_DEFAULT = 20;
+export const FORM_WAIT_SECONDS_MAX = 60;
+export const DEFAULT_FORM_SUCCESS: FormSuccess = { style: "card", title: "", body: "", allowAnother: true, redirectUrl: null, waitForWorkflow: false, waitSeconds: FORM_WAIT_SECONDS_DEFAULT };
+
+/** The answer a workflow wrote for one sender; replaces title and text of the static message. */
+export type FormResponse = { style: FormSuccessStyle | null; title: string; body: string };
+export const FORM_RESPONSE_TITLE_MAX = 120;
+export const FORM_RESPONSE_BODY_MAX = 4000;
+
+/** Mails a workflow may send to one address per day, across all forms. */
+export const FORM_MAILS_PER_ADDRESS_PER_DAY = 3;
 
 /** Texts around the fields. Empty = translated default (or, for the heading, the collection name). */
 export type FormTexts = { title: string; intro: string; submitLabel: string; titleLabel: string };
@@ -81,7 +95,11 @@ export const formSettingsSchema = z.object({
     body: z.string().trim().max(2000),
     allowAnother: z.boolean(),
     redirectUrl: httpsUrl.nullable(),
+    waitForWorkflow: z.boolean(),
+    waitSeconds: z.number().int().min(5).max(FORM_WAIT_SECONDS_MAX),
   }),
+  /** Workflows may answer senders by e-mail (action reply_to_submitter); needs the contact fields. */
+  mailReply: z.boolean(),
   dailyLimit: z.number().int().min(1).max(FORM_DAILY_LIMIT_MAX),
 });
 export type FormSettings = z.infer<typeof formSettingsSchema>;
@@ -114,6 +132,8 @@ export const formSubmissionSchema = z.object({
   title: z.string().trim().min(1).max(200),
   answers: z.record(z.string(), z.unknown()),
   contact: z.object({ name: z.string().trim().max(120).optional(), email: z.string().trim().toLowerCase().max(200).optional() }).optional(),
+  /** the sender ticked "answer me by e-mail" */
+  mailConsent: z.boolean().optional(),
   /** signed render time, see issueFormStamp */
   stamp: z.string().max(200),
   /** honeypot – people never see this field */

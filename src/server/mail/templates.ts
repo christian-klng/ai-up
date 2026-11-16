@@ -137,3 +137,24 @@ export function pendingMemberAdminMail(ctx: Ctx, to: string, member: { name: str
     }),
   };
 }
+
+const replyFooter = {
+  de: (form: string, app: string) => `Du erhältst diese E-Mail, weil diese Adresse im Formular „${form}“ von ${app} angegeben und eine Antwort per E-Mail gewünscht wurde. Wenn du das nicht warst, kannst du sie ignorieren – es folgt keine weitere.`,
+  en: (form: string, app: string) => `You are receiving this e-mail because this address was entered in the form “${form}” of ${app} and an answer by e-mail was requested. If this was not you, you can ignore it – no further mail will follow.`,
+} as const;
+
+/**
+ * Answer of a workflow to someone who sent something in through a public form
+ * (docs/externe-formulare.md 6). The text comes from the workflow; it is shown as plain paragraphs,
+ * never as markup, and the footer always says where the mail comes from.
+ */
+export function submissionReplyMail(ctx: Ctx, to: string, mail: { subject: string; body: string; formTitle: string }): MailMessage {
+  const subject = mail.subject.replace(/[\r\n]+/g, " ").trim().slice(0, 150) || ctx.appName;
+  const body = mail.body.trim().slice(0, 10000);
+  const footer = replyFooter[ctx.locale](mail.formTitle, ctx.appName);
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+  return { to, subject, text: `${body}\n\n--\n${footer}`, html: mailLayout({ brand: ctx.brand, title: subject, bodyHtml: paragraphs, footer }) };
+}

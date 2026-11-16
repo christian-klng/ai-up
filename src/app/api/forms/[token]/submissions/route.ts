@@ -38,7 +38,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/forms/[token]/s
     if (!resolved) return fail("closed");
     const result = await submitForm(resolved, parsed.data, { ip: clientIp(req.headers.get("x-forwarded-for")) });
     if (!result.ok) return fail(result.code, result.issues ? { issues: result.issues } : {});
-    return Response.json({ ok: true, submissionId: result.submissionId, key: result.key, success: result.success });
+    return Response.json({ ok: true, submissionId: result.submissionId, key: result.key, success: result.success, waitSeconds: result.waitSeconds });
   } catch (err) {
     logger.error({ err }, "form submission failed");
     return fail("unexpected");

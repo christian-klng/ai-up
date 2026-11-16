@@ -36,8 +36,27 @@ export type ContentEventPayload = {
   origin: EventOrigin;
 };
 
+/** A submission through a collection's public form (docs/externe-formulare.md). */
+export type FormSubmittedPayload = {
+  content: ContentEventPayload["content"];
+  submission: {
+    id: string;
+    /** what the sender filled in, by element key of the template */
+    answers: Record<string, unknown>;
+    /** null when the form does not ask or the sender left both fields empty */
+    contact: { name: string | null; email: string | null } | null;
+    /** the sender agreed to be answered by e-mail */
+    mailConsent: boolean;
+    pageUrl: string | null;
+  };
+  form: { id: string };
+  actorId: null;
+  origin: EventOrigin;
+};
+
 export type DomainEventMap = {
   "content.created": ContentEventPayload;
+  "form.submitted": FormSubmittedPayload;
   "content.updated": ContentEventPayload;
   "content.deleted": { contentId: string; areaId: string; actorId: string };
   /** An LLM call failed – lets an admin build an alerting workflow (see llm/errors.ts) */

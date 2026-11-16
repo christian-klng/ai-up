@@ -1,6 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import type { CollectionLayout, CollectionSort } from "@/lib/collection-layouts";
-import type { FormContactMode, FormSuccess, FormTexts } from "@/lib/collection-forms";
+import type { FormContactMode, FormResponse, FormSuccess, FormTexts } from "@/lib/collection-forms";
 import type { LandingDefinition } from "@/lib/landing-schema";
 import type { TemplateEvaluation } from "@/lib/structures/evaluation";
 import type { StructureDefinition, StructureEntryMeta } from "@/lib/structures/types";
@@ -1357,6 +1357,8 @@ export const collectionForms = pgTable(
     /** Built-in name/e-mail fields: off | optional | required */
     contact: text("contact").$type<FormContactMode>().notNull().default("off"),
     success: jsonb("success").$type<FormSuccess>().notNull(),
+    /** Workflows may answer senders by e-mail (action reply_to_submitter); off by default. */
+    mailReply: boolean("mail_reply").notNull().default(false),
     /** Submissions accepted per day – the cap on what a flood can cost. */
     dailyLimit: integer("daily_limit").notNull().default(200),
     submissionCount: integer("submission_count").notNull().default(0),
@@ -1392,7 +1394,9 @@ export const formSubmissions = pgTable(
     /** Page the form was embedded in, as reported by the browser */
     pageUrl: text("page_url"),
     /** Answer for the sender written by a workflow; null = the form's static message applies. */
-    response: jsonb("response").$type<{ style: string; title: string; body: string }>(),
+    response: jsonb("response").$type<FormResponse>(),
+    /** Set when a workflow mailed the sender – at most once per submission. */
+    mailSentAt: timestamp("mail_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("form_submissions_content_idx").on(t.contentId), index("form_submissions_form_idx").on(t.formId, t.createdAt)],

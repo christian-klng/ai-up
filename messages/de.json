@@ -501,7 +501,12 @@
           "noFields": "Wähle eine Vorlage und mindestens ein Feld zum Ausfüllen, bevor du das Formular öffnest.",
           "noTemplate": "Wähle zuerst eine Vorlage.",
           "template": "Diese Vorlage steht in der Sammlung nicht mehr zur Verfügung."
-        }
+        },
+        "mailReply": "Antwort per E-Mail erlauben",
+        "mailReplyHint": "Das Formular zeigt dann ein Kästchen „Ich möchte eine Antwort per E-Mail erhalten“. Nur wer es ankreuzt, kann von einem Workflow eine Mail bekommen – höchstens eine je Einsendung.",
+        "waitForWorkflow": "Antwort vom Workflow abwarten",
+        "waitForWorkflowHint": "Ein Workflow mit dem Trigger „Formular eingesandt“ kann die Meldung für jede Einsendung selbst schreiben. Kommt in der Wartezeit nichts, erscheint die Meldung von oben.",
+        "waitSeconds": "Höchstens warten (Sekunden)"
       }
     },
     "templates": {
@@ -1683,6 +1688,8 @@
       "title": "Vielen Dank!",
       "body": "Deine Einsendung ist bei uns angekommen.",
       "another": "Weitere Einsendung"
-    }
+    },
+    "waiting": "Deine Einsendung ist angekommen und wird gerade bearbeitet …",
+    "mailConsent": "Ich möchte eine Antwort per E-Mail erhalten."
   }
 }

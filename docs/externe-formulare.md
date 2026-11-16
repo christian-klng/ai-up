@@ -1,6 +1,6 @@
 # Externer Kanal für Sammlungen („Formular")
 
-Stand: 16.11.2026 – Phase 1 umgesetzt, Phasen 2–4 offen.
+Stand: 16.11.2026 – Phasen 1 und 2 umgesetzt, Phasen 3–4 offen.
 
 Eine Sammlung kann per Schalter einen Kanal nach außen öffnen: Nicht-Mitglieder senden über ein
 Formular Einträge ein („erstellt von Extern"). Gedacht für Ideen, Feature Requests und
@@ -97,27 +97,43 @@ Ein anonymer Schreibpfad ist neu in der App.
 
 - **Statisch:** Titel und Markdown-Text, Design `plain | card | celebrate`. Optional Knopf
   „Weitere Einsendung" und Weiterleitungs-URL (nur https).
-- **Dynamisch (Phase 2):** Schalter „Antwort vom Workflow abwarten" mit Timeout (Standard 20 s).
+- **Dynamisch:** Schalter „Antwort vom Workflow abwarten" mit Timeout (Standard 20 s, höchstens 60).
+  Gewartet wird nur, wenn es einen aktiven Workflow mit Trigger `form.submitted` für die Sammlung
+  gibt (`hasFormWorkflow`) – sonst erscheint die statische Meldung sofort.
   Die Einsendung antwortet sofort mit `submissionId` und Abruf-Schlüssel; das Formular zeigt
   „Wird bearbeitet…" und fragt per Polling ab (die Realtime-Kanäle sind nutzer- und
   communitygebunden). Kommt nichts rechtzeitig oder scheitert der Workflow, erscheint die statische
   Meldung.
 - Das Markdown der Antwort läuft durch unseren Renderer, ohne HTML.
 
-## 6. Workflows (Phase 2)
+## 6. Workflows
+
+Trigger in `src/server/workflows/triggers/index.ts`, Aktionen in `actions/forms.ts`, Fachlogik in
+`domain/collection-forms.ts` (`setSubmissionResponse`, `getSubmissionResponse`, `replyToSubmitter`).
+Das Event `form.submitted` wird erst emittiert, wenn die Zeile in `form_submissions` steht – ein
+Workflow kann also sofort antworten.
 
 - **Trigger `form.submitted`:** eigener Event-Typ, Filter nach Sammlung. Payload `content.*`,
   `submission.id`, `submission.answers.<key>`, `submission.contact`, `submission.pageUrl`.
 - **Aktion `respond_to_submission`:** Stil, Titel, Text (Liquid) → `form_submissions.response`.
-- **Aktion `update_entry`:** setzt einzelne Antworten eines Eintrags (`origin: workflow`), damit
-  z. B. die Kategorie im Eintrag landet und nicht nur in der Meldung.
+- **Aktion `update_entry`:** setzt einzelne Antworten eines Eintrags (`origin: workflow`, Autor der
+  Version ist der Bot), damit z. B. die Kategorie im Eintrag landet und nicht nur in der Meldung.
+  `answers` ist ein JSON-Objekt; die Liquid-Vorlagen darin werden **je Wert nach dem Parsen**
+  gerendert – Text eines LLM oder Einsenders kann die Struktur also nicht brechen. Nur einfache
+  Feldtypen (Text, Auswahl, Chips, Checkbox, Link), fehlende Pflichtfelder blockieren nicht, ein
+  abgelehnter Wert oder ein per `showIf` verborgenes Feld lässt den Schritt scheitern. Für externe
+  Einträge ohne Eintrags-Bewertung und ohne Link-Preview.
 - **Aktion `reply_to_submitter`** (Mail an Einsender):
   - Kein freier Empfänger – nur `submissionId`, Adresse kommt aus `form_submissions`.
   - Eigener Schalter am Formular „Antwort per E-Mail erlauben" (Standard aus); verlangt das
     Kontaktfeld E-Mail und eine Einwilligungs-Checkbox. Ohne Häkchen: `skipped`.
   - Limits: eine Mail je Einsendung, drei je Adresse und Tag über alle Formulare, Tageslimit des
     Formulars.
-  - Betreff/Text als Liquid, Markdown ohne HTML, fester Fußtext (Community, Formular, Anlass).
+  - Betreff/Text als Liquid; der Text geht als schlichte Absätze hinaus (kein HTML, kein
+    Markdown-Rendering), fester Fußtext (Community, Formular, Anlass). Sprache = Standardsprache
+    der Community.
+  - Greift eine Leitplanke, endet der Schritt erfolgreich mit `sent: false` und `reason`
+    (`disabled | noConsent | alreadySent | addressLimit`).
   - **Restrisiko:** Trägt jemand eine fremde Adresse ein und gibt der Workflow die Eingaben
     wieder, bekommt ein Dritter fremden Text über unsere Domain. Limits begrenzen das, verhindern
     es nicht; ganz schließen würde es nur ein Double-Opt-in (nachrüsten bei Missbrauch).

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CheckCircle2, ImagePlus, Loader2, PartyPopper, X } from "lucide-react";
-import type { FormContactMode, FormSubmitError, FormSuccess } from "@/lib/collection-forms";
+import type { FormContactMode, FormResponse, FormSubmitError, FormSuccess } from "@/lib/collection-forms";
 import type { ImageAnswer, LinkAnswer, StructureAnswers, StructureDefinition, StructureElement } from "@/lib/structures/types";
 import { validateStructureAnswers, type AnswerIssue } from "@/lib/structures/validate";
 import { visibleElements } from "@/lib/structures/visibility";
@@ -21,6 +21,8 @@ type Props = {
   titleLabel: string;
   submitLabel: string;
   contact: FormContactMode;
+  /** offer "answer me by e-mail" (the form allows workflows to mail senders) */
+  mailReply: boolean;
   /** signed render time; the server measures the time to fill in with it */
   stamp: string;
   privacyUrl: string | null;
@@ -39,19 +41,55 @@ const selectClass =
  * its own rather than the members' fill form: no boards, no server actions, no session – it talks
  * to /api/forms and /api/upload only, so it also works inside an iframe on somebody else's site.
  */
-export function PublicForm({ token, definition, titleLabel, submitLabel, contact, stamp, privacyUrl, maxUploadMb }: Props) {
+export function PublicForm({ token, definition, titleLabel, submitLabel, contact, mailReply, stamp, privacyUrl, maxUploadMb }: Props) {
   const t = useTranslations("forms");
   const [title, setTitle] = useState("");
   const [answers, setAnswers] = useState<StructureAnswers>({});
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [mailConsent, setMailConsent] = useState(false);
   const [website, setWebsite] = useState("");
+  /** a workflow is writing the answer: the submission to ask about, and the message to fall back to */
+  const [waiting, setWaiting] = useState<{ id: string; key: string; seconds: number; fallback: FormSuccess } | null>(null);
   const [uploads, setUploads] = useState<Record<string, Upload>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState<FormSuccess | null>(null);
+
+  // Ask for the workflow's answer until it is there or the form's patience runs out; then the
+  // static message is as good as it gets.
+  useEffect(() => {
+    if (!waiting) return;
+    let stopped = false;
+    const finish = (success: FormSuccess) => {
+      if (stopped) return;
+      stopped = true;
+      setWaiting(null);
+      setDone(success);
+    };
+    const deadline = window.setTimeout(() => finish(waiting.fallback), waiting.seconds * 1000);
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/forms/${encodeURIComponent(token)}/submissions/${waiting.id}?key=${encodeURIComponent(waiting.key)}`, { cache: "no-store" });
+        const body = res.ok ? ((await res.json()) as { status: "pending" } | { status: "ready"; response: FormResponse }) : null;
+        if (body?.status === "ready") {
+          const r = body.response;
+          finish({ ...waiting.fallback, style: r.style ?? waiting.fallback.style, title: r.title || waiting.fallback.title, body: r.body });
+        }
+      } catch {
+        // a failed poll is just a later answer
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 1500);
+    void poll();
+    return () => {
+      stopped = true;
+      window.clearTimeout(deadline);
+      window.clearInterval(timer);
+    };
+  }, [waiting, token]);
 
   const visible = useMemo(() => visibleElements(definition, answers), [definition, answers]);
   const issueFor = (key: string) => issues.find((i) => i.key === key);
@@ -116,6 +154,7 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
           title: title.trim(),
           answers: clean,
           contact: contact === "off" ? undefined : { name: name.trim() || undefined, email: email.trim() || undefined },
+          mailConsent: mailReply && mailConsent && Boolean(email.trim()),
           stamp,
           website: website || undefined,
           // Inside an embed the page that matters is the one around the iframe.
@@ -123,9 +162,10 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
           uploads: tickets,
         }),
       });
-      const body = (await response.json().catch(() => null)) as { ok: true; success: FormSuccess } | { ok: false; code: FormSubmitError; issues?: Issue[] } | null;
+      const body = (await response.json().catch(() => null)) as { ok: true; success: FormSuccess; submissionId: string | null; key: string | null; waitSeconds: number | null } | { ok: false; code: FormSubmitError; issues?: Issue[] } | null;
       if (body?.ok) {
-        setDone(body.success);
+        if (body.waitSeconds && body.submissionId && body.key) setWaiting({ id: body.submissionId, key: body.key, seconds: body.waitSeconds, fallback: body.success });
+        else setDone(body.success);
         return;
       }
       if (body?.issues?.length) setIssues(body.issues);
@@ -144,9 +184,18 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
     setUploads({});
     setIssues([]);
     setError(null);
+    setMailConsent(false);
     setDone(null);
   };
 
+  if (waiting) {
+    return (
+      <div role="status" className="flex items-center gap-3 rounded-lg border p-4 text-sm text-muted-foreground">
+        <Loader2 className="size-5 shrink-0 animate-spin" aria-hidden />
+        {t("waiting")}
+      </div>
+    );
+  }
   if (done) return <SuccessMessage success={done} onAnother={done.allowAnother ? reset : undefined} />;
 
   const issueText = (issue: Issue | undefined) => (issue ? <p className="text-xs text-destructive">{t(`issues.${issue.code}`, { count: issue.count ?? 0 })}</p> : null);
@@ -207,6 +256,12 @@ export function PublicForm({ token, definition, titleLabel, submitLabel, contact
           <Field label={t("contactEmail")} required={contact === "required"} htmlFor="form-contact-email">
             <Input id="form-contact-email" type="email" autoComplete="email" maxLength={200} value={email} aria-invalid={contact === "required" && Boolean(error) && !email.trim()} onChange={(e) => setEmail(e.target.value)} />
           </Field>
+          {mailReply && (
+            <label className="flex items-start gap-2.5 text-sm sm:col-span-2">
+              <input type="checkbox" className="mt-0.5 size-4 accent-primary" checked={mailConsent} onChange={(e) => setMailConsent(e.target.checked)} />
+              <span>{t("mailConsent")}</span>
+            </label>
+          )}
         </div>
       )}
 
@@ -401,7 +456,7 @@ function SuccessMessage({ success, onAnother }: { success: FormSuccess; onAnothe
       <div role="status" className="flex flex-col items-center rounded-xl bg-primary px-6 py-10 text-center text-primary-foreground">
         <PartyPopper className="size-10" aria-hidden />
         <p className="mt-4 text-2xl font-semibold tracking-tight">{title}</p>
-        <Markdown className="mt-2 text-sm opacity-90">{body}</Markdown>
+        <Markdown className="mt-2 text-sm opacity-90 text-inherit! [&_*]:text-inherit!">{body}</Markdown>
         {onAnother && !redirect && (
           <Button type="button" variant="secondary" size="sm" className="mt-5" onClick={onAnother}>
             {t("success.another")}

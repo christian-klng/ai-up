@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Copy, ExternalLink, Loader2, Send } from "lucide-react";
 import { loadCollectionFormAction, saveCollectionFormAction, type CollectionFormDialogData } from "@/server/actions/admin-forms";
-import { FORM_CONTACT_MODES, FORM_DAILY_LIMIT_MAX, FORM_SUCCESS_STYLES, type FormContactMode, type FormSettings, type FormSuccessStyle } from "@/lib/collection-forms";
+import { FORM_CONTACT_MODES, FORM_DAILY_LIMIT_MAX, FORM_SUCCESS_STYLES, FORM_WAIT_SECONDS_MAX, type FormContactMode, type FormSettings, type FormSuccessStyle } from "@/lib/collection-forms";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -178,6 +178,13 @@ export function AreaFormDialog({ areaId, areaName, open: isOpen }: { areaId: str
                 </Select>
                 <p className="text-xs text-muted-foreground">{t("contactHint")}</p>
               </div>
+              <label className={cn("flex items-start gap-2.5 text-sm", settings.contact === "off" && "opacity-60")}>
+                <input type="checkbox" className="mt-0.5 size-4 accent-primary" disabled={settings.contact === "off"} checked={settings.mailReply && settings.contact !== "off"} onChange={(e) => patch({ mailReply: e.target.checked })} />
+                <span>
+                  {t("mailReply")}
+                  <span className="block text-xs text-muted-foreground">{t("mailReplyHint")}</span>
+                </span>
+              </label>
             </section>
 
             <section className="grid gap-3">
@@ -237,6 +244,28 @@ export function AreaFormDialog({ areaId, areaName, open: isOpen }: { areaId: str
                 <Label htmlFor="form-redirect">{t("redirectUrl")}</Label>
                 <Input id="form-redirect" type="url" placeholder="https://" value={settings.success.redirectUrl ?? ""} onChange={(e) => patch({ success: { ...settings.success, redirectUrl: e.target.value.trim() || null } })} />
                 <p className="text-xs text-muted-foreground">{t("redirectHint")}</p>
+              </div>
+              <div className="grid gap-2 rounded-lg border p-3">
+                <label className="flex items-start gap-2.5 text-sm">
+                  <input type="checkbox" className="mt-0.5 size-4 accent-primary" checked={settings.success.waitForWorkflow} onChange={(e) => patch({ success: { ...settings.success, waitForWorkflow: e.target.checked } })} />
+                  <span>
+                    {t("waitForWorkflow")}
+                    <span className="block text-xs text-muted-foreground">{t("waitForWorkflowHint")}</span>
+                  </span>
+                </label>
+                {settings.success.waitForWorkflow && (
+                  <div className="grid gap-1.5 sm:max-w-xs">
+                    <Label htmlFor="form-wait">{t("waitSeconds")}</Label>
+                    <Input
+                      id="form-wait"
+                      type="number"
+                      min={5}
+                      max={FORM_WAIT_SECONDS_MAX}
+                      value={settings.success.waitSeconds}
+                      onChange={(e) => patch({ success: { ...settings.success, waitSeconds: Math.max(5, Math.min(FORM_WAIT_SECONDS_MAX, Math.round(Number(e.target.value) || 5))) } })}
+                    />
+                  </div>
+                )}
               </div>
             </section>
 

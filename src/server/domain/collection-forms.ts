@@ -1,7 +1,10 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { emitDomainEvent } from "@/server/events/bus";
+import { sendMail } from "@/server/mail/mailer";
+import { mailContext, submissionReplyMail } from "@/server/mail/templates";
 import { db } from "@/server/db/client";
-import { auditLog, collectionForms, communities, contentTemplates, formSubmissions, knowledgeAreas, mediaFiles, type CollectionForm, type Community, type ContentTemplate, type FormSubmission, type KnowledgeArea } from "@/server/db/schema";
+import { auditLog, collectionForms, communities, contentTemplates, formSubmissions, knowledgeAreas, mediaFiles, workflows, type CollectionForm, type Community, type ContentTemplate, type FormSubmission, type KnowledgeArea } from "@/server/db/schema";
 import { env } from "@/server/env";
 import { logger } from "@/server/logger";
 import { getRedis } from "@/server/redis";
@@ -10,13 +13,18 @@ import {
   DEFAULT_FORM_SUCCESS,
   DEFAULT_FORM_TEXTS,
   FORM_DAILY_LIMIT_DEFAULT,
+  FORM_MAILS_PER_ADDRESS_PER_DAY,
   FORM_MAX_IMAGES,
+  FORM_RESPONSE_BODY_MAX,
+  FORM_RESPONSE_TITLE_MAX,
+  FORM_SUCCESS_STYLES,
   FORM_MIN_FILL_MS,
   FORM_STAMP_TTL_MS,
   formImageKeys,
   formProblems,
   publicDefinition,
   type FormProblem,
+  type FormResponse,
   type FormSettings,
   type FormSubmissionInput,
   type FormSubmitError,
@@ -59,6 +67,7 @@ function settingsOf(form: CollectionForm | null): FormSettings {
     texts: { ...DEFAULT_FORM_TEXTS, ...form?.texts },
     contact: form?.contact ?? "off",
     success: { ...DEFAULT_FORM_SUCCESS, ...form?.success },
+    mailReply: form?.mailReply ?? false,
     dailyLimit: form?.dailyLimit ?? FORM_DAILY_LIMIT_DEFAULT,
   };
 }
@@ -112,6 +121,8 @@ export async function saveCollectionForm(communityId: string, areaId: string, se
     texts: settings.texts,
     contact: settings.contact,
     success: settings.success,
+    // Without an address to write to there is nothing to allow.
+    mailReply: settings.mailReply && settings.contact !== "off",
     dailyLimit: settings.dailyLimit,
     ...(settings.enabled && !existing?.enabled ? { enabledBy: actorId } : {}),
   };
@@ -224,7 +235,7 @@ function withinDailyLimit(form: CollectionForm): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 export type SubmitFormResult =
-  | { ok: true; submissionId: string | null; key: string | null; success: FormSuccess }
+  | { ok: true; submissionId: string | null; key: string | null; success: FormSuccess; /** a workflow is about to answer: ask for it for this many seconds */ waitSeconds: number | null }
   | { ok: false; code: FormSubmitError; issues?: AnswerIssue[] };
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -239,7 +250,7 @@ export async function submitForm(resolved: ResolvedForm, input: FormSubmissionIn
   const success: FormSuccess = { ...DEFAULT_FORM_SUCCESS, ...form.success };
 
   // The honeypot gets the usual answer – whatever filled it in learns nothing from it.
-  if (input.website) return { ok: true, submissionId: null, key: null, success };
+  if (input.website) return { ok: true, submissionId: null, key: null, success, waitSeconds: null };
 
   const age = formStampAge(form.id, input.stamp);
   if (age === null || age > FORM_STAMP_TTL_MS) return { ok: false, code: "expired" };
@@ -285,7 +296,12 @@ export async function submitForm(resolved: ResolvedForm, input: FormSubmissionIn
   // Counted last, so that only submissions that would be accepted use up the day's allowance.
   if (!(await withinDailyLimit(form))) return { ok: false, code: "rateLimited" };
 
-  const content = await createContent(community.id, area.id, "structured", built.input, null, { kind: "external", formId: form.id, submissionId });
+  const contact = form.contact !== "off" && (name || email) ? { name, email } : null;
+  // Consent only counts where the form offers the checkbox and there is an address to answer to.
+  const mailConsent = Boolean(form.mailReply && input.mailConsent && contact?.email);
+  const pageUrl = safePageUrl(input.pageUrl);
+  const origin = { kind: "external" as const, formId: form.id, submissionId };
+  const content = await createContent(community.id, area.id, "structured", built.input, null, origin);
   const key = randomBytes(24).toString("base64url");
   await db.insert(formSubmissions).values({
     id: submissionId,
@@ -293,9 +309,10 @@ export async function submitForm(resolved: ResolvedForm, input: FormSubmissionIn
     formId: form.id,
     contentId: content.id,
     accessKeyHash: createHash("sha256").update(key).digest("hex"),
-    contactName: form.contact === "off" ? null : name,
-    contactEmail: form.contact === "off" ? null : email,
-    pageUrl: safePageUrl(input.pageUrl),
+    contactName: contact?.name ?? null,
+    contactEmail: contact?.email ?? null,
+    mailConsent,
+    pageUrl,
   });
   // From here on the images are ordinary content: the sweep below leaves them alone, and a second
   // submission cannot attach them again.
@@ -305,7 +322,33 @@ export async function submitForm(resolved: ResolvedForm, input: FormSubmissionIn
     .set({ submissionCount: sql`${collectionForms.submissionCount} + 1` })
     .where(eq(collectionForms.id, form.id));
   logger.info({ formId: form.id, contentId: content.id, submissionId }, "form submission stored");
-  return { ok: true, submissionId, key, success };
+
+  // Only now – the submission row exists, so a workflow can answer it right away.
+  const stored = built.input.meta?.structure?.answers ?? {};
+  emitDomainEvent("form.submitted", community.id, {
+    content: {
+      id: content.id,
+      type: content.type,
+      title: content.title,
+      url: null,
+      body: built.input.bodyMarkdown ?? null,
+      areaId: area.id,
+      areaSlug: area.slug,
+      areaName: area.name,
+      areaPurpose: area.purpose,
+      authorId: null,
+      authorName: null,
+      versionNo: 1,
+      href: `/knowledge/${area.slug}/${content.id}`,
+    },
+    // What the sender filled in – not the seeds of boards the form never showed.
+    submission: { id: submissionId, answers: Object.fromEntries(definition.elements.filter((el) => stored[el.key] !== undefined).map((el) => [el.key, stored[el.key]])), contact, mailConsent, pageUrl },
+    form: { id: form.id },
+    actorId: null,
+    origin,
+  });
+  const waits = success.waitForWorkflow && (await hasFormWorkflow(community.id, area.id));
+  return { ok: true, submissionId, key, success, waitSeconds: waits ? success.waitSeconds : null };
 }
 
 function safePageUrl(raw: string | undefined): string | null {
@@ -317,6 +360,93 @@ function safePageUrl(raw: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** Is there an active workflow that could answer a submission to this collection? Waiting without one would only delay the message. */
+async function hasFormWorkflow(communityId: string, areaId: string): Promise<boolean> {
+  const active = await db.query.workflows.findMany({ where: and(eq(workflows.communityId, communityId), eq(workflows.status, "active")), columns: { trigger: true } });
+  return active.some((w) => {
+    if (w.trigger.type !== "form.submitted") return false;
+    const areaIds = (w.trigger.config as { areaIds?: unknown }).areaIds;
+    return !Array.isArray(areaIds) || areaIds.length === 0 || areaIds.includes(areaId);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Answering a submission (workflow actions, docs/externe-formulare.md 5 and 6)
+// ---------------------------------------------------------------------------
+
+/** Stores the message a workflow wrote for the sender. `false` when the submission is not in this community. */
+export async function setSubmissionResponse(communityId: string, submissionId: string, response: { style?: string | null; title: string; body: string }): Promise<boolean> {
+  const style = FORM_SUCCESS_STYLES.find((s) => s === response.style) ?? null;
+  const value: FormResponse = { style, title: response.title.trim().slice(0, FORM_RESPONSE_TITLE_MAX), body: response.body.trim().slice(0, FORM_RESPONSE_BODY_MAX) };
+  const rows = await db
+    .update(formSubmissions)
+    .set({ response: value })
+    .where(and(eq(formSubmissions.id, submissionId), eq(formSubmissions.communityId, communityId)))
+    .returning({ id: formSubmissions.id });
+  return rows.length > 0;
+}
+
+const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * What the sender's browser polls for. Needs the form's token, the submission id and the key that
+ * only the sender got back – `null` (answered as "not found") whenever one of them does not fit.
+ */
+export async function getSubmissionResponse(token: string, submissionId: string, key: string): Promise<{ response: FormResponse | null } | null> {
+  if (!token || token.length > 64 || !uuidRe.test(submissionId) || !key || key.length > 100) return null;
+  const [row] = await db
+    .select({ hash: formSubmissions.accessKeyHash, response: formSubmissions.response })
+    .from(formSubmissions)
+    .innerJoin(collectionForms, eq(collectionForms.id, formSubmissions.formId))
+    .where(and(eq(formSubmissions.id, submissionId), eq(collectionForms.token, token)))
+    .limit(1);
+  if (!row || !sameSignature(row.hash, createHash("sha256").update(key).digest("hex"))) return null;
+  return { response: row.response ?? null };
+}
+
+export type ReplyResult = { sent: true } | { sent: false; reason: "notFound" | "disabled" | "noConsent" | "alreadySent" | "addressLimit" };
+
+/**
+ * Mails the sender of a submission – the only mail the app sends to an address nobody confirmed.
+ * Hence the fences: the form must allow it, the sender must have asked for it, one mail per
+ * submission, a daily cap per address across all forms, and no recipient other than the one stored
+ * with the submission. What remains: someone can enter a stranger's address, and a workflow that
+ * echoes the input then carries their text to that stranger (docs/externe-formulare.md 6).
+ */
+export async function replyToSubmitter(communityId: string, submissionId: string, mail: { subject: string; body: string }): Promise<ReplyResult> {
+  if (!uuidRe.test(submissionId)) return { sent: false, reason: "notFound" };
+  const [row] = await db
+    .select({ submission: formSubmissions, form: collectionForms, area: knowledgeAreas, community: communities })
+    .from(formSubmissions)
+    .innerJoin(collectionForms, eq(collectionForms.id, formSubmissions.formId))
+    .innerJoin(knowledgeAreas, eq(knowledgeAreas.id, collectionForms.areaId))
+    .innerJoin(communities, eq(communities.id, formSubmissions.communityId))
+    .where(and(eq(formSubmissions.id, submissionId), eq(formSubmissions.communityId, communityId)))
+    .limit(1);
+  if (!row) return { sent: false, reason: "notFound" };
+  const { submission, form, area, community } = row;
+  if (!form.mailReply) return { sent: false, reason: "disabled" };
+  if (!submission.mailConsent || !submission.contactEmail) return { sent: false, reason: "noConsent" };
+  if (submission.mailSentAt) return { sent: false, reason: "alreadySent" };
+  if (!(await withinLimit("mail", submission.contactEmail, FORM_MAILS_PER_ADDRESS_PER_DAY, 24 * 60 * 60))) return { sent: false, reason: "addressLimit" };
+
+  // Claimed before sending: two runs answering the same submission must not both get through.
+  const claimed = await db
+    .update(formSubmissions)
+    .set({ mailSentAt: new Date() })
+    .where(and(eq(formSubmissions.id, submission.id), isNull(formSubmissions.mailSentAt)))
+    .returning({ id: formSubmissions.id });
+  if (!claimed.length) return { sent: false, reason: "alreadySent" };
+  try {
+    await sendMail(submissionReplyMail(mailContext(community, community.defaultLocale), submission.contactEmail, { subject: mail.subject, body: mail.body, formTitle: form.texts?.title || area.name }));
+  } catch (err) {
+    // Not delivered: give the one mail back.
+    await db.update(formSubmissions).set({ mailSentAt: null }).where(eq(formSubmissions.id, submission.id));
+    throw err;
+  }
+  return { sent: true };
 }
 
 /** The submission an entry came from – contact details for admins. `undefined` for entries written by members. */

@@ -501,7 +501,12 @@
           "noFields": "Choose a template and at least one field to fill in before opening the form.",
           "noTemplate": "Choose a template first.",
           "template": "This template is no longer available in the collection."
-        }
+        },
+        "mailReply": "Allow answers by e-mail",
+        "mailReplyHint": "The form then shows a box “I would like to receive an answer by e-mail”. Only those who tick it can get a mail from a workflow – one per submission at most.",
+        "waitForWorkflow": "Wait for the workflow’s answer",
+        "waitForWorkflowHint": "A workflow with the trigger “Form submitted” can write the message for each submission itself. If nothing arrives in time, the message above is shown.",
+        "waitSeconds": "Wait at most (seconds)"
       }
     },
     "templates": {
@@ -1683,6 +1688,8 @@
       "title": "Thank you!",
       "body": "We have received your submission.",
       "another": "Send another one"
-    }
+    },
+    "waiting": "We have received your submission and are processing it …",
+    "mailConsent": "I would like to receive an answer by e-mail."
   }
 }

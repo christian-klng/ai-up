@@ -282,3 +282,42 @@ registerTrigger<MeetingTriggerConfig>({
   matches: matchesMeeting,
   eventTypes: ["meeting.recording.available"],
 });
+
+// ---------------------------------------------------------------------------
+// form.submitted – a submission through a collection's public form (docs/externe-formulare.md)
+// ---------------------------------------------------------------------------
+
+const formSubmittedConfig = z.object({ areaIds: z.array(z.string().uuid()).default([]) });
+
+registerTrigger<z.infer<typeof formSubmittedConfig>>({
+  type: "form.submitted",
+  labels: {
+    name: { de: "Formular eingesandt", en: "Form submitted" },
+    description: { de: "Startet, wenn jemand von außen über das öffentliche Formular einer Sammlung einen Eintrag einsendet.", en: "Fires when someone outside the community sends in an entry through a collection's public form." },
+  },
+  doc: "Fires for every submission through a collection's public form (the collection's external channel). The sender is anonymous: there is no user, trigger.content.authorId is null and anyone on the internet can cause a run – keep the steps cheap. Filter by collection. Answer the sender on the form with respond_to_submission, write into the new entry with update_entry, mail the sender with reply_to_submitter (only if the form allows it and the sender asked for it). The entry's content.created event also exists, but content triggers ignore it unless includeExternalOrigin is set – use this trigger instead.",
+  configSchema: formSubmittedConfig,
+  fields: [{ key: "areaIds", type: "area" as const, label: { de: "Sammlungen", en: "Collections" }, help: { de: "Leer = alle Sammlungen mit geöffnetem Formular.", en: "Empty = every collection with an open form." } }],
+  payloadDoc: {
+    ...contentPayloadDoc,
+    "content.type": "always structured",
+    "content.authorId": "always null (anonymous sender)",
+    "submission.id": "uuid of the submission – pass it to respond_to_submission / reply_to_submitter",
+    "submission.answers": "what the sender filled in, keyed by the template's element keys (e.g. submission.answers.description)",
+    "submission.contact": "{ name, email } as entered, or null (personal data: do not copy it into entries)",
+    "submission.mailConsent": "true when the sender asked to be answered by e-mail",
+    "submission.pageUrl": "page the form was embedded in, or null",
+    "form.id": "uuid of the form",
+  },
+  samplePayload: {
+    content: { ...contentSample.content, type: "structured", title: "Dark mode for the dashboard", url: null, body: "## Description\n\nPlease add a dark mode.", areaName: "Feature requests", authorId: null, authorName: null, href: "/knowledge/feature-requests/…" },
+    submission: { id: "00000000-0000-0000-0000-000000000000", answers: { description: "Please add a dark mode." }, contact: { name: "Jane Doe", email: "jane@example.com" }, mailConsent: true, pageUrl: "https://example.com/feedback" },
+    form: { id: "00000000-0000-0000-0000-000000000000" },
+    origin: { kind: "external" },
+  },
+  matches: (config, payload) => {
+    const areaId = (payload.content as { areaId?: string } | undefined)?.areaId;
+    return config.areaIds.length === 0 || config.areaIds.includes(areaId ?? "");
+  },
+  eventTypes: ["form.submitted"],
+});

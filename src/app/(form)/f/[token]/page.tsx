@@ -60,6 +60,7 @@ export default async function CollectionFormPage({ params, searchParams }: PageP
             titleLabel={texts.titleLabel}
             submitLabel={texts.submitLabel}
             contact={form.contact}
+            mailReply={form.mailReply && form.contact !== "off"}
             stamp={issueFormStamp(form.id)}
             privacyUrl={privacyUrl}
             maxUploadMb={FORM_UPLOAD_MAX_MB}
